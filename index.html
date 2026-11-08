@@ -193,6 +193,10 @@
 .simb{position:absolute;top:8px;left:8px;z-index:2;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
 .simb.duplicate{background:#d9674e;color:#2a0d06}.simb.very{background:#e2b65c;color:#2a1d05}.simb.similar{background:#7fb6d6;color:#06202e}
 .cats button.look{border-style:dashed}
+.tnum{font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums;margin-right:6px}
+#where{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(11,31,42,.94);border:1px solid var(--line);color:var(--ink);
+  border-radius:999px;padding:6px 16px;font-size:14px;font-variant-numeric:tabular-nums;z-index:40;display:none;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#where b{color:#fff}
 </style>
 </head>
 <body>
@@ -210,6 +214,7 @@
 </header>
 <main id="main"></main>
 <aside id="drawer"></aside>
+<div id="where"></div>
 <div class="lightbox" id="lb"><img id="lbimg" alt=""></div>
 <div class="toast" id="toast"></div>
 
@@ -453,7 +458,7 @@
   const CHUNK = 150;
   let gridState = null;
   const tierWord = { duplicate: "Possible duplicates", "very similar": "Very similar", similar: "Similar" };
-  function tileHTML(x, which, gs) {
+  function tileHTML(x, which, gs, n) {
     const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st, sim = SIM.by[x.id];
     let head = "";
     if (sim && sim.gid !== gs.lastG) {
@@ -467,7 +472,7 @@
         ${thumbHTML(r)}
         <div class="acts over"><button class="x ${st === "nix" || (which === "all" && !st) ? "on" : ""}" data-act="nix" title="Nix">✕</button>
           <button class="k ${st === "keep" ? "on" : ""}" data-act="keep" title="Keep">✓</button></div>
-        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${esc(r.title || x.id)}</div>
+        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${n ? `<span class="tnum">${n.toLocaleString()}</span>` : ""}${esc(r.title || x.id)}</div>
           <div class="sub one">${sub(r)}</div>
           <button class="openrec" data-open="${esc(x.id)}">Open record${nq ? ` · ${nq} question${nq > 1 ? "s" : ""}` : ""}${edited ? " · edited" : ""}</button>
           <details class="more"><summary>Details</summary>
@@ -488,6 +493,7 @@
     const enlarge = t => { $("#lbimg").src = t.dataset.full; $("#lb").style.display = "flex"; };
     root.querySelectorAll("[data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); openRecord(b.dataset.open); });
     root.querySelectorAll(".tile").forEach(el => {
+      el.dataset.n = (el.querySelector(".tnum") || {}).textContent || "";
       el.querySelectorAll("[data-act]").forEach(b => b.onclick = e => { e.stopPropagation(); decide(el, b.dataset.act); });
       const t = el.querySelector(".thumb"); if (!t) return;
       t.style.cursor = "pointer";
@@ -505,7 +511,7 @@
     const grid = $("#main .grid"); if (!grid) return;
     const next = gs.items.slice(gs.shown, gs.shown + CHUNK); if (!next.length) return;
     const tmp = document.createElement("div");
-    tmp.innerHTML = next.map(x => tileHTML(x, gs.which, gs)).join("");
+    tmp.innerHTML = next.map((x, i) => tileHTML(x, gs.which, gs, gs.shown + i + 1)).join("");
     bindTiles(tmp, gs.which);
     while (tmp.firstChild) grid.appendChild(tmp.firstChild);
     gs.shown += next.length; shownN = Math.max(shownN, gs.shown);
@@ -513,6 +519,19 @@
     hydratePreviews();
   }
   let moreIO = null;
+  function updateWhere() {
+    const w = $("#where"), gs = gridState;
+    if (!gs || !gs.items.length || !$("#main .grid") || tab === "swipe" || tab === "reflect") { w.style.display = "none"; return; }
+    const tiles = $("#main .grid").querySelectorAll(".tile");
+    let n = "";
+    for (const t of tiles) { const r = t.getBoundingClientRect(); if (r.bottom > 90) { n = t.dataset.n; break; } }
+    if (!n) { w.style.display = "none"; return; }
+    const num = parseInt(n.replace(/[^0-9]/g, ""), 10) || 0, total = gs.items.length;
+    w.innerHTML = `<b>${num.toLocaleString()}</b> of ${total.toLocaleString()} · ${Math.max(0, Math.round(num / total * 100))}% through`;
+    w.style.display = "block";
+  }
+  let whereT = null;
+  window.addEventListener("scroll", () => { clearTimeout(whereT); whereT = setTimeout(updateWhere, 60); }, { passive: true });
   function renderGrid(which) {
     const allItems = list(which === "all" ? "all" : which);
     const empty = { all: "Nothing left to sort.",
@@ -532,6 +551,7 @@
     if (moreIO) moreIO.disconnect();
     const sen = $("#more-sentinel");
     if (sen) { moreIO = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) appendChunk(); }, { rootMargin: "1500px" }); moreIO.observe(sen); }
+    setTimeout(updateWhere, 50);
     const fb = $("#finishnix");
     if (fb) fb.onclick = () => {
       const tiles = [...$("#main .grid").querySelectorAll(".tile")].filter(el => el.getBoundingClientRect().top < window.innerHeight && !statusOf(el.dataset.id));
@@ -1091,7 +1111,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108173548";
+  const BUILD = "20261108183824";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
