@@ -443,14 +443,16 @@
   function renderSetup(msg) {
     $("#main").innerHTML = `<div class="setup"><h2>Connect to GitHub</h2>
       ${msg ? `<p style="color:var(--nix)">${esc(msg)}</p>` : ""}
+      <p class="sub"><b>Already have a key?</b> Open your old local Sorting Room, go to Settings, press <b>Copy key</b>, paste it below and press Connect. You only do this once.</p>
       <p class="sub">This page reads finds straight from your private repo and writes your keep and nix calls back to it. The token stays in this browser only.</p>
       <ol><li>On GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens, Generate new token.</li>
         <li>Repository access: Only select repositories, then ${esc(DEF_REPO)}.</li>
-        <li>Permissions: Contents, Read and write; Actions, Read-only (for the Activity feed). Nothing else.</li><li>Copy the token and paste it below.</li></ol>
+        <li>Permissions: Contents, Read and write. Nothing else.</li><li>Copy the token and paste it below.</li></ol>
       <label>Repository</label><input type="text" id="s-repo" value="${esc(repo)}">
       <label>Token</label><input type="password" id="s-token" value="${esc(token)}" placeholder="github_pat_...">
       <button class="primary" id="s-save">Connect</button>
-      ${token ? `<button class="linkbtn" id="s-forget" style="margin-left:12px">Forget token</button>` : ""}</div>`;
+      ${token ? `<button class="linkbtn" id="s-copy" style="margin-left:12px">Copy key</button><button class="linkbtn" id="s-forget" style="margin-left:12px">Forget token</button>` : ""}</div>`;
+    const cp = $("#s-copy"); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(token); toast("Key copied. Paste it into the live Sorting Room."); } catch { const i = $("#s-token"); i.type = "text"; i.select(); toast("Key shown: copy it with Cmd+C"); } };
     $("#s-save").onclick = () => { token = $("#s-token").value.trim(); repo = $("#s-repo").value.trim() || DEF_REPO;
       S.set("token", token); S.set("repo", repo); cache = {}; S.set("cache", cache); if (tab === "setup") tab = "all"; load(); };
     const f = $("#s-forget"); if (f) f.onclick = () => { token = ""; S.set("token", ""); renderSetup(); };
@@ -762,7 +764,7 @@
   });
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108160958";
+  const BUILD = "20261108161446";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
