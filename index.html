@@ -163,6 +163,31 @@
   .itile .codes span { font-size: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px; color: var(--gold); }
 .held{font-size:12px;color:#e9b872;margin-top:4px}
 .cflag.hold{bottom:36px;background:#5a4317;color:#f3d79a}
+.cats{display:flex;flex-wrap:wrap;gap:8px;padding:14px 24px 4px}
+.cats button{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font:500 14px Inter,system-ui;cursor:pointer}
+.cats button.on{background:var(--ink);color:var(--deep);border-color:var(--ink)}
+.cats button .c{opacity:.7;margin-left:6px}
+.tile .t{cursor:pointer}.tile .t:hover{text-decoration:underline}
+.openrec{background:none;border:0;color:var(--mute);font-size:12px;cursor:pointer;padding:0;text-decoration:underline}
+.pubbar{padding:6px 24px 0;color:var(--mute);font-size:13px}.pubbar b{color:var(--ink)}
+.badge.live{background:rgba(63,182,139,.9);color:#06261a}.badge.wait{background:rgba(226,182,92,.92);color:#2a1d05}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);background:var(--deep);border-left:1px solid var(--line);z-index:50;
+  overflow-y:auto;transform:translateX(100%);transition:transform .2s;box-shadow:-20px 0 40px rgba(0,0,0,.4)}
+#drawer.open{transform:none}
+#drawer .dh{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--deep);z-index:2}
+#drawer .dh .sp{flex:1}
+#drawer .dimg{background:#000;display:flex;justify-content:center}#drawer .dimg img{max-width:100%;max-height:60vh;object-fit:contain}
+#drawer .db{padding:16px 18px 40px}
+#drawer label{display:block;font-size:12px;color:var(--mute);margin:12px 0 4px}
+#drawer input[type=text],#drawer textarea{width:100%;box-sizing:border-box;background:var(--deep2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:14px Inter,system-ui}
+#drawer textarea{min-height:70px;resize:vertical}
+#drawer .ro{font-size:13px;color:var(--mute);margin-top:6px;word-break:break-word}
+#drawer h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:22px 0 6px}
+#drawer .q{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:14px}
+#drawer .q .a{color:var(--keep);margin-top:6px}#drawer .q .w{color:var(--mute);font-size:12px;margin-top:4px}
+#drawer .stbtn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px}
+#drawer .stbtn.k.on{background:var(--keep);color:#06261a;border-color:var(--keep)}#drawer .stbtn.x.on{background:var(--nix);color:#2a0d06;border-color:var(--nix)}
+#drawer .primary{margin-top:12px}
 </style>
 </head>
 <body>
@@ -179,6 +204,7 @@
     <button class="linkbtn" id="v4live" title="When on, Refresh publishes everything in Advancing to the v4 library"></button><button class="linkbtn" id="refresh">Refresh</button><button class="linkbtn" id="settings">Settings</button></div>
 </header>
 <main id="main"></main>
+<aside id="drawer"></aside>
 <div class="lightbox" id="lb"><img id="lbimg" alt=""></div>
 <div class="toast" id="toast"></div>
 
@@ -193,6 +219,13 @@
   let token = S.get("token", ""), repo = S.get("repo", DEF_REPO);
   let records = {};            // id -> {rec, path, v4?}
   const CARDS = { sha: null, list: [] };
+  let EDITS = {}, editsPending = {}, editsTimer = null;     // id -> {fields, questions, updated_at}
+  const PUB = { sha: null, ids: new Set(), at: "" };       // what v4/library/index.json holds right now
+  const MAN = {};                                           // batch -> manifest (loaded when a record is opened)
+  const CATS = [["image", "Images"], ["work", "Works"], ["person", "People"], ["place", "Places"], ["excerpt", "Excerpts"],
+                ["event", "Events"], ["concept", "Concepts"], ["practice", "Practices"], ["nature", "Nature"]];
+  let cat = S.get("cat", "");
+  const catOf = x => x.v4 ? x.v4.type : (x.rec.image_url || x.rec.iiif_url ? "image" : x.rec.passage ? "excerpt" : "work");
   const PV = {};                // private preview path -> blob URL
   let cache = S.get("cache", {}); // path -> record (records never change once written)
   let sort = {};               // id -> {status, at}
@@ -240,7 +273,7 @@
       }
       S.set("cache", cache);
       records = {};
-      for (const p of recPaths) if (cache[p]) { const r = cache[p]; const id = r.id || p.split("/").pop().slice(0, -5); records[id] = { rec: r, path: p }; }
+      for (const p of recPaths) if (cache[p]) { const r = cache[p]; const id = r.id || p.split("/").pop().slice(0, -5); records[id] = { rec: Object.assign({}, r), orig: r, path: p }; }
       // packaged batches (v4/intake): one card per item, arriving as no-go like every find
       const cardsEnt = (tree.tree || []).find(t => t.path === "v4/intake/cards.json");
       if (cardsEnt && cardsEnt.sha !== CARDS.sha) {
@@ -259,6 +292,14 @@
       if (sr.status !== 404) { const j = await sr.json(); sortSha = j.sha; try { sort = JSON.parse(unb64(j.content)); } catch { sort = {}; } }
       Object.assign(sort, pending);
       reflections = (await raw("journal/reflections.md")) || "";
+      const er = await api(`/contents/v4/edits.json?ref=main`);
+      if (er.status !== 404) { try { EDITS = JSON.parse(unb64((await er.json()).content)); } catch { EDITS = {}; } }
+      Object.assign(EDITS, editsPending);
+      const pubEnt = (tree.tree || []).find(t => t.path === "v4/library/index.json");
+      if (pubEnt && pubEnt.sha !== PUB.sha) {
+        try { const ix = JSON.parse(await raw("v4/library/index.json")); PUB.ids = new Set((ix.items || []).map(i => i.id)); PUB.sha = pubEnt.sha; } catch {}
+      }
+      applyEdits();
       $("#dot").className = "dot live";
       $("#stat").textContent = `Live · synced ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
       render();
@@ -299,8 +340,9 @@
     }
   }
 
-  function list(which) {
+  function list(which, ignoreCat) {
     let items = Object.entries(records).map(([id, v]) => ({ id, ...v }));
+    if (cat && !ignoreCat) items = items.filter(x => catOf(x) === cat);
     if (filter.lane) items = items.filter(x => String(x.rec.lane) === filter.lane);
     if (filter.day) items = items.filter(x => x.path.split("/")[1] === filter.day);
     if (which === "keep") items = items.filter(x => statusOf(x.id) === "keep");
@@ -368,15 +410,23 @@
       <a href="${gh(x.path)}" target="_blank" rel="noopener">Record</a><a href="${gh(src)}" target="_blank" rel="noopener">Snapshot</a></div>`;
   }
   function sub(r) { return [r.holder || r.institution, r.date_of_item, r.creator].filter(Boolean).map(esc).join(" · "); }
-  function dlState(id) { if (statusOf(id) !== "keep") return ""; if (records[id] && records[id].v4) return "Advancing to v4"; return keptFolders.has(id) ? "Downloaded" : "Downloading soon"; }
+  function dlState(id) {
+    if (statusOf(id) !== "keep") return "";
+    const x = records[id]; if (x && x.rec._hold) return "Held: source incomplete";
+    return PUB.ids.has(id) ? "Live in v4" : "Publishes on Refresh";
+  }
 
   function filtersHTML() {
-    const lanes = [...new Set(Object.values(records).map(x => String(x.rec.lane || "")).filter(Boolean))].sort();
-    const days = [...new Set(Object.values(records).map(x => x.path.split("/")[1]))].sort().reverse();
-    return `<div class="filters">Lane <select id="f-lane"><option value="">All</option>${lanes.map(l => `<option ${filter.lane === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
-      Group <select id="f-day"><option value="">All</option>${days.map(d => `<option ${filter.day === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></div>`;
+    const which = tab === "keep" || tab === "nix" ? tab : tab === "swipe" ? "swipe" : "all";
+    const base = list(which, true), n = {};
+    base.forEach(x => { const c = catOf(x); n[c] = (n[c] || 0) + 1; });
+    const days = [...new Set(Object.values(records).map(x => x.path.split("/")[1]))].sort();
+    return `<div class="cats"><button data-cat="" class="${cat ? "" : "on"}">All<span class="c">${base.length}</span></button>
+      ${CATS.map(([k, l]) => `<button data-cat="${k}" class="${cat === k ? "on" : ""}">${l}<span class="c">${n[k] || 0}</span></button>`).join("")}</div>
+      <div class="filters">Group <select id="f-day"><option value="">All</option>${days.map(d => `<option ${filter.day === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></div>`;
   }
   function bindFilters() {
+    document.querySelectorAll(".cats [data-cat]").forEach(b => b.onclick = () => { cat = b.dataset.cat; S.set("cat", cat); shownN = 200; render(); });
     const l = $("#f-lane"), d = $("#f-day");
     if (l) l.onchange = () => { filter.lane = l.value; render(); };
     if (d) d.onchange = () => { filter.day = d.value; render(); };
@@ -389,17 +439,21 @@
     const more = allItems.length > items.length ? `<div class="filters" style="justify-content:center"><button class="linkbtn" id="showmore">Show ${Math.min(200, allItems.length - items.length)} more (${allItems.length - items.length} not shown)</button></div>` : "";
     const empty = { all: "Nothing left to sort.",
                     keep: "Nothing advancing yet. Swipe right or press Keep.", nix: "Nothing nixed." }[which];
+    const waiting = which === "keep" ? allItems.filter(x => !PUB.ids.has(x.id) && !x.rec._hold).length : 0;
+    const heldN = which === "keep" ? allItems.filter(x => x.rec._hold).length : 0;
+    const pub = which === "keep" ? `<div class="pubbar">Advancing is the v4 library. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
     const finish = which === "all" && items.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <span>${allItems.length} to sort.</span><button class="linkbtn" id="finishnix">Done with this page: nix the ${items.length} shown</button></div>` : "";
-    $("#main").innerHTML = filtersHTML() + finish + (items.length ? `<div class="grid">${items.map(x => {
+    $("#main").innerHTML = filtersHTML() + pub + finish + (items.length ? `<div class="grid">${items.map(x => {
       const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st;
       return `<div class="tile ${st}" data-id="${esc(x.id)}">
-        ${isNew ? `<span class="badge new">New</span>` : st === "keep" ? `<span class="badge">${dlState(x.id)}</span>` : ""}
+        ${isNew ? `<span class="badge new">New</span>` : st === "keep" ? `<span class="badge ${PUB.ids.has(x.id) ? "live" : "wait"}">${dlState(x.id)}</span>` : ""}
         ${thumbHTML(r)}
         <div class="acts over"><button class="x ${st === "nix" || (which === "all" && !st) ? "on" : ""}" data-act="nix" title="Nix">✕</button>
           <button class="k ${st === "keep" ? "on" : ""}" data-act="keep" title="Keep">✓</button></div>
-        <div class="meta"><div class="t" title="${esc(r.title || "")}">${esc(r.title || x.id)}</div>
+        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${esc(r.title || x.id)}</div>
           <div class="sub one">${sub(r)}</div>
+          <button class="openrec" data-open="${esc(x.id)}">Open record${(EDITS[x.id] || {}).questions && EDITS[x.id].questions.length ? ` · ${EDITS[x.id].questions.length} question${EDITS[x.id].questions.length > 1 ? "s" : ""}` : ""}${(EDITS[x.id] || {}).fields && Object.keys(EDITS[x.id].fields).length ? " · edited" : ""}</button>
           <details class="more"><summary>Details</summary>
             <div class="sub">Lane ${esc(r.lane || "?")} · ${esc(r.kind || "")} · Rights: ${esc(r.rights || "unknown")}</div>
             ${r.description_seen ? `<div class="sub">${esc(r.description_seen)}</div>` : ""}
@@ -414,6 +468,7 @@
       items.forEach(x => { if (!statusOf(x.id)) setStatus(x.id, "nix"); });
       toast(`Nixed ${items.length}`); render();
     };
+    $("#main").querySelectorAll("[data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); openRecord(b.dataset.open); });
     $("#main").querySelectorAll(".tile").forEach(el => {
       el.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
         const id = el.dataset.id, act = b.dataset.act;
@@ -726,13 +781,13 @@
           delete v.preview;
         }
         delete v.hold;
-        put(v, prevPath);
+        put(editsToV4(v), prevPath);
       }
     }
     // agent finds in Advancing
     for (const [id, x] of Object.entries(records)) {
       if (x.v4 || statusOf(id) !== "keep") continue;
-      const v = findToV4(id, x, (sort[id] || {}).at);
+      const v = editsToV4(findToV4(id, x, (sort[id] || {}).at));
       put(v, "", x.rec.image_url || "");
     }
     index.sort((a, b) => a.path < b.path ? -1 : 1);
@@ -745,6 +800,7 @@
     try {
       if (intakePending.length) { clearTimeout(intakeTimer); await intakeSave(); }
       if (Object.keys(pending).length) { clearTimeout(saveTimer); await save(); }
+      if (Object.keys(editsPending).length) { clearTimeout(editsTimer); await saveEdits(); }
       for (let attempt = 0; attempt < 2; attempt++) {
         const ref = await (await api(`/git/ref/heads/main`)).json();
         const head = ref.object.sha;
@@ -771,6 +827,7 @@
         const up = await api(`/git/refs/heads/main`, { method: "PATCH", body: JSON.stringify({ sha: nc.sha }) });
         if (up.ok) {
           V4.last = new Date().toISOString(); S.set("v4LastSync", V4.last);
+          setTimeout(load, 1500);
           toast(`Published to v4: ${added ? `+${added} ` : ""}${updated ? `${updated} updated ` : ""}${removed ? `−${removed} ` : ""}· ${count} in the library${held ? ` · ${held} held for source` : ""}`);
           break;
         }
@@ -806,10 +863,147 @@
           z.onclick = e => { e.stopPropagation(); enlarge(t); };
           t.appendChild(z);
         }
-      } else if (t.dataset.full) t.onclick = () => enlarge(t);
+      } else {
+        // Advancing / Nixed: the picture opens the record; the corner button enlarges
+        t.style.cursor = "pointer";
+        t.onclick = () => openRecord(t.closest(".tile").dataset.id);
+        if (t.dataset.full) {
+          const z = Object.assign(document.createElement("button"), { className: "zoom", title: "Enlarge", textContent: "⤢" });
+          z.onclick = e => { e.stopPropagation(); enlarge(t); };
+          t.appendChild(z);
+        }
+      }
     });
     $("#main").querySelectorAll(".card .cardinner[data-full]").forEach(t => t.ondblclick = () => enlarge(t));
     hydratePreviews();
+  }
+  // ---------- Record view: open, edit, ask questions ----------
+  const EDITABLE = [["title", "Title"], ["summary", "Summary"], ["creator_as_stated", "Creator (as stated)"], ["date_as_stated", "Date (as stated)"],
+                    ["holder", "Held by"], ["tags", "Tags (comma separated)"], ["rights_as_stated", "Rights (as stated)"], ["care_note", "Care note"], ["notes", "Notes"]];
+  const LONG = new Set(["summary", "creator_as_stated", "rights_as_stated", "care_note", "notes", "holder"]);
+  function applyEdits() {
+    for (const [id, x] of Object.entries(records)) {
+      const f = (EDITS[id] || {}).fields || {};
+      if (!Object.keys(f).length) continue;
+      const r = x.rec;
+      if (f.title) r.title = f.title;
+      if (f.creator_as_stated !== undefined) r.creator = f.creator_as_stated;
+      if (f.date_as_stated !== undefined) r.date_of_item = f.date_as_stated;
+      if (f.holder !== undefined) r.holder = f.holder;
+      if (f.rights_as_stated !== undefined) r.rights = f.rights_as_stated;
+      if (f.summary !== undefined) { if (x.v4) r.passage = f.summary; else r.why_this = f.summary; }
+      if (f.care_note !== undefined) r.care_note = f.care_note;
+    }
+  }
+  async function fullV4(x) {
+    if (!x.v4) return null;
+    const b = x.v4.batch;
+    if (!MAN[b]) { const txt = await raw(`v4/intake/${b}/manifest.json`); MAN[b] = {}; (JSON.parse(txt || '{"items":[]}').items || []).forEach(it => MAN[b][it.v4.id] = it); }
+    return MAN[b][x.id] || null;
+  }
+  function currentValues(x, full) {
+    const v = full ? full.v4 : null, r = x.rec, o = x.orig || {};
+    const base = v ? { title: v.title, summary: v.summary || v.quote || "", creator_as_stated: v.creator_as_stated, date_as_stated: v.date.as_stated,
+                       holder: v.holder, tags: (v.tags || []).join(", "), rights_as_stated: v.rights.as_stated, care_note: v.care.note, notes: v.notes || "" }
+                   : { title: o.title, summary: o.why_this || "", creator_as_stated: o.creator || o.author || "", date_as_stated: o.date_of_item || "",
+                       holder: o.holder || o.institution || "", tags: (o.themes || []).join(", "), rights_as_stated: o.rights || "", care_note: o.care_note || "", notes: o.chain || "" };
+    for (const k in base) if (base[k] === "unknown" || base[k] == null) base[k] = "";
+    return Object.assign(base, (EDITS[x.id] || {}).fields || {});
+  }
+  let drawerId = null;
+  async function openRecord(id) {
+    if (!records[id]) return;
+    const x = Object.assign({ id }, records[id]);
+    drawerId = id;
+    const d = $("#drawer"); d.classList.add("open");
+    d.innerHTML = `<div class="dh"><b>Loading…</b><span class="sp"></span><button class="linkbtn" id="dclose">Close</button></div>`;
+    $("#dclose").onclick = closeRecord;
+    let full = null; try { full = await fullV4(x); } catch {}
+    if (drawerId !== id) return;
+    renderDrawer(x, full);
+  }
+  function closeRecord() { drawerId = null; $("#drawer").classList.remove("open"); render(); }
+  function renderDrawer(x, full) {
+    const d = $("#drawer"), r = x.rec, st = statusOf(x.id), val = currentValues(x, full), ed = EDITS[x.id] || {};
+    const v = full ? full.v4 : null;
+    const pic = r._pv ? (PV[r._pv] ? `<div class="dimg"><img src="${PV[r._pv]}" alt=""></div>` : `<div class="dimg"><img data-pv="${esc(r._pv)}" alt=""></div>`)
+              : (imgChain(r)[0] ? `<div class="dimg"><img src="${esc(imgChain(r)[0])}" alt=""></div>` : "");
+    const label = (CATS.find(c => c[0] === catOf(x)) || [, catOf(x)])[1];
+    const ro = (k, t) => t && t !== "unknown" ? `<div class="ro"><b>${k}:</b> ${esc(t)}</div>` : "";
+    const srcs = v ? (v.sources || []).map(s => typeof s === "string" ? s : [s.label || s.source_id || s.file || "", s.supports || s.entry || "", s.url || ""].filter(Boolean).join(" · ")).filter(Boolean) : [];
+    d.innerHTML = `<div class="dh"><span class="stbtn" style="cursor:default">${esc(label)}</span>
+        <button class="stbtn x ${st === "nix" ? "on" : ""}" data-st="nix">✕ Nix</button><button class="stbtn k ${st === "keep" ? "on" : ""}" data-st="keep">✓ Keep</button>
+        <span class="sp"></span><button class="linkbtn" id="dclose">Close</button></div>
+      ${pic}
+      <div class="db">
+        ${st === "keep" ? `<div class="ro">${esc(dlState(x.id))}</div>` : ""}
+        ${r._hold ? `<div class="ro" style="color:var(--gold)">${esc(r._hold)}</div>` : ""}
+        <h3>Record</h3>
+        ${EDITABLE.map(([k, l]) => `<label>${l}</label>${LONG.has(k) ? `<textarea data-f="${k}">${esc(val[k] || "")}</textarea>` : `<input type="text" data-f="${k}" value="${esc(val[k] || "")}">`}`).join("")}
+        <button class="primary" id="dsave">Save edits</button> <span class="ro" id="dsaved">${ed.updated_at ? `Last edited ${new Date(ed.updated_at).toLocaleString()}` : ""}</span>
+        <h3>Questions</h3>
+        ${(ed.questions || []).map(q => `<div class="q">${esc(q.q)}<div class="w">${new Date(q.at).toLocaleString()}</div>${q.answer ? `<div class="a">${esc(q.answer)}</div>` : `<div class="w">Waiting for an answer</div>`}</div>`).join("") || `<div class="ro">No questions yet.</div>`}
+        <label>Ask a question about this record</label><textarea id="dq" placeholder="e.g. Is there a better source for the date? Who is pictured?"></textarea>
+        <button class="primary" id="dask">Add question</button>
+        <h3>Source</h3>
+        ${r.source_url ? `<div class="ro"><a href="${esc(r.source_url)}" target="_blank" rel="noopener">Open the source page</a></div>` : ""}
+        ${srcs.map(s => `<div class="ro">${esc(s)}</div>`).join("")}
+        ${v ? ro("Care codes suggested", (v.care.suggested_codes || []).join(", ")) + ro("Access", v.care.access) + ro("Former IDs", v.former_ids.join(", ")) + ro("Batch", x.v4.batch) + ro("Same image as", (v.same_as || []).join(", ")) : ro("Find", x.id) + ro("Lane", r.lane) + ro("Seen", r.description_seen)}
+      </div>`;
+    $("#dclose").onclick = closeRecord;
+    d.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { const want = b.dataset.st; setStatus(x.id, statusOf(x.id) === want ? "" : want); renderDrawer(x, full); });
+    $("#dsave").onclick = () => {
+      const fields = {}, now = currentValues(x, null), base = currentValues(Object.assign({}, x, { id: "__none__" }), full);
+      d.querySelectorAll("[data-f]").forEach(el => { const k = el.dataset.f, nv = el.value.trim(); if (nv !== (base[k] || "").trim()) fields[k] = nv; });
+      editRecord(x.id, e => { e.fields = fields; });
+      applyEdits(); $("#dsaved").textContent = Object.keys(fields).length ? `Saved ${Object.keys(fields).length} edit${Object.keys(fields).length > 1 ? "s" : ""}. They publish with the record on Refresh.` : "No changes from the original.";
+    };
+    $("#dask").onclick = () => {
+      const q = $("#dq").value.trim(); if (!q) return;
+      editRecord(x.id, e => { (e.questions = e.questions || []).push({ q, at: new Date().toISOString(), by: "Cyrus", answer: "" }); });
+      renderDrawer(x, full); toast("Question saved to the record");
+    };
+    hydratePreviews();
+  }
+  function editRecord(id, fn) {
+    const e = JSON.parse(JSON.stringify(EDITS[id] || { fields: {}, questions: [] }));
+    fn(e); e.updated_at = new Date().toISOString();
+    EDITS[id] = e; editsPending[id] = e;
+    clearTimeout(editsTimer); editsTimer = setTimeout(saveEdits, 1500);
+  }
+  async function saveEdits() {
+    const changes = editsPending; editsPending = {};
+    if (!Object.keys(changes).length) return;
+    try {
+      for (let i = 0; i < 3; i++) {
+        const cur = await api(`/contents/v4/edits.json?ref=main`);
+        let base = {}, sha;
+        if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; try { base = JSON.parse(unb64(j.content)); } catch {} }
+        Object.assign(base, changes);
+        const body = { message: `Edits: ${Object.keys(changes).length} record${Object.keys(changes).length > 1 ? "s" : ""}`, content: b64(JSON.stringify(base, null, 1) + "\n"), branch: "main" };
+        if (sha) body.sha = sha;
+        const res = await api(`/contents/v4/edits.json`, { method: "PUT", body: JSON.stringify(body) });
+        if (res.ok) { $("#stat").textContent = `Saved · ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`; return; }
+        if (res.status !== 409 && res.status !== 422) throw new Error(res.status);
+      }
+      throw new Error("conflict");
+    } catch (e) { Object.assign(changes, editsPending); editsPending = changes; editsTimer = setTimeout(saveEdits, 8000); toast("Could not save edits yet; will retry"); }
+  }
+  function editsToV4(v) {
+    const e = EDITS[v.id]; if (!e) return v;
+    const f = e.fields || {};
+    if (f.title !== undefined) v.title = f.title;
+    if (f.summary !== undefined) v.summary = f.summary;
+    if (f.creator_as_stated !== undefined) v.creator_as_stated = f.creator_as_stated;
+    if (f.date_as_stated !== undefined) v.date = Object.assign({}, v.date, { as_stated: f.date_as_stated });
+    if (f.holder !== undefined) v.holder = f.holder;
+    if (f.tags !== undefined) v.tags = f.tags.split(",").map(t => t.trim()).filter(Boolean);
+    if (f.rights_as_stated !== undefined) v.rights = Object.assign({}, v.rights, { as_stated: f.rights_as_stated });
+    if (f.care_note !== undefined) v.care = Object.assign({}, v.care, { note: f.care_note });
+    if (f.notes !== undefined) v.notes = f.notes;
+    if (Object.keys(f).length) v.edited = { by: "Cyrus", at: e.updated_at, fields: Object.keys(f) };
+    if ((e.questions || []).length) v.questions = e.questions;
+    return v;
   }
   let pvIO = null;
   function hydratePreviews() {
@@ -848,14 +1042,15 @@
     else if (e.key === "ArrowLeft") $("#bx")?.click();
     else if (e.key.toLowerCase() === "z") undo();
   });
-  window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); });
+  window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108163540";
+  const BUILD = "20261108164615";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
       const v = await (await fetch("version.json?t=" + Date.now(), { cache: "no-store" })).json();
-      if (v.build && v.build !== BUILD && !intakePending.length) location.reload();
+      if (v.build && v.build !== BUILD && !intakePending.length && !drawerId && !Object.keys(editsPending).length && !Object.keys(pending).length) location.reload();
     } catch {}
   }, 60000);
 
