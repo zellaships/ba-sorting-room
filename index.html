@@ -231,7 +231,7 @@
   const TIER = { duplicate: "Likely duplicate", "very similar": "Very similar", similar: "Similar" };                                           // batch -> manifest (loaded when a record is opened)
   const CATS = [["image", "Images"], ["work", "Works"], ["person", "People"], ["place", "Places"], ["excerpt", "Excerpts"],
                 ["event", "Events"], ["concept", "Concepts"], ["practice", "Practices"], ["nature", "Nature"]];
-  let cat = S.get("cat", "");
+  let cat = S.get("cat", ""); if (cat === "look") cat = "";
   const catOf = x => x.v4 ? x.v4.type : (x.rec.image_url || x.rec.iiif_url ? "image" : x.rec.passage ? "excerpt" : "work");
   const PV = {};                // private preview path -> blob URL
   let cache = S.get("cache", {}); // path -> record (records never change once written)
@@ -436,7 +436,6 @@
     base.forEach(x => { const c = catOf(x); n[c] = (n[c] || 0) + 1; });
     const days = [...new Set(Object.values(records).map(x => x.path.split("/")[1]))].sort();
     return `<div class="cats"><button data-cat="" class="${cat ? "" : "on"}">All<span class="c">${base.length}</span></button>
-      <button data-cat="look" class="look ${cat === "look" ? "on" : ""}">Lookalikes<span class="c">${base.filter(x => SIM.by[x.id]).length}</span></button>
       ${CATS.map(([k, l]) => `<button data-cat="${k}" class="${cat === k ? "on" : ""}">${l}<span class="c">${n[k] || 0}</span></button>`).join("")}</div>
       <div class="filters">Group <select id="f-day"><option value="">All</option>${days.map(d => `<option ${filter.day === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></div>`;
   }
@@ -1073,7 +1072,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108172455";
+  const BUILD = "20261108172941";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
