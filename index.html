@@ -188,6 +188,11 @@
 #drawer .stbtn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px}
 #drawer .stbtn.k.on{background:var(--keep);color:#06261a;border-color:var(--keep)}#drawer .stbtn.x.on{background:var(--nix);color:#2a0d06;border-color:var(--nix)}
 #drawer .primary{margin-top:12px}
+.ghead{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:14px 0 -4px;padding-top:10px;border-top:1px solid var(--line);color:var(--mute);font-size:13px}
+.ghead b{color:var(--ink);font-size:14px}
+.simb{position:absolute;top:8px;left:8px;z-index:2;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
+.simb.duplicate{background:#d9674e;color:#2a0d06}.simb.very{background:#e2b65c;color:#2a1d05}.simb.similar{background:#7fb6d6;color:#06202e}
+.cats button.look{border-style:dashed}
 </style>
 </head>
 <body>
@@ -221,7 +226,9 @@
   const CARDS = { sha: null, list: [] };
   let EDITS = {}, editsPending = {}, editsTimer = null;     // id -> {fields, questions, updated_at}
   const PUB = { sha: null, ids: new Set(), at: "" };       // what v4/library/index.json holds right now
-  const MAN = {};                                           // batch -> manifest (loaded when a record is opened)
+  const MAN = {};
+  const SIM = { sha: null, by: {} };                        // lookalike groups from v4/intake/similar.json
+  const TIER = { duplicate: "Likely duplicate", "very similar": "Very similar", similar: "Similar" };                                           // batch -> manifest (loaded when a record is opened)
   const CATS = [["image", "Images"], ["work", "Works"], ["person", "People"], ["place", "Places"], ["excerpt", "Excerpts"],
                 ["event", "Events"], ["concept", "Concepts"], ["practice", "Practices"], ["nature", "Nature"]];
   let cat = S.get("cat", "");
@@ -295,6 +302,8 @@
       const er = await api(`/contents/v4/edits.json?ref=main`);
       if (er.status !== 404) { try { EDITS = JSON.parse(unb64((await er.json()).content)); } catch { EDITS = {}; } }
       Object.assign(EDITS, editsPending);
+      const simEnt = (tree.tree || []).find(t => t.path === "v4/intake/similar.json");
+      if (simEnt && simEnt.sha !== SIM.sha) { try { SIM.by = JSON.parse(await raw("v4/intake/similar.json")).by_id || {}; SIM.sha = simEnt.sha; } catch {} }
       const pubEnt = (tree.tree || []).find(t => t.path === "v4/library/index.json");
       if (pubEnt && pubEnt.sha !== PUB.sha) {
         try { const ix = JSON.parse(await raw("v4/library/index.json")); PUB.ids = new Set((ix.items || []).map(i => i.id)); PUB.sha = pubEnt.sha; } catch {}
@@ -342,7 +351,8 @@
 
   function list(which, ignoreCat) {
     let items = Object.entries(records).map(([id, v]) => ({ id, ...v }));
-    if (cat && !ignoreCat) items = items.filter(x => catOf(x) === cat);
+    if (cat === "look" && !ignoreCat) items = items.filter(x => SIM.by[x.id]);
+    else if (cat && !ignoreCat) items = items.filter(x => catOf(x) === cat);
     if (filter.lane) items = items.filter(x => String(x.rec.lane) === filter.lane);
     if (filter.day) items = items.filter(x => x.path.split("/")[1] === filter.day);
     if (which === "keep") items = items.filter(x => statusOf(x.id) === "keep");
@@ -350,8 +360,12 @@
     else if (which === "swipe") items = items.filter(x => !statusOf(x.id));
     else items = items.filter(x => !statusOf(x.id)); // All shows only unsorted finds (kept and nixed live in their own tabs)
     // packaged items first in sheet order (images before text records), then agent finds newest first
-    const ord = x => x.v4 ? (x.v4.type === "image" ? 0 : 1) : 2;
-    return items.sort((a, b) => ord(a) - ord(b) || (a.v4 && b.v4 ? a.ord - b.ord : (a.path < b.path ? 1 : -1)));
+    // lookalike groups first (likely duplicates, then very similar, then similar; lookalikes side by side),
+    // then packaged items in sheet order (images before text records), then agent finds newest first
+    const ord = x => SIM.by[x.id] ? 0 : x.v4 ? (x.v4.type === "image" ? 1 : 2) : 3;
+    return items.sort((a, b) => ord(a) - ord(b) ||
+      (SIM.by[a.id] && SIM.by[b.id] ? (SIM.by[a.id].gid - SIM.by[b.id].gid || SIM.by[a.id].pos - SIM.by[b.id].pos) :
+       a.v4 && b.v4 ? a.ord - b.ord : (a.path < b.path ? 1 : -1)));
   }
   function counts() {
     const all = Object.keys(records);
@@ -422,6 +436,7 @@
     base.forEach(x => { const c = catOf(x); n[c] = (n[c] || 0) + 1; });
     const days = [...new Set(Object.values(records).map(x => x.path.split("/")[1]))].sort();
     return `<div class="cats"><button data-cat="" class="${cat ? "" : "on"}">All<span class="c">${base.length}</span></button>
+      <button data-cat="look" class="look ${cat === "look" ? "on" : ""}">Lookalikes<span class="c">${base.filter(x => SIM.by[x.id]).length}</span></button>
       ${CATS.map(([k, l]) => `<button data-cat="${k}" class="${cat === k ? "on" : ""}">${l}<span class="c">${n[k] || 0}</span></button>`).join("")}</div>
       <div class="filters">Group <select id="f-day"><option value="">All</option>${days.map(d => `<option ${filter.day === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></div>`;
   }
@@ -444,10 +459,19 @@
     const pub = which === "keep" ? `<div class="pubbar">Advancing is the v4 library. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
     const finish = which === "all" && items.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <span>${allItems.length} to sort.</span><button class="linkbtn" id="finishnix">Done with this page: nix the ${items.length} shown</button></div>` : "";
+    const gCount = {}; allItems.forEach(x => { const g = SIM.by[x.id]; if (g) gCount[g.gid] = (gCount[g.gid] || 0) + 1; });
+    let lastG = null;
     $("#main").innerHTML = filtersHTML() + pub + finish + (items.length ? `<div class="grid">${items.map(x => {
-      const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st;
-      return `<div class="tile ${st}" data-id="${esc(x.id)}">
-        ${isNew ? `<span class="badge new">New</span>` : st === "keep" ? `<span class="badge ${PUB.ids.has(x.id) ? "live" : "wait"}">${dlState(x.id)}</span>` : ""}
+      const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st, sim = SIM.by[x.id];
+      let head = "";
+      if (sim && sim.gid !== lastG) {
+        const tierWord = { duplicate: "Possible duplicates", "very similar": "Very similar", similar: "Similar" };
+        const gt = items.filter(y => SIM.by[y.id] && SIM.by[y.id].gid === sim.gid).some(y => SIM.by[y.id].tier === "duplicate") ? "duplicate" : sim.tier;
+        head = `<div class="ghead"><b>Lookalike group ${sim.gid}</b> · ${tierWord[gt] || "Similar"} · ${gCount[sim.gid] || 1} here</div>`;
+      } else if (!sim && lastG !== null && lastG !== "none") head = `<div class="ghead"><b>Everything else</b></div>`;
+      lastG = sim ? sim.gid : (lastG === null ? null : "none");
+      return head + `<div class="tile ${st}" data-id="${esc(x.id)}">
+        ${sim ? `<span class="simb ${sim.tier === "very similar" ? "very" : sim.tier}" title="Closest match ${esc((records[sim.match] || {}).rec ? records[sim.match].rec.title : sim.match)} (${sim.score})">${TIER[sim.tier]}</span>` : isNew ? `<span class="badge new">New</span>` : st === "keep" ? `<span class="badge ${PUB.ids.has(x.id) ? "live" : "wait"}">${dlState(x.id)}</span>` : ""}
         ${thumbHTML(r)}
         <div class="acts over"><button class="x ${st === "nix" || (which === "all" && !st) ? "on" : ""}" data-act="nix" title="Nix">✕</button>
           <button class="k ${st === "keep" ? "on" : ""}" data-act="keep" title="Keep">✓</button></div>
@@ -938,6 +962,9 @@
       <div class="db">
         ${st === "keep" ? `<div class="ro">${esc(dlState(x.id))}</div>` : ""}
         ${r._hold ? `<div class="ro" style="color:var(--gold)">${esc(r._hold)}</div>` : ""}
+        ${SIM.by[x.id] ? `<div class="ro"><b>${TIER[SIM.by[x.id].tier]}</b> (lookalike group ${SIM.by[x.id].gid}, ${SIM.by[x.id].size} images). Closest match:
+          <button class="openrec" data-jump="${esc(SIM.by[x.id].match)}">${esc(records[SIM.by[x.id].match] ? records[SIM.by[x.id].match].rec.title : SIM.by[x.id].match)}</button>
+          ${records[SIM.by[x.id].match] ? ` (${statusOf(SIM.by[x.id].match) === "keep" ? "kept" : statusOf(SIM.by[x.id].match) === "nix" ? "nixed" : "unsorted"})` : ""}</div>` : ""}
         <h3>Record</h3>
         ${EDITABLE.map(([k, l]) => `<label>${l}</label>${LONG.has(k) ? `<textarea data-f="${k}">${esc(val[k] || "")}</textarea>` : `<input type="text" data-f="${k}" value="${esc(val[k] || "")}">`}`).join("")}
         <button class="primary" id="dsave">Save edits</button> <span class="ro" id="dsaved">${ed.updated_at ? `Last edited ${new Date(ed.updated_at).toLocaleString()}` : ""}</span>
@@ -951,6 +978,7 @@
         ${v ? ro("Care codes suggested", (v.care.suggested_codes || []).join(", ")) + ro("Access", v.care.access) + ro("Former IDs", v.former_ids.join(", ")) + ro("Batch", x.v4.batch) + ro("Same image as", (v.same_as || []).join(", ")) : ro("Find", x.id) + ro("Lane", r.lane) + ro("Seen", r.description_seen)}
       </div>`;
     $("#dclose").onclick = closeRecord;
+    d.querySelectorAll("[data-jump]").forEach(b => b.onclick = () => openRecord(b.dataset.jump));
     d.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { const want = b.dataset.st; setStatus(x.id, statusOf(x.id) === want ? "" : want); renderDrawer(x, full); });
     $("#dsave").onclick = () => {
       const fields = {}, now = currentValues(x, null), base = currentValues(Object.assign({}, x, { id: "__none__" }), full);
@@ -1045,7 +1073,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108164615";
+  const BUILD = "20261108172455";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
