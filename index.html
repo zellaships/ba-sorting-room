@@ -193,7 +193,7 @@
 .simb{position:absolute;top:8px;left:8px;z-index:2;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
 .simb.duplicate{background:#d9674e;color:#2a0d06}.simb.very{background:#e2b65c;color:#2a1d05}.simb.similar{background:#7fb6d6;color:#06202e}
 .cats button.look{border-style:dashed}
-.tnum{font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums;margin-right:6px}
+.tnum{display:inline-block;font:600 12px Inter,system-ui;font-variant-numeric:tabular-nums;background:var(--deep2);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:1px 9px;margin-right:8px;vertical-align:2px}
 #where{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(11,31,42,.94);border:1px solid var(--line);color:var(--ink);
   border-radius:999px;padding:6px 16px;font-size:14px;font-variant-numeric:tabular-nums;z-index:40;display:none;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 #where b{color:#fff}
@@ -214,7 +214,7 @@
 </header>
 <main id="main"></main>
 <aside id="drawer"></aside>
-<div id="where"></div>
+<div id="where" hidden></div>
 <div class="lightbox" id="lb"><img id="lbimg" alt=""></div>
 <div class="toast" id="toast"></div>
 
@@ -528,7 +528,7 @@
     if (!n) { w.style.display = "none"; return; }
     const num = parseInt(n.replace(/[^0-9]/g, ""), 10) || 0, total = gs.items.length;
     w.innerHTML = `<b>${num.toLocaleString()}</b> of ${total.toLocaleString()} · ${Math.max(0, Math.round(num / total * 100))}% through`;
-    w.style.display = "block";
+    w.style.display = "none";
   }
   let whereT = null;
   window.addEventListener("scroll", () => { clearTimeout(whereT); whereT = setTimeout(updateWhere, 60); }, { passive: true });
@@ -1111,7 +1111,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108183824";
+  const BUILD = "20261108183858";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
