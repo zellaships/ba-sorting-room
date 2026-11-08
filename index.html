@@ -472,7 +472,7 @@
         ${thumbHTML(r)}
         <div class="acts over"><button class="x ${st === "nix" || (which === "all" && !st) ? "on" : ""}" data-act="nix" title="Nix">✕</button>
           <button class="k ${st === "keep" ? "on" : ""}" data-act="keep" title="Keep">✓</button></div>
-        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${n ? `<span class="tnum">${n.toLocaleString()}</span>` : ""}${esc(r.title || x.id)}</div>
+        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${n ? `<span class="tnum">${n.toLocaleString()} / ${gs.items.length.toLocaleString()}</span>` : ""}${esc(r.title || x.id)}</div>
           <div class="sub one">${sub(r)}</div>
           <button class="openrec" data-open="${esc(x.id)}">Open record${nq ? ` · ${nq} question${nq > 1 ? "s" : ""}` : ""}${edited ? " · edited" : ""}</button>
           <details class="more"><summary>Details</summary>
@@ -493,7 +493,7 @@
     const enlarge = t => { $("#lbimg").src = t.dataset.full; $("#lb").style.display = "flex"; };
     root.querySelectorAll("[data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); openRecord(b.dataset.open); });
     root.querySelectorAll(".tile").forEach(el => {
-      el.dataset.n = (el.querySelector(".tnum") || {}).textContent || "";
+      el.dataset.n = ((el.querySelector(".tnum") || {}).textContent || "").split("/")[0];
       el.querySelectorAll("[data-act]").forEach(b => b.onclick = e => { e.stopPropagation(); decide(el, b.dataset.act); });
       const t = el.querySelector(".thumb"); if (!t) return;
       t.style.cursor = "pointer";
@@ -1111,7 +1111,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108183858";
+  const BUILD = "20261108183943";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
