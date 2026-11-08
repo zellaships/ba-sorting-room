@@ -161,6 +161,7 @@
   .itile.go .gobadge { background: var(--keep); color: #06231a; }
   .itile .codes { display: flex; gap: 4px; flex-wrap: wrap; }
   .itile .codes span { font-size: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px; color: var(--gold); }
+.held{font-size:12px;color:#e9b872;margin-top:4px}
 </style>
 </head>
 <body>
@@ -528,7 +529,7 @@
   async function intakeBatches() {
     const r = await api(`/contents/v4/intake?ref=main`);
     if (r.status === 404) return [];
-    return (await r.json()).filter(x => x.type === "dir").map(x => x.name).sort().reverse();
+    return (await r.json()).filter(x => x.type === "dir").map(x => x.name).sort();
   }
   async function intakeLoad(batch) {
     IN.batch = batch; S.set("intakeBatch", batch); IN.manifest = null; IN.go = {}; IN.decided = {};
@@ -607,9 +608,13 @@
           <div class="meta"><div class="t" title="${esc(v.title)}">${esc(v.title)}</div>
           <div class="sub one">${esc([v.date.as_stated !== "unknown" ? v.date.as_stated : "", (v.tags || []).slice(0, 3).join(", ")].filter(Boolean).join(" · "))}</div>
           ${codes ? `<div class="codes">${codes}</div>` : ""}
+          ${v.hold ? `<div class="held" title="${esc(v.hold)}">Held: source ${esc(v.source_entry || "missing")}, won't publish yet</div>` : ""}
           <details class="more"><summary>Details</summary><div class="sub">${esc(clip(v.summary, 600))}</div>
             ${v.care.note && v.care.note !== "unknown" ? `<div class="sub">Care: ${esc(clip(v.care.note, 300))}</div>` : ""}
-            <div class="sub">Rights: ${esc(v.rights.as_stated)} · v3 status: ${esc(v.status_v3)} · ${esc(v.former_ids.join(", "))}</div></details>
+            ${v.creator_as_stated && v.creator_as_stated !== "unknown" ? `<div class="sub">By: ${esc(clip(v.creator_as_stated, 300))}</div>` : ""}
+            ${v.holder && v.holder !== "unknown" ? `<div class="sub">Held by: ${esc(clip(v.holder, 200))}</div>` : ""}
+            ${v.source_url && v.source_url !== "unknown" ? `<div class="sub"><a href="${esc(v.source_url)}" target="_blank" rel="noopener">Source page</a></div>` : ""}
+            <div class="sub">Rights: ${esc(v.rights.as_stated)}${v.status_v3 ? ` · v3 status: ${esc(v.status_v3)}` : ""} · ${esc(v.former_ids.join(", "))}</div></details>
           </div></div>`;
       }).join("")}</div>`;
     $("#v4sync").onclick = () => syncV4(true);
@@ -645,6 +650,7 @@
     // every batch: manifest + latest decision per item; gos become library records
     const batches = Object.keys(treeMap).map(p => (p.match(/^v4\/intake\/([^/]+)\/manifest\.json$/) || [])[1]).filter(Boolean);
     const files = {}, index = [];
+    let held = 0;
     for (const batch of batches.sort()) {
       const man = JSON.parse(await raw(`v4/intake/${batch}/manifest.json`) || '{"items":[]}');
       const decTxt = treeMap[`v4/decisions/${batch}.jsonl`] ? (await raw(`v4/decisions/${batch}.jsonl`)) || "" : "";
@@ -653,6 +659,7 @@
       for (const it of man.items || []) {
         const d = dec[it.v4.id];
         if (!d || d.decision !== "go") continue;
+        if (it.v4.hold) { held++; continue; }
         const v = JSON.parse(JSON.stringify(it.v4));
         v.admission = { decision: "go", decided_by: d.by || "Cyrus", decided_at: d.at || "unknown", batch };
         let prevPath = "";
@@ -670,7 +677,7 @@
     }
     index.sort((a, b) => a.path < b.path ? -1 : 1);
     files["v4/library/index.json"] = { content: stableJSON({ count: index.length, items: index }) };
-    return { files, count: index.length };
+    return { files, count: index.length, held };
   }
   async function syncV4(manual = false) {
     if (V4.busy) return; V4.busy = true;
@@ -683,7 +690,7 @@
         const commit = await (await api(`/git/commits/${head}`)).json();
         const tree = await (await api(`/git/trees/${commit.tree.sha}?recursive=1`)).json();
         const treeMap = {}; (tree.tree || []).forEach(t => { if (t.type === "blob") treeMap[t.path] = t.sha; });
-        const { files, count } = await v4Desired(treeMap);
+        const { files, count, held } = await v4Desired(treeMap);
         const changes = []; let added = 0, updated = 0, removed = 0;
         for (const [path, f] of Object.entries(files)) {
           const want = f.sha || await gitBlobSha(f.content);
@@ -703,7 +710,7 @@
         const up = await api(`/git/refs/heads/main`, { method: "PATCH", body: JSON.stringify({ sha: nc.sha }) });
         if (up.ok) {
           V4.last = new Date().toISOString(); S.set("v4LastSync", V4.last);
-          toast(`Published to v4: ${added ? `+${added} ` : ""}${updated ? `${updated} updated ` : ""}${removed ? `−${removed} ` : ""}· ${count} in the library`);
+          toast(`Published to v4: ${added ? `+${added} ` : ""}${updated ? `${updated} updated ` : ""}${removed ? `−${removed} ` : ""}· ${count} in the library${held ? ` · ${held} held for source` : ""}`);
           break;
         }
         if (attempt === 1) throw new Error("someone else saved at the same moment; try again");
@@ -764,7 +771,7 @@
   });
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108161446";
+  const BUILD = "20261108162921";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
