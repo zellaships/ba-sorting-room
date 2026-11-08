@@ -761,6 +761,16 @@
     else if (e.key.toLowerCase() === "z") undo();
   });
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); });
+  // ---------- Auto-update: reload by itself when a new version of this page is published ----------
+  const BUILD = "20261108160958";
+  setInterval(async () => {
+    if (location.protocol === "file:" || document.visibilityState !== "visible") return;
+    try {
+      const v = await (await fetch("version.json?t=" + Date.now(), { cache: "no-store" })).json();
+      if (v.build && v.build !== BUILD && !intakePending.length) location.reload();
+    } catch {}
+  }, 60000);
+
   if (tab === "activity") tab = "all";
   render(); load();
   setInterval(() => { if (token && document.visibilityState === "visible") load(); }, POLL_MS);
