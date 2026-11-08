@@ -311,7 +311,10 @@
       applyEdits();
       $("#dot").className = "dot live";
       $("#stat").textContent = `Live · synced ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-      render();
+      // redraw only when something changed, so a background sync never jumps the page while you scroll
+      const sig = [Object.keys(records).length, sortSha, CARDS.sha, SIM.sha, PUB.sha, JSON.stringify(EDITS).length,
+                   Object.values(sort).filter(v => v && v.status).length].join("|");
+      if (sig !== lastSig || !$("#main").children.length) { lastSig = sig; render(); } else counts();
     } catch (e) {
       $("#dot").className = "dot";
       $("#stat").textContent = `Sync failed (${e.message})`;
@@ -440,66 +443,103 @@
       <div class="filters">Group <select id="f-day"><option value="">All</option>${days.map(d => `<option ${filter.day === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></div>`;
   }
   function bindFilters() {
-    document.querySelectorAll(".cats [data-cat]").forEach(b => b.onclick = () => { cat = b.dataset.cat; S.set("cat", cat); shownN = 200; render(); });
+    document.querySelectorAll(".cats [data-cat]").forEach(b => b.onclick = () => { cat = b.dataset.cat; S.set("cat", cat); shownN = CHUNK; render(); });
     const l = $("#f-lane"), d = $("#f-day");
     if (l) l.onchange = () => { filter.lane = l.value; render(); };
     if (d) d.onchange = () => { filter.day = d.value; render(); };
   }
 
-  let shownN = 200;
-  function renderGrid(which) {
-    const allItems = list(which === "all" ? "all" : which);
-    const items = allItems.slice(0, shownN);
-    const more = allItems.length > items.length ? `<div class="filters" style="justify-content:center"><button class="linkbtn" id="showmore">Show ${Math.min(200, allItems.length - items.length)} more (${allItems.length - items.length} not shown)</button></div>` : "";
-    const empty = { all: "Nothing left to sort.",
-                    keep: "Nothing advancing yet. Swipe right or press Keep.", nix: "Nothing nixed." }[which];
-    const waiting = which === "keep" ? allItems.filter(x => !PUB.ids.has(x.id) && !x.rec._hold).length : 0;
-    const heldN = which === "keep" ? allItems.filter(x => x.rec._hold).length : 0;
-    const pub = which === "keep" ? `<div class="pubbar">Advancing is the v4 library. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
-    const finish = which === "all" && items.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
-      <span>${allItems.length} to sort.</span><button class="linkbtn" id="finishnix">Done with this page: nix the ${items.length} shown</button></div>` : "";
-    const gCount = {}; allItems.forEach(x => { const g = SIM.by[x.id]; if (g) gCount[g.gid] = (gCount[g.gid] || 0) + 1; });
-    let lastG = null;
-    $("#main").innerHTML = filtersHTML() + pub + finish + (items.length ? `<div class="grid">${items.map(x => {
-      const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st, sim = SIM.by[x.id];
-      let head = "";
-      if (sim && sim.gid !== lastG) {
-        const tierWord = { duplicate: "Possible duplicates", "very similar": "Very similar", similar: "Similar" };
-        const gt = items.filter(y => SIM.by[y.id] && SIM.by[y.id].gid === sim.gid).some(y => SIM.by[y.id].tier === "duplicate") ? "duplicate" : sim.tier;
-        head = `<div class="ghead"><b>Lookalike group ${sim.gid}</b> · ${tierWord[gt] || "Similar"} · ${gCount[sim.gid] || 1} here</div>`;
-      } else if (!sim && lastG !== null && lastG !== "none") head = `<div class="ghead"><b>Everything else</b></div>`;
-      lastG = sim ? sim.gid : (lastG === null ? null : "none");
-      return head + `<div class="tile ${st}" data-id="${esc(x.id)}">
+  let shownN = 150, lastSig = "";            // how many tiles are on the page; grows as you scroll
+  const CHUNK = 150;
+  let gridState = null;
+  const tierWord = { duplicate: "Possible duplicates", "very similar": "Very similar", similar: "Similar" };
+  function tileHTML(x, which, gs) {
+    const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st, sim = SIM.by[x.id];
+    let head = "";
+    if (sim && sim.gid !== gs.lastG) {
+      const gt = gs.gTier[sim.gid] || sim.tier;
+      head = `<div class="ghead"><b>Lookalike group ${sim.gid}</b> · ${tierWord[gt] || "Similar"} · ${gs.gCount[sim.gid] || 1} here</div>`;
+    } else if (!sim && gs.lastG !== null && gs.lastG !== "none") head = `<div class="ghead"><b>Everything else</b></div>`;
+    gs.lastG = sim ? sim.gid : (gs.lastG === null ? null : "none");
+    const ed = EDITS[x.id] || {}, nq = (ed.questions || []).length, edited = ed.fields && Object.keys(ed.fields).length;
+    return head + `<div class="tile ${st}" data-id="${esc(x.id)}">
         ${sim ? `<span class="simb ${sim.tier === "very similar" ? "very" : sim.tier}" title="Closest match ${esc((records[sim.match] || {}).rec ? records[sim.match].rec.title : sim.match)} (${sim.score})">${TIER[sim.tier]}</span>` : isNew ? `<span class="badge new">New</span>` : st === "keep" ? `<span class="badge ${PUB.ids.has(x.id) ? "live" : "wait"}">${dlState(x.id)}</span>` : ""}
         ${thumbHTML(r)}
         <div class="acts over"><button class="x ${st === "nix" || (which === "all" && !st) ? "on" : ""}" data-act="nix" title="Nix">✕</button>
           <button class="k ${st === "keep" ? "on" : ""}" data-act="keep" title="Keep">✓</button></div>
         <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${esc(r.title || x.id)}</div>
           <div class="sub one">${sub(r)}</div>
-          <button class="openrec" data-open="${esc(x.id)}">Open record${(EDITS[x.id] || {}).questions && EDITS[x.id].questions.length ? ` · ${EDITS[x.id].questions.length} question${EDITS[x.id].questions.length > 1 ? "s" : ""}` : ""}${(EDITS[x.id] || {}).fields && Object.keys(EDITS[x.id].fields).length ? " · edited" : ""}</button>
+          <button class="openrec" data-open="${esc(x.id)}">Open record${nq ? ` · ${nq} question${nq > 1 ? "s" : ""}` : ""}${edited ? " · edited" : ""}</button>
           <details class="more"><summary>Details</summary>
-            <div class="sub">Lane ${esc(r.lane || "?")} · ${esc(r.kind || "")} · Rights: ${esc(r.rights || "unknown")}</div>
+            <div class="sub">${esc(r.kind || "")} · Rights: ${esc(r.rights || "unknown")}</div>
             ${r.description_seen ? `<div class="sub">${esc(r.description_seen)}</div>` : ""}
             ${r.care_flag && r.care_note ? `<div class="sub">Care: ${esc(r.care_note)}</div>` : ""}
             ${linksHTML(x)}</details></div></div>`;
-    }).join("")}</div>${more}` : `<div class="empty">${empty}</div>`);
+  }
+  // a keep or nix changes only that card: it leaves this view, nothing else is redrawn
+  function decide(el, act) {
+    const id = el.dataset.id;
+    setStatus(id, statusOf(id) === act ? "" : act);
+    toast(statusOf(id) === "keep" ? "Advancing" : statusOf(id) === "nix" ? "Nixed" : "Back to unsorted");
+    el.style.transition = "opacity .15s"; el.style.opacity = 0;
+    setTimeout(() => { el.remove(); if (gridState) { gridState.left--; const n = $("#toSort"); if (n) n.textContent = gridState.left; } }, 150);
+  }
+  function bindTiles(root, which) {
+    const enlarge = t => { $("#lbimg").src = t.dataset.full; $("#lb").style.display = "flex"; };
+    root.querySelectorAll("[data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); openRecord(b.dataset.open); });
+    root.querySelectorAll(".tile").forEach(el => {
+      el.querySelectorAll("[data-act]").forEach(b => b.onclick = e => { e.stopPropagation(); decide(el, b.dataset.act); });
+      const t = el.querySelector(".thumb"); if (!t) return;
+      t.style.cursor = "pointer";
+      // All: one click on the picture keeps it. Advancing / Nixed: the picture opens the record. ⤢ enlarges.
+      t.onclick = which === "all" ? () => decide(el, "keep") : () => openRecord(el.dataset.id);
+      if (t.dataset.full || t.querySelector("img[data-pv]")) {
+        const z = Object.assign(document.createElement("button"), { className: "zoom", title: "Enlarge", textContent: "⤢" });
+        z.onclick = e => { e.stopPropagation(); if (t.dataset.full) enlarge(t); };
+        t.appendChild(z);
+      }
+    });
+  }
+  function appendChunk() {
+    const gs = gridState; if (!gs) return;
+    const grid = $("#main .grid"); if (!grid) return;
+    const next = gs.items.slice(gs.shown, gs.shown + CHUNK); if (!next.length) return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = next.map(x => tileHTML(x, gs.which, gs)).join("");
+    bindTiles(tmp, gs.which);
+    while (tmp.firstChild) grid.appendChild(tmp.firstChild);
+    gs.shown += next.length; shownN = Math.max(shownN, gs.shown);
+    const sl = $("#scrollnote"); if (sl) sl.textContent = gs.shown < gs.items.length ? `Showing ${gs.shown} of ${gs.items.length}. Keep scrolling to load the rest.` : `All ${gs.items.length} shown.`;
+    hydratePreviews();
+  }
+  let moreIO = null;
+  function renderGrid(which) {
+    const allItems = list(which === "all" ? "all" : which);
+    const empty = { all: "Nothing left to sort.",
+                    keep: "Nothing advancing yet. Swipe right or press Keep.", nix: "Nothing nixed." }[which];
+    const waiting = which === "keep" ? allItems.filter(x => !PUB.ids.has(x.id) && !x.rec._hold).length : 0;
+    const heldN = which === "keep" ? allItems.filter(x => x.rec._hold).length : 0;
+    const pub = which === "keep" ? `<div class="pubbar">Advancing is the v4 library. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
+    const finish = which === "all" && allItems.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
+      <span><b id="toSort">${allItems.length}</b> to sort.</span><button class="linkbtn" id="finishnix">Done: nix everything I've scrolled past</button></div>` : "";
+    const gCount = {}, gTier = {};
+    allItems.forEach(x => { const g = SIM.by[x.id]; if (g) { gCount[g.gid] = (gCount[g.gid] || 0) + 1; if (g.tier === "duplicate") gTier[g.gid] = "duplicate"; } });
+    gridState = { which, items: allItems, shown: 0, lastG: null, gCount, gTier, left: allItems.length };
+    $("#main").innerHTML = filtersHTML() + pub + finish + (allItems.length ? `<div class="grid"></div><div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>` : `<div class="empty">${empty}</div>`);
     bindFilters();
-    const sm = $("#showmore"); if (sm) sm.onclick = () => { shownN += 200; render(); };
+    const want = Math.max(CHUNK, shownN);
+    while (gridState.shown < Math.min(want, allItems.length)) { const before = gridState.shown; appendChunk(); if (gridState.shown === before) break; }
+    if (moreIO) moreIO.disconnect();
+    const sen = $("#more-sentinel");
+    if (sen) { moreIO = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) appendChunk(); }, { rootMargin: "1500px" }); moreIO.observe(sen); }
     const fb = $("#finishnix");
     if (fb) fb.onclick = () => {
-      if (!confirm(`Nix the ${items.length} unpicked finds on this page?`)) return;
-      items.forEach(x => { if (!statusOf(x.id)) setStatus(x.id, "nix"); });
-      toast(`Nixed ${items.length}`); render();
+      const tiles = [...$("#main .grid").querySelectorAll(".tile")].filter(el => el.getBoundingClientRect().top < window.innerHeight && !statusOf(el.dataset.id));
+      if (!tiles.length) { toast("Nothing above to nix"); return; }
+      if (!confirm(`Nix the ${tiles.length} unpicked items from the top of the list down to here?`)) return;
+      tiles.forEach(el => setStatus(el.dataset.id, "nix"));
+      toast(`Nixed ${tiles.length}`); shownN = CHUNK; render(); window.scrollTo(0, 0);
     };
-    $("#main").querySelectorAll("[data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); openRecord(b.dataset.open); });
-    $("#main").querySelectorAll(".tile").forEach(el => {
-      el.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
-        const id = el.dataset.id, act = b.dataset.act;
-        setStatus(id, statusOf(id) === act ? "" : act);
-        toast(statusOf(id) === "keep" ? "Advancing: downloads at full resolution shortly" : statusOf(id) === "nix" ? "Nixed" : "Back to unsorted");
-        render();
-      });
-    });
   }
 
   function renderSwipe() {
@@ -876,27 +916,6 @@
     else if (tab === "keep" || tab === "nix") renderGrid(tab);
     else renderGrid("all");
     const enlarge = t => { $("#lbimg").src = t.dataset.full; $("#lb").style.display = "flex"; };
-    $("#main").querySelectorAll(".tile .thumb").forEach(t => {
-      if (tab === "all" || !tab) {
-        // All tab: one click on the picture keeps it; the corner button enlarges
-        t.style.cursor = "pointer";
-        t.onclick = () => { const id = t.closest(".tile").dataset.id; setStatus(id, "keep"); toast("Kept"); render(); };
-        if (t.dataset.full) {
-          const z = Object.assign(document.createElement("button"), { className: "zoom", title: "Enlarge", textContent: "⤢" });
-          z.onclick = e => { e.stopPropagation(); enlarge(t); };
-          t.appendChild(z);
-        }
-      } else {
-        // Advancing / Nixed: the picture opens the record; the corner button enlarges
-        t.style.cursor = "pointer";
-        t.onclick = () => openRecord(t.closest(".tile").dataset.id);
-        if (t.dataset.full) {
-          const z = Object.assign(document.createElement("button"), { className: "zoom", title: "Enlarge", textContent: "⤢" });
-          z.onclick = e => { e.stopPropagation(); enlarge(t); };
-          t.appendChild(z);
-        }
-      }
-    });
     $("#main").querySelectorAll(".card .cardinner[data-full]").forEach(t => t.ondblclick = () => enlarge(t));
     hydratePreviews();
   }
@@ -1051,7 +1070,7 @@
     } catch { const box = img.closest("[data-rid]"); const x = box && records[box.dataset.rid]; if (box && x) box.innerHTML = textCard(x.rec); }
   }
 
-  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; location.hash = tab; render(); });
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; location.hash = tab; shownN = CHUNK; render(); window.scrollTo(0, 0); });
   window.addEventListener("hashchange", () => { tab = (location.hash || "#all").slice(1); if (tab === "intake" || tab === "activity") tab = "all"; render(); });
 
 
@@ -1072,7 +1091,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108172941";
+  const BUILD = "20261108173548";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
