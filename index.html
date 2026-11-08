@@ -197,7 +197,7 @@
   let sortSha = null, pending = {}, saveTimer = null;
   let keptFolders = new Set();
   let seenIds = new Set(S.get("seen", []));
-  let tab = (location.hash || "#all").slice(1);
+  let tab = (location.hash || "#intake").slice(1);
   let filter = { lane: "", day: "" };
   let history = [];            // undo stack for swipe
   let reflections = "";
@@ -357,7 +357,7 @@
 
   function renderGrid(which) {
     const items = list(which === "all" ? "all" : which);
-    const empty = { all: "Nothing has come in yet. Finds appear here within a minute of each hourly run.",
+    const empty = { all: `All agent finds are sorted. The 6,877 flat-master images are waiting in the v4 Library. <button class="linkbtn" id="goint">Open v4 Library</button>`,
                     keep: "Nothing advancing yet. Swipe right or press Keep.", nix: "Nothing nixed." }[which];
     const finish = which === "all" && items.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <button class="linkbtn" id="finishnix">Done picking: nix the ${items.length} left</button></div>` : "";
@@ -377,6 +377,7 @@
             ${linksHTML(x)}</details></div></div>`;
     }).join("")}</div>` : `<div class="empty">${empty}</div>`);
     bindFilters();
+    const gi = $("#goint"); if (gi) gi.onclick = () => { tab = "intake"; location.hash = tab; render(); };
     const fb = $("#finishnix");
     if (fb) fb.onclick = () => {
       if (!confirm(`Nix all ${items.length} finds still unpicked in this view?`)) return;
@@ -771,7 +772,7 @@
   });
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108162921";
+  const BUILD = "20261108163208";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
