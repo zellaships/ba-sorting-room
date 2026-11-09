@@ -214,6 +214,7 @@ body.resizing{cursor:col-resize;user-select:none}
   <button data-tool="marker" title="Place a week marker (W)">⚑</button>
   <button data-tool="threads" title="Threads">≋</button>
   <button data-tool="versions" title="Versions">⟲</button>
+  <button data-tool="studio" title="Card studio: how each category looks">◧</button>
   <span style="flex:1"></span>
   <button data-tool="fit" title="See everything (F)">⤢</button>
 </nav>
@@ -234,6 +235,7 @@ body.resizing{cursor:col-resize;user-select:none}
   <p>The workbench reads the v4 library from your private repo with the same key as the Sorting Room. Open the <a href="../">Sorting Room</a>, connect there once, then come back.</p>
 </div></div>
 
+<script src="cards.js"></script>
 <script>
 (() => {
   // ---------- basics ----------
@@ -283,7 +285,7 @@ body.resizing{cursor:col-resize;user-select:none}
   const catLabel = k => (CATS.find(c => c[0] === k) || [, k])[1];
 
   // ---------- state ----------
-  let LIB = [], LIBBY = {};                 // library index (v4/library/index.json)
+  let LIB = [], LIBBY = {}, STYLE = {};                 // library index (v4/library/index.json)
   const REC = {};                           // id -> full record (loaded on demand)
   let B = { version: 1, cards: [], links: [], threads: [], updated_at: "" };
   let boardSha = null, dirty = false, lastSaved = "";
@@ -300,6 +302,7 @@ body.resizing{cursor:col-resize;user-select:none}
       const ix = await raw("v4/library/index.json");
       LIB = ix ? (JSON.parse(ix).items || []) : [];
       LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i);
+      try { STYLE = JSON.parse(await raw("v4/design/card-styles.json") || "{}"); } catch { STYLE = {}; }
       const br = await api(`/contents/${BOARD_PATH}?ref=main`);
       if (br.status !== 404) { const j = await br.json(); boardSha = j.sha; B = Object.assign(B, JSON.parse(unb64(j.content))); }
       const local = S.get("wb.draft", null);
@@ -396,7 +399,7 @@ body.resizing{cursor:col-resize;user-select:none}
   $("#zIn").onclick = () => zoomAt(1.25); $("#zOut").onclick = () => zoomAt(0.8); $("#zPct").onclick = () => { view.z = 1; zoomAt(1); };
 
   // ---------- drawing ----------
-  const KINDSIZE = { record: [260, 300], text: [280, 200], note: [260, 180], marker: [220, 60], embed: [420, 280], ftext: [340, 40] };
+  const KINDSIZE = { record: [260, 300], text: [260, 300], note: [260, 180], marker: [220, 60], embed: [420, 280], ftext: [340, 40] };
   const NOTE_COLORS = { sand: ["#fffbe9", "#a8741a"], sea: ["#e8f3ef", "#34685a"], rose: ["#fbecea", "#a2493a"], sky: ["#eaf1fa", "#3d6694"], lilac: ["#f1ecf8", "#6b4f99"], ink: ["#2a2426", "#e8d9a8"] };
   const noteHTML = c => c.html != null ? c.html : esc(c.text || "").replace(/\n/g, "<br>");
   function cardHTML(c) {
@@ -412,6 +415,11 @@ body.resizing{cursor:col-resize;user-select:none}
     const title = c.title || it.title || "Record not in the library";
     if (it.preview) return `<span class="kind">${esc(catLabel(it.type))}</span><div class="img" style="height:${c.h - 74}px"><img data-pv="${esc(it.preview)}" alt=""></div>
       <div class="cap"><div class="t">${esc(title)}</div><div class="m">${esc(known(it.date))}</div></div>`;
+    if (window.BACards && BACards.STYLES[it.type]) {
+      const r = REC[c.ref] ? BACards.fromRecord(REC[c.ref]) : BACards.fromRecord({ id: c.ref, type: it.type, title, date: { as_stated: it.date || "", edtf: it.date || "" }, tags: it.tags || [] });
+      if (!REC[c.ref]) rec(c.ref).then(x => { if (x) { const el = world.querySelector(`.card[data-id="${c.id}"]`); if (el) { el.dataset.sig = ""; draw(); } } });
+      return `<div class="bcwrap" style="height:100%">${BACards.render(r, STYLE[it.type])}</div>`;
+    }
     return `<span class="kind">${esc(catLabel(it.type || ""))}</span><div class="body text" style="padding:34px 14px 12px"><div class="q">${esc(title)}</div><div class="m muted" style="margin-top:6px">${esc(known(it.date))}</div></div>`;
   }
   function embedOf(url) {
@@ -431,7 +439,7 @@ body.resizing{cursor:col-resize;user-select:none}
     world.querySelectorAll(".lmid").forEach(n => n.remove());
     for (const c of B.cards) {
       let el = world.querySelector(`.card[data-id="${c.id}"]`);
-      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview]);
+      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview, c.kind === "record" && !!REC[c.ref], STYLE[(LIBBY[c.ref] || {}).type]]);
       if (editing && editing.id === c.id && el) { el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px"; continue; }
       if (!el) { el = document.createElement("div"); el.dataset.id = c.id; world.appendChild(el); bindCard(el); }
       if (el.dataset.sig !== sig) {
@@ -1046,6 +1054,7 @@ body.resizing{cursor:col-resize;user-select:none}
     if (tool === "threads") { tool = null; toggleView("threads"); return; }
     if (tool === "versions") { tool = null; toggleView("versions"); return; }
     railState();
+    if (tool === "studio") { location.href = "studio.html"; return; }
     if (tool === "fit") { tool = null; fit(); setTool(null); return; }
     if (tool === "note" || tool === "embed" || tool === "marker" || tool === "text") toast(tool === "text" ? "Click where the text should go" : "Click on the board to place it");
   }

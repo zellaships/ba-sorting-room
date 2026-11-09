@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Black Aquatics · Card studio</title>
+<style>
+:root{--ink:#251f21;--muted:#625e60;--rule:#e6e3e1;--teal:#34685a;--wash:#f5f3f0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--wash);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}
+header{position:sticky;top:0;z-index:5;height:56px;display:flex;align-items:center;gap:16px;padding:0 20px;background:#fff;border-bottom:1px solid var(--rule)}
+h1{font:22px/1.1 Georgia,serif;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:650;color:var(--muted)}
+.sp{flex:1}
+a{color:var(--teal)}
+button{font:inherit;cursor:pointer;border:1px solid var(--rule);background:#fff;border-radius:6px;padding:6px 12px}
+button:hover{background:var(--wash)}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.wrap{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 56px)}
+nav{background:#fff;border-right:1px solid var(--rule);padding:14px 10px;position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto}
+nav button{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;text-align:left;padding:9px 12px;border-radius:8px;margin-bottom:2px}
+nav button.on{background:var(--ink);color:#fff}
+nav .pick{font-size:12px;opacity:.7}
+main{padding:24px 28px 60px}
+.intro{max-width:760px;color:var(--muted);margin:0 0 20px}
+.style{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px 18px 20px;margin-bottom:22px}
+.style.chosen{border-color:var(--teal);box-shadow:0 0 0 2px rgba(52,104,90,.18)}
+.shead{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.shead h2{font:21px/1.2 Georgia,serif;margin:0}
+.shead .note{color:var(--muted);font-size:14px;flex:1}
+.row{display:flex;gap:18px;overflow-x:auto;padding:6px 2px 8px}
+.frame{flex:none;width:260px;height:300px;border-radius:10px;overflow:hidden;border:1px solid var(--rule);box-shadow:0 1px 2px rgba(0,0,0,.05),0 6px 18px rgba(0,0,0,.06);background:#fff}
+.small .frame{width:180px;height:208px}
+.small .frame .bc{zoom:.69}
+.badge{font-size:12px;color:var(--teal);font-weight:600}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}
+#toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.gate{max-width:520px;margin:80px auto;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:28px}
+</style>
+</head>
+<body>
+<header><h1>Black Aquatics</h1><span class="eyebrow">Card studio</span><span class="sp"></span><span id="stat" class="eyebrow"></span><a href="./">Back to the workbench</a></header>
+<div id="app"></div>
+<div id="toast"></div>
+<script src="cards.js"></script>
+<script>
+(() => {
+  const REPO_DEF = "zellaships/black-aquatics-research", CHOICE_PATH = "v4/design/card-styles.json";
+  const S = { get(k, d) { try { const v = localStorage.getItem("ba." + k); return v === null ? d : JSON.parse(v); } catch { return d; } } };
+  const token = S.get("token", ""), repo = S.get("repo", REPO_DEF);
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const toast = m => { const t = $("#toast"); t.textContent = m; t.style.opacity = 1; clearTimeout(t._h); t._h = setTimeout(() => t.style.opacity = 0, 2200); };
+  const b64 = s => btoa(unescape(encodeURIComponent(s)));
+  async function api(path, opts = {}) {
+    const r = await fetch(`https://api.github.com/repos/${repo}${path}`, { ...opts, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", ...(opts.headers || {}) } });
+    if (!r.ok && r.status !== 404) throw new Error(r.status); return r;
+  }
+  const raw = async p => { const r = await api(`/contents/${p}?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } }); return r.status === 404 ? null : r.text(); };
+  const LABELS = { work: "Works", person: "People", place: "Places", excerpt: "Excerpts", event: "Events", concept: "Concepts", practice: "Practices", nature: "Nature" };
+  let SAMPLES = {}, CHOICE = {}, choiceSha = null, cat = location.hash.slice(1) || "work", small = false, offset = 0;
+
+  async function load() {
+    if (!token) { $("#app").innerHTML = `<div class="gate"><h2>Connect first</h2><p>Open the <a href="../">Sorting Room</a>, connect to GitHub there once, then come back.</p></div>`; return; }
+    SAMPLES = JSON.parse(await raw("v4/design/samples.json") || "{}").samples || {};
+    const cr = await api(`/contents/${CHOICE_PATH}?ref=main`);
+    if (cr.status !== 404) { const j = await cr.json(); choiceSha = j.sha; CHOICE = JSON.parse(await raw(CHOICE_PATH)); }
+    render();
+  }
+  function render() {
+    const styles = BACards.STYLES[cat] || [], samples = SAMPLES[cat] || [];
+    const pick = n => Array.from({ length: Math.min(n, samples.length) }, (_, i) => samples[(i + offset) % samples.length]);
+    $("#stat").textContent = `${Object.keys(CHOICE).length} of ${Object.keys(LABELS).length} categories chosen`;
+    $("#app").innerHTML = `<div class="wrap"><nav>${Object.entries(LABELS).map(([k, l]) => `<button data-c="${k}" class="${k === cat ? "on" : ""}"><span>${l}</span><span class="pick">${CHOICE[k] ? esc((BACards.STYLES[k].find(s => s.id === CHOICE[k]) || {}).name || "") : ""}</span></button>`).join("")}</nav>
+      <main class="${small ? "small" : ""}"><p class="intro">How should <b>${LABELS[cat].toLowerCase()}</b> look on the board when there is no checked picture? Each row is one option, shown on real records from your v3 library. Pick the one that reads best at a glance. Records with a checked image always show the image.</p>
+        <div class="toolbar"><button id="shuf">Other examples</button><button id="size">${small ? "Board size" : "Zoomed out"}</button></div>
+        ${styles.map(st => `<section class="style ${CHOICE[cat] === st.id ? "chosen" : ""}"><div class="shead"><h2>${esc(st.name)}</h2><span class="note">${esc(st.note)}</span>
+          ${CHOICE[cat] === st.id ? `<span class="badge">In use on the board</span>` : `<button class="primary" data-use="${st.id}">Use this</button>`}</div>
+          <div class="row">${pick(small ? 6 : 4).map(r => `<div class="frame" title="${esc(r.title)}">${BACards.render(r, st.id)}</div>`).join("")}</div></section>`).join("")}
+      </main></div>`;
+    document.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { cat = b.dataset.c; location.hash = cat; offset = 0; render(); window.scrollTo(0, 0); });
+    document.querySelectorAll("[data-use]").forEach(b => b.onclick = () => choose(b.dataset.use));
+    $("#shuf").onclick = () => { offset += small ? 6 : 4; render(); };
+    $("#size").onclick = () => { small = !small; render(); };
+  }
+  async function choose(id) {
+    CHOICE[cat] = id; render();
+    try {
+      for (let i = 0; i < 2; i++) {
+        const body = { message: `Card studio: ${LABELS[cat]} use ${id}`, content: b64(JSON.stringify(CHOICE, null, 1) + "\n"), branch: "main" };
+        if (choiceSha) body.sha = choiceSha;
+        const r = await api(`/contents/${CHOICE_PATH}`, { method: "PUT", body: JSON.stringify(body) });
+        if (r.ok) { choiceSha = (await r.json()).content.sha; toast(`${LABELS[cat]} will use “${BACards.STYLES[cat].find(s => s.id === id).name}” on the board`); return; }
+        const cur = await api(`/contents/${CHOICE_PATH}?ref=main`); if (cur.status !== 404) { choiceSha = (await cur.json()).sha; CHOICE = Object.assign(JSON.parse(await raw(CHOICE_PATH)), { [cat]: id }); }
+      }
+      throw new Error("conflict");
+    } catch (e) { toast(`Could not save the choice (${e.message})`); }
+  }
+  load();
+})();
+</script>
+</body>
+</html>
