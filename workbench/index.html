@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Black Aquatics · Workbench</title>
 <style>
-:root{--ink:#251f21;--muted:#625e60;--rule:#e6e3e1;--teal:#34685a;--teal2:#83b5a5;--paper:#fff;--wash:#f5f3f0;--gold:#a8741a;--rail:52px;--panel:380px;--drawer:400px}
+:root{color-scheme:dark;--ink:#ecebe8;--muted:#979b9e;--rule:#2d3135;--teal:#74b8a5;--teal2:#83b5a5;--paper:#1c1f22;--wash:#25292c;--gold:#d3a24a;--bg:#141618;--raise:#22262a;--fill:#ecebe8;--onfill:#111315;--rail:52px;--panel:380px;--drawer:400px}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;color:var(--ink);background:var(--wash);font:15px/1.5 system-ui,-apple-system,sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -244,11 +244,72 @@ body.resizing{cursor:col-resize;user-select:none}
 .conn .brk{margin-left:auto;border:0;background:transparent;color:var(--muted);font-size:16px;padding:2px 6px}
 .conn .brk:hover{color:#b5432f}
 .selcount{font:22px/1.2 Georgia,serif;margin:4px 0 12px}
+
+/* ---------- slate: permanent dark mode ---------- */
+html,body{background:var(--bg)}
+h1.wm{line-height:0}h1.wm img{height:17px;width:auto;display:block;filter:invert(1)}
+header,#rail,.side,#drawer .inner,#gate .box,.modal .box,.catmenu,#zoomctl{background:var(--paper)!important}
+button{background:var(--raise);border-color:var(--rule)}
+button:hover{background:#2c3135}
+button.primary,#rail button.on,.chips button.on,#rail #railLib.on{background:var(--fill)!important;color:var(--onfill)!important;border-color:var(--fill)!important}
+#rail #railLib{background:var(--raise)}
+#rail #railLib.on::before{background:#2f6f62}
+#rail button[title]:hover::after,#toast,.wlabel{background:var(--fill);color:var(--onfill)}
+input[type=text],input[type=search],input[type=url],textarea,select{background:#16191b;border-color:var(--rule)}
+#board{background:radial-gradient(circle at 1px 1px,#30353a 1px,transparent 1.2px) 0 0/28px 28px,var(--bg)!important}
+.card{background:var(--raise);border-color:#33383d;box-shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px rgba(0,0,0,.28)}
+.card .img,.recimg,.pimg,.li .img{background:#0c0d0e}
+.card .kind{background:rgba(20,22,24,.86);color:#c9cbcc}
+.card .handle::after{border-color:var(--bg)}
+.card .grip::after{border-color:#5d6368}
+.card.marker{background:var(--fill);color:var(--onfill)}
+.card.note{border-color:rgba(255,255,255,.06)}
+.card.ftext:hover{border-color:rgba(255,255,255,.12)}
+.rt:empty::before{color:#6b7074}
+.rt blockquote{color:#b9bbbc}
+#links path{stroke:#6f757a}
+#links path.sel,#links path.hot{stroke:var(--teal)}
+.lbl,.lmid .dot,.lmid .brk,.edge .grip{background:var(--raise)!important}
+.lmid .dot{border-color:#7a8085}
+.lmid .brk{color:#ef8a76}
+#rope circle{stroke:var(--bg)}
+.li{background:var(--raise);border-color:var(--rule)}
+.li .noimg{background:#1a1d20}
+.chips button:disabled{background:transparent}
+.crumbs .sep{color:#555}
+#minimap{background:rgba(28,31,34,.94)!important;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+#marquee{background:rgba(116,184,165,.1)}
+.modal{background:rgba(0,0,0,.55)}
+#ghostNote{background:#2a271e;border-color:rgba(255,255,255,.08);box-shadow:0 18px 40px rgba(0,0,0,.55)}
+#ghostNote::after{color:#7d7766}
+#drawer.open{box-shadow:10px 0 34px rgba(0,0,0,.4)}
+#present{background:var(--fill);color:var(--onfill)}#present button{color:var(--onfill);border-color:rgba(0,0,0,.25)}
+.swatches button{border-color:var(--paper)}
+::selection{background:#2f6f62;color:#fff}
+
+/* ---------- Black Aquatics identity: wordmark, Helvetica, mono labels, aqua accent ---------- */
+html,body{font:15px/1.5 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;letter-spacing:-.003em}
+h1,h2,.card .cap .t,.li .noimg{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important;letter-spacing:-.01em}
+h2{font-weight:500}
+.eyebrow,header .stat,.chips button .c,.card .kind,.card .cap .m,.li .k,#zoomctl,.crumbs .cb{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.eyebrow{font-size:10.5px;letter-spacing:.24em;font-weight:500;color:#8c9194}
+header{border-bottom:1px solid #22262a;background:linear-gradient(180deg,#0f1416,#15191c)!important}
+header .stat{font-size:11.5px;letter-spacing:.04em}
+header a{color:#c9cbcc}
+#saveBtn{border-radius:999px;padding:6px 18px;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+#rail{background:#121518!important;border-right-color:#22262a}
+.card .kind{font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-radius:3px}
+.chips button{border-radius:999px}
+#zoomctl{font-size:12px}
+a{color:var(--teal2)}
+#rail button:not(#railLib){background:transparent;border-color:transparent;color:#b9bdc0}
+#rail button:not(#railLib):hover{background:#1f2326;color:#fff}
+.crumbs .cb{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase}
 </style>
 </head>
 <body>
 <header>
-  <h1>Black Aquatics</h1><span class="eyebrow">Workbench</span>
+  <h1 class="wm"><img src="wordmark.png" alt="Black Aquatics"></h1><span class="eyebrow">Workbench</span>
   <span class="sp"></span>
   <span class="stat" id="stat">Loading…</span>
   <button id="saveBtn" class="primary" title="Save a version of the board to the repo">Save</button>
@@ -409,17 +470,17 @@ body.resizing{cursor:col-resize;user-select:none}
     const pad = 10, k = Math.min((W - pad * 2) / (x1 - x0 || 1), (H - pad * 2) / (y1 - y0 || 1));
     const ox = pad + ((W - pad * 2) - (x1 - x0) * k) / 2 - x0 * k, oy = pad + ((H - pad * 2) - (y1 - y0) * k) / 2 - y0 * k;
     mmFit = { k, ox, oy };
-    mctx.strokeStyle = "rgba(138,132,134,.45)"; mctx.lineWidth = 1;
+    mctx.strokeStyle = "rgba(160,170,175,.35)"; mctx.lineWidth = 1;
     const byId = Object.fromEntries(B.cards.map(c => [c.id, c]));
     for (const l of B.links) { const a = byId[l.from], b = byId[l.to]; if (!a || !b) continue;
       mctx.beginPath(); mctx.moveTo(ox + (a.x + a.w / 2) * k, oy + (a.y + (cardH(a) || 80) / 2) * k); mctx.lineTo(ox + (b.x + b.w / 2) * k, oy + (b.y + (cardH(b) || 80) / 2) * k); mctx.stroke(); }
     for (const c of B.cards) {
       const h = cardH(c) || 80, on = selIds.has(c.id);
-      mctx.fillStyle = on ? "#2f6f68" : c.kind === "note" ? "#e9d98f" : c.kind === "marker" ? "#251f21" : c.kind === "record" && (LIBBY[c.ref] || {}).preview ? "#3a3335" : "#bdb6b8";
+      mctx.fillStyle = on ? "#83b5a5" : c.kind === "note" ? "#b89a52" : c.kind === "marker" ? "#ecebe8" : c.kind === "record" && (LIBBY[c.ref] || {}).preview ? "#8a9298" : "#5a6166";
       const x = ox + c.x * k, y = oy + c.y * k, w = Math.max(2, c.w * k), hh = Math.max(2, h * k);
       mctx.beginPath(); mctx.roundRect ? mctx.roundRect(x, y, w, hh, Math.min(2, w / 3)) : mctx.rect(x, y, w, hh); mctx.fill();
     }
-    mctx.strokeStyle = "#2f6f68"; mctx.lineWidth = 1.5; mctx.fillStyle = "rgba(47,111,104,.07)";
+    mctx.strokeStyle = "#83b5a5"; mctx.lineWidth = 1.5; mctx.fillStyle = "rgba(131,181,165,.08)";
     mctx.beginPath(); mctx.rect(ox + vx0 * k, oy + vy0 * k, vw * k, vh * k); mctx.fill(); mctx.stroke();
   }
   function setMap(on) { mapOn = on; S.set("wb.map", on); mm.classList.toggle("on", on); $("#mapBtn").classList.toggle("on", on); if (on) mapSoon(); }
@@ -495,7 +556,7 @@ body.resizing{cursor:col-resize;user-select:none}
 
   // ---------- drawing ----------
   const KINDSIZE = { record: [260, 300], text: [260, 300], note: [260, 180], marker: [220, 60], embed: [420, 280], ftext: [340, 40] };
-  const NOTE_COLORS = { sand: ["#fffbe9", "#a8741a"], sea: ["#e8f3ef", "#34685a"], rose: ["#fbecea", "#a2493a"], sky: ["#eaf1fa", "#3d6694"], lilac: ["#f1ecf8", "#6b4f99"], ink: ["#2a2426", "#e8d9a8"] };
+  const NOTE_COLORS = { sand: ["#2a271e", "#d9b45e"], sea: ["#1b2a26", "#7cc0aa"], rose: ["#2d2021", "#e08a7a"], sky: ["#1c2430", "#8db1e0"], lilac: ["#251f31", "#b39be0"], ink: ["#0d0e0f", "#e8d9a8"] };
   const noteHTML = c => c.html != null ? c.html : esc(c.text || "").replace(/\n/g, "<br>");
   function cardHTML(c) {
     if (c.kind === "ftext") return `<div class="rt" data-ph="Type something" style="font-size:${c.size || 16}px">${c.html || ""}</div><div class="ew"></div>`;
