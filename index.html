@@ -167,6 +167,8 @@
 .cats button{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font:500 14px Inter,system-ui;cursor:pointer}
 .cats button.on{background:var(--ink);color:var(--deep);border-color:var(--ink)}
 .cats button .c{opacity:.7;margin-left:6px}
+#main[data-which=nix] .tile.nix{opacity:1}.tile:has(.thumb.styled) .sub.one{display:none}
+.thumb.styled{background:#f6f3ec;align-items:stretch;justify-content:stretch}.thumb.styled>.bc{flex:1}.cardinner.styled>.bc{max-width:520px;height:100%}
 .tile .t{cursor:pointer}.tile .t:hover{text-decoration:underline}
 .openrec{background:none;border:0;color:var(--mute);font-size:12px;cursor:pointer;padding:0;text-decoration:underline}
 .pubbar{padding:6px 24px 0;color:var(--mute);font-size:13px}.pubbar b{color:var(--ink)}
@@ -218,6 +220,7 @@
 <div class="lightbox" id="lb"><img id="lbimg" alt=""></div>
 <div class="toast" id="toast"></div>
 
+<script src="workbench/cards.js"></script>
 <script>
 (() => {
   const DEF_REPO = "zellaships/black-aquatics-research";
@@ -232,6 +235,7 @@
   let EDITS = {}, editsPending = {}, editsTimer = null;     // id -> {fields, questions, updated_at}
   const PUB = { sha: null, ids: new Set(), at: "" };       // what v4/library/index.json holds right now
   const MAN = {};
+  const CV = { sha: null, by: {}, styleSha: null, style: {} };   // card designs: v4/intake/cardview.json + v4/design/card-styles.json
   const SIM = { sha: null, by: {} };                        // lookalike groups from v4/intake/similar.json
   const TIER = { duplicate: "Likely duplicate", "very similar": "Very similar", similar: "Similar" };                                           // batch -> manifest (loaded when a record is opened)
   const CATS = [["image", "Images"], ["work", "Works"], ["person", "People"], ["place", "Places"], ["excerpt", "Excerpts"],
@@ -314,6 +318,11 @@
       Object.assign(EDITS, editsPending);
       const simEnt = (tree.tree || []).find(t => t.path === "v4/intake/similar.json");
       if (simEnt && simEnt.sha !== SIM.sha) { try { SIM.by = JSON.parse(await raw("v4/intake/similar.json")).by_id || {}; SIM.sha = simEnt.sha; } catch {} }
+      // card designs for records without a picture (same picks as the workbench, from the card studio)
+      const cvEnt = (tree.tree || []).find(t => t.path === "v4/intake/cardview.json");
+      if (cvEnt && cvEnt.sha !== CV.sha) { try { CV.by = JSON.parse(await raw("v4/intake/cardview.json")).by_id || {}; CV.sha = cvEnt.sha; } catch {} }
+      const csEnt = (tree.tree || []).find(t => t.path === "v4/design/card-styles.json");
+      if (csEnt && csEnt.sha !== CV.styleSha) { try { CV.style = JSON.parse(await raw("v4/design/card-styles.json")) || {}; CV.styleSha = csEnt.sha; } catch {} }
       const pubEnt = (tree.tree || []).find(t => t.path === "v4/library/index.json");
       if (pubEnt && pubEnt.sha !== PUB.sha) {
         try { const ix = JSON.parse(await raw("v4/library/index.json")); PUB.ids = new Set((ix.items || []).map(i => i.id)); PUB.sha = pubEnt.sha; } catch {}
@@ -423,6 +432,13 @@
       const hold = r._hold ? `<span class="cflag hold" title="${esc(r._hold)}">Held: source incomplete</span>` : "";
       const care = r.care_flag ? `<span class="cflag" title="${esc(r.care_note)}">Care flag</span>` : "";
       return `<div class="${cls}" data-rid="${rid}" data-full="${PV[r._pv] || ""}">${img}${care}${hold}</div>`;
+    }
+    const cv = CV.by[r.id];
+    if (cv && window.BACards && BACards.STYLES[cv.type]) {
+      const ed = (EDITS[r.id] || {}).fields || {};
+      const shown = Object.assign({}, cv, ed.title ? { title: ed.title } : {}, ed.summary ? { summary: ed.summary } : {},
+        ed.creator_as_stated !== undefined ? { creator: ed.creator_as_stated } : {}, ed.date_as_stated !== undefined ? { date: ed.date_as_stated } : {});
+      return `<div class="${cls} styled" data-rid="${rid}">${BACards.render(shown, CV.style[cv.type])}</div>`;
     }
     const urls = imgChain(r);
     if (!urls.length) return `<div class="${cls}" data-rid="${rid}">${textCard(r)}</div>`;
@@ -556,6 +572,7 @@
     const gCount = {}, gTier = {};
     allItems.forEach(x => { const g = SIM.by[x.id]; if (g) { gCount[g.gid] = (gCount[g.gid] || 0) + 1; if (g.tier === "duplicate") gTier[g.gid] = "duplicate"; } });
     const catCount = {}; if (which === "keep") allItems.forEach(x => { const c = catOf(x); catCount[c] = (catCount[c] || 0) + 1; });
+    $("#main").dataset.which = which;
     gridState = { which, items: allItems, shown: 0, lastG: null, lastCat: null, catCount, gCount, gTier, left: allItems.length };
     $("#main").innerHTML = filtersHTML() + pub + finish + (allItems.length ? `<div class="grid"></div><div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>` : `<div class="empty">${empty}</div>`);
     bindFilters();
@@ -1124,7 +1141,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108192927";
+  const BUILD = "20261108212033";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
