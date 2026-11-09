@@ -168,6 +168,11 @@
 .cats button.on{background:var(--ink);color:var(--deep);border-color:var(--ink)}
 .cats button .c{opacity:.7;margin-left:6px}
 #main[data-which=nix] .tile.nix{opacity:1}.tile:has(.thumb.styled) .sub.one{display:none}
+.flip{position:relative;perspective:1400px}.flip .face{position:absolute;inset:0;display:flex;backface-visibility:hidden;transition:transform .45s cubic-bezier(.2,.7,.2,1)}
+.flip .face>.bc{flex:1}.flip .back{transform:rotateY(180deg)}.flip:hover .front{transform:rotateY(-180deg)}.flip:hover .back{transform:rotateY(0)}
+.flip .pic{flex:1;background:#0a1a22;display:flex;align-items:center;justify-content:center;position:relative}.flip .pic img{width:100%;height:100%;object-fit:contain}
+.flip .pkind{position:absolute;left:10px;top:10px;font:600 10px/1 Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;background:rgba(10,26,34,.8);color:#e9e3d8;padding:5px 7px;border-radius:4px}
+.flip.nopic .back,.flip.nopic:hover .back{display:none}.flip.nopic:not(.pfirst) .front{display:none}.flip.nopic:not(.pfirst) .back{display:flex;transform:none}.flip.nopic.pfirst:hover .front{transform:none}
 .thumb.styled{background:#f6f3ec;align-items:stretch;justify-content:stretch}.thumb.styled>.bc{flex:1}.cardinner.styled>.bc{max-width:520px;height:100%}
 .tile .t{cursor:pointer}.tile .t:hover{text-decoration:underline}
 .openrec{background:none;border:0;color:var(--mute);font-size:12px;cursor:pointer;padding:0;text-decoration:underline}
@@ -260,7 +265,7 @@
 
   async function api(path, opts = {}) {
     const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
-      ...opts, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json",
+      cache: "no-store", ...opts, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json",
                           "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) }
     });
     if (!res.ok && res.status !== 404) throw new Error(`${res.status} ${res.statusText}`);
@@ -335,7 +340,11 @@
       let e;
       if ((e = changed("v4/intake/cards.json", CARDS.sha))) jobs.push(raw(e.path).then(t => { if (t) { CARDS.list = JSON.parse(t).cards || []; CARDS.sha = e.sha; } }));
       const se = changed("decisions/sort.json", sortSha);
-      if (se) jobs.push(raw(se.path).then(t => { if (t !== null) { sort = JSON.parse(t); sortSha = se.sha; } else throw new Error("could not read decisions"); }));
+      if (se) jobs.push(raw(se.path).then(t => {
+        const d = t === null ? null : JSON.parse(t);
+        // a real decisions file maps ids to {status}; anything else (an error or file metadata) is refused, never used
+        if (!d || typeof d !== "object" || "sha" in d || "content" in d || !Object.values(d).some(v => v && v.status)) throw new Error("could not read your decisions");
+        sort = d; sortSha = se.sha; }));
       const ee = changed("v4/edits.json", SNAP.editsSha);
       if (ee) jobs.push(raw(ee.path).then(t => { if (t !== null) { EDITS = JSON.parse(t); SNAP.editsSha = ee.sha; } }));
       const re = changed("journal/reflections.md", SNAP.reflSha);
@@ -466,7 +475,14 @@
       const ed = (EDITS[r.id] || {}).fields || {};
       const shown = Object.assign({}, cv, ed.title ? { title: ed.title } : {}, ed.summary ? { summary: ed.summary } : {},
         ed.creator_as_stated !== undefined ? { creator: ed.creator_as_stated } : {}, ed.date_as_stated !== undefined ? { date: ed.date_as_stated } : {});
-      return `<div class="${cls} styled" data-rid="${rid}">${BACards.render(shown, CV.style[cv.type])}</div>`;
+      const design = BACards.render(shown, CV.style[cv.type]);
+      const pic = cv.image ? `<img alt="${esc(shown.title)}" data-pv="${esc(cv.image)}" ${PV[cv.image] ? `src="${PV[cv.image]}"` : ""}>`
+        : cv.image_url ? `<img alt="${esc(shown.title)}" loading="lazy" referrerpolicy="no-referrer" src="${esc(cv.image_url)}" onerror="this.closest('.flip').classList.add('nopic')">` : "";
+      if (!pic) return `<div class="${cls} styled" data-rid="${rid}">${design}</div>`;
+      // people: the design in front, the picture on hover. Everything else: the picture in front, the design on hover.
+      const front = cv.type === "person" ? design : `<div class="pic">${pic}<span class="pkind">${esc(cv.type)}</span></div>`;
+      const back = cv.type === "person" ? `<div class="pic">${pic}</div>` : design;
+      return `<div class="${cls} styled flip ${cv.type === "person" ? "pfirst" : ""}" data-rid="${rid}" title="Hover to flip"><div class="face front">${front}</div><div class="face back">${back}</div></div>`;
     }
     const urls = imgChain(r);
     if (!urls.length) return `<div class="${cls}" data-rid="${rid}">${textCard(r)}</div>`;
@@ -937,6 +953,7 @@
     return { files, count: index.length, held };
   }
   async function syncV4(manual = false) {
+    if (!sortSha) { toast("Decisions are still loading. Nothing was published."); return; }
     if (V4.busy) return; V4.busy = true;
     const btn = $("#v4sync"); if (btn) btn.textContent = "Syncing…";
     try {
@@ -1170,7 +1187,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108213303";
+  const BUILD = "20261108214237";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
