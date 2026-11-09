@@ -266,6 +266,11 @@
     const r = await api(`/contents/${encodeURI(path)}?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } });
     return r.status === 404 ? null : r.text();
   }
+  // file body from a contents-API response; files over 1 MB come back without content, so read those raw
+  async function bodyOf(j, path) {
+    if (j && j.content && j.encoding === "base64") return unb64(j.content);
+    const t = await raw(path); if (t === null) throw new Error("could not read " + path); return t;
+  }
   const b64 = s => btoa(unescape(encodeURIComponent(s)));
   const unb64 = s => decodeURIComponent(escape(atob(s.replace(/\n/g, ""))));
 
@@ -301,11 +306,11 @@
           care_flag: care, care_note: care ? `${c.care_codes.join(", ").replace(/_/g, " ")}${c.care_note ? ": " + c.care_note : ""}` : "" } };
       });
       const sr = await api(`/contents/decisions/sort.json?ref=main`);
-      if (sr.status !== 404) { const j = await sr.json(); sortSha = j.sha; try { sort = JSON.parse(unb64(j.content)); } catch { sort = {}; } }
+      if (sr.status !== 404) { const j = await sr.json(); const txt = await bodyOf(j, "decisions/sort.json"); sort = JSON.parse(txt); sortSha = j.sha; }
       Object.assign(sort, pending);
       reflections = (await raw("journal/reflections.md")) || "";
       const er = await api(`/contents/v4/edits.json?ref=main`);
-      if (er.status !== 404) { try { EDITS = JSON.parse(unb64((await er.json()).content)); } catch { EDITS = {}; } }
+      if (er.status !== 404) EDITS = JSON.parse(await bodyOf(await er.json(), "v4/edits.json"));
       Object.assign(EDITS, editsPending);
       const simEnt = (tree.tree || []).find(t => t.path === "v4/intake/similar.json");
       if (simEnt && simEnt.sha !== SIM.sha) { try { SIM.by = JSON.parse(await raw("v4/intake/similar.json")).by_id || {}; SIM.sha = simEnt.sha; } catch {} }
@@ -343,9 +348,9 @@
     try {
       const cur = await api(`/contents/decisions/sort.json?ref=main`);
       let base = {}, sha;
-      if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; try { base = JSON.parse(unb64(j.content)); } catch {} }
+      if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; base = JSON.parse(await bodyOf(j, "decisions/sort.json")); }   // never write over decisions we could not read
       for (const [id, v] of Object.entries(changes)) { if (v) base[id] = v; else delete base[id]; }
-      const body = { message: `Sort: ${Object.keys(changes).length} decisions`, content: b64(JSON.stringify(base, null, 1) + "\n"), branch: "main" };
+      const body = { message: `Sort: ${Object.keys(changes).length} decisions`, content: b64(JSON.stringify(base) + "\n"), branch: "main" };
       if (sha) body.sha = sha;
       const res = await api(`/contents/decisions/sort.json`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`${res.status}`);
@@ -716,7 +721,7 @@
     IN.sha = null;
     if (d.status !== 404) {
       const j = await d.json(); IN.sha = j.sha;
-      unb64(j.content || "").split("\n").filter(Boolean).forEach(line => {
+      (await bodyOf(j, `v4/decisions/${batch}.jsonl`)).split("\n").filter(Boolean).forEach(line => {
         try { const x = JSON.parse(line); IN.decided[x.id] = x.decision; } catch {}
       });
     }
@@ -736,7 +741,7 @@
       for (let attempt = 0; attempt < 3; attempt++) {
         const cur = await api(`/contents/${path}?ref=main`);
         let body = "", sha;
-        if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; body = unb64(j.content || ""); }
+        if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; body = await bodyOf(j, path); }
         const next = body + lines.map(l => JSON.stringify(l)).join("\n") + "\n";
         const put = { message: `v4 decisions: ${lines.length} in ${IN.batch}`, content: b64(next), branch: "main" };
         if (sha) put.sha = sha;
@@ -1052,7 +1057,7 @@
       for (let i = 0; i < 3; i++) {
         const cur = await api(`/contents/v4/edits.json?ref=main`);
         let base = {}, sha;
-        if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; try { base = JSON.parse(unb64(j.content)); } catch {} }
+        if (cur.status !== 404) { const j = await cur.json(); sha = j.sha; base = JSON.parse(await bodyOf(j, "v4/edits.json")); }
         Object.assign(base, changes);
         const body = { message: `Edits: ${Object.keys(changes).length} record${Object.keys(changes).length > 1 ? "s" : ""}`, content: b64(JSON.stringify(base, null, 1) + "\n"), branch: "main" };
         if (sha) body.sha = sha;
@@ -1119,7 +1124,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108192741";
+  const BUILD = "20261108192927";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
