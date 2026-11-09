@@ -74,19 +74,51 @@ header .stat{font-size:13px;color:var(--muted)}
 
 /* drawer + panel */
 .side{position:fixed;top:56px;bottom:0;background:#fff;z-index:20;overflow:hidden;display:flex;flex-direction:column;transition:transform .18s}
-#drawer{left:var(--rail);width:var(--drawer);border-right:1px solid var(--rule);transform:translateX(calc(-100% - var(--rail)))}
+#drawer{left:var(--rail);width:var(--pw,420px);border-right:1px solid var(--rule);transform:translateX(calc(-100% - var(--rail)));overflow:visible}
 #drawer.open{transform:none}
-#panel{right:0;width:var(--panel);border-left:1px solid var(--rule);transform:translateX(100%)}
-#panel.open{transform:none}
+#drawer.resizing{transition:none}
+#drawer .inner{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;background:#fff}
+/* resize edge: quiet until you need it */
+.edge{position:absolute;top:0;bottom:0;right:-7px;width:14px;cursor:col-resize;z-index:3;touch-action:none}
+.edge::before{content:"";position:absolute;top:0;bottom:0;left:6px;width:2px;background:transparent;transition:background .15s .05s}
+.edge .grip{position:absolute;top:50%;left:1px;width:12px;height:44px;margin-top:-22px;border-radius:999px;background:#fff;border:1px solid var(--rule);
+  box-shadow:0 2px 8px rgba(0,0,0,.08);opacity:0;transform:scaleY(.6);transition:opacity .15s .05s,transform .15s .05s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.edge .grip i{width:3px;height:3px;border-radius:50%;background:var(--muted)}
+.edge:hover::before,#drawer.resizing .edge::before{background:var(--teal2)}
+.edge:hover .grip,#drawer.resizing .edge .grip{opacity:1;transform:none}
+#drawer.resizing .edge .grip{border-color:var(--teal);background:var(--teal)}
+#drawer.resizing .edge .grip i{background:#fff}
+#drawer.atmax .edge::before{background:var(--gold)}
+.wlabel{position:absolute;top:50%;left:calc(100% + 14px);transform:translateY(-50%);background:var(--ink);color:#fff;font-size:12px;border-radius:999px;padding:3px 10px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
+#drawer.resizing .wlabel{opacity:1}
+#shore{position:fixed;top:56px;bottom:0;right:0;width:0;pointer-events:none;z-index:19;background:linear-gradient(90deg,rgba(37,31,33,.18),rgba(37,31,33,0));opacity:0;transition:opacity .2s}
+#shore.on{opacity:1}
+body.resizing{cursor:col-resize;user-select:none}
+.crumbs{display:flex;align-items:center;gap:4px;padding:12px 14px;border-bottom:1px solid var(--rule);min-height:52px;font-size:14px}
+.crumbs .cb{border:0;background:transparent;padding:4px 8px;border-radius:6px;color:var(--teal);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.crumbs .cb:hover{background:var(--wash)}
+.crumbs .cb.here{color:var(--ink);font-weight:600;cursor:default}
+.crumbs .cb.here:hover{background:transparent}
+.crumbs .sep{color:#bbb}
+.crumbs .sp{flex:1}
+.crumbs .x{border:0;background:transparent;font-size:18px;color:var(--muted);padding:2px 8px}
+.catmenu{position:absolute;z-index:10;background:#fff;border:1px solid var(--rule);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;min-width:200px}
+.catmenu button{display:flex;justify-content:space-between;gap:16px;width:100%;border:0;text-align:left;padding:7px 10px;border-radius:6px}
+.catmenu button.on{background:var(--wash);font-weight:600}
+.catmenu .c{color:var(--muted)}
+.recimg{background:#1b1718;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:zoom-in;position:relative}
+.recimg img{max-width:100%;max-height:calc(100vh - 260px);object-fit:contain;display:block}
+.recnav{display:flex;align-items:center;gap:8px;margin:10px 0 2px}
+.recnav .muted{flex:1;text-align:center}
 .side .hd{padding:14px 16px 10px;border-bottom:1px solid var(--rule)}
 .side .bd{flex:1;overflow-y:auto;padding:12px 16px 30px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chips button{padding:3px 10px;font-size:13px;border-radius:999px}
 .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .chips .c{opacity:.6;margin-left:4px}
-.lib{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .li{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;cursor:grab}
-.li .img{height:120px;background:#1b1718;display:flex;align-items:center;justify-content:center}
+.li .img{height:140px;background:#1b1718;display:flex;align-items:center;justify-content:center}
 .li .img img{max-width:100%;max-height:100%;object-fit:contain}
 .li .noimg{height:120px;padding:10px;font:13px/1.35 Georgia,serif;color:var(--muted);overflow:hidden;background:var(--wash)}
 .li .t{padding:6px 8px;font-size:13px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -147,8 +179,8 @@ header .stat{font-size:13px;color:var(--muted)}
 
 <div id="board"><div id="world"><svg id="links"></svg></div></div>
 
-<aside id="drawer" class="side"></aside>
-<aside id="panel" class="side"></aside>
+<aside id="drawer" class="side"><div class="inner"></div><div class="edge" title="Drag to resize · double-click to switch between your width and wide"><span class="grip"><i></i><i></i><i></i></span></div><span class="wlabel"></span></aside>
+<div id="shore"></div>
 
 <div id="present"><button id="pPrev">←</button><span class="where" id="pWhere"></span><button id="pNext">→</button><button id="pStop">Done</button></div>
 <div id="zoomctl"><button id="zOut" title="Zoom out">−</button><button id="zPct" title="Reset to 100%">100%</button><button id="zIn" title="Zoom in">+</button></div>
@@ -233,7 +265,7 @@ header .stat{font-size:13px;color:var(--muted)}
       lastSaved = B.updated_at || "";
       $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board`;
       draw(); applyView();
-      if (!B.cards.length) setTool("library");
+      openView({ kind: "library" });
     } catch (e) { $("#stat").textContent = `Could not load (${e.message})`; }
   }
   async function rec(id) {
@@ -423,7 +455,7 @@ header .stat{font-size:13px;color:var(--muted)}
   function addLink(from, to) {
     if (B.links.some(l => l.from === from && l.to === to)) { toast("Already connected"); return; }
     const id = uid("l"); change(() => B.links.push({ id, from, to, label: "" }));
-    select({ type: "link", id }); setTimeout(() => { const i = $("#panel [data-f=label]"); if (i) i.focus(); }, 50);
+    select({ type: "link", id }); setTimeout(() => { const i = $("#drawer [data-f=label]"); if (i) i.focus(); }, 50);
   }
   function editText(c) {
     modal(`<h2>${c.kind === "marker" ? "Week marker" : "Note"}</h2>
@@ -449,73 +481,180 @@ header .stat{font-size:13px;color:var(--muted)}
       });
     }
   }
-  function addRecord(id, at) {
+  function addRecord(id, at, quiet) {
     const it = LIBBY[id]; if (!it) return;
     const r = board.getBoundingClientRect();
     const p = at || toWorld(r.left + r.width / 2 + (Math.random() - .5) * 120, r.top + r.height / 2 + (Math.random() - .5) * 120);
     const [w, h] = it.preview ? KINDSIZE.record : KINDSIZE.text;
     const c = { id: uid("c"), kind: "record", ref: id, x: Math.round(p.x - w / 2), y: Math.round(p.y - h / 2), w, h };
-    change(() => B.cards.push(c)); select({ type: "card", id: c.id });
+    change(() => B.cards.push(c));
+    if (quiet) { sel = { type: "card", id: c.id }; draw(); } else select({ type: "card", id: c.id });
   }
   board.addEventListener("dragover", e => e.preventDefault());
   board.addEventListener("drop", e => { e.preventDefault(); const id = e.dataTransfer.getData("text/ba-id"); if (id) addRecord(id, toWorld(e.clientX, e.clientY)); });
 
-  // ---------- selection + side panel ----------
-  function select(s) { sel = s; draw(); renderPanel(); }
-  async function renderPanel() {
-    const p = $("#panel");
-    if (!sel) { p.classList.remove("open"); return; }
-    p.classList.add("open");
-    if (sel.type === "link") {
-      const l = B.links.find(x => x.id === sel.id); if (!l) return select(null);
-      const a = cardById(l.from), b = cardById(l.to);
-      p.innerHTML = `<div class="hd"><div class="eyebrow">Connection</div><h2>${esc(cardTitle(a))} → ${esc(cardTitle(b))}</h2></div>
-        <div class="bd"><div class="field"><label>What connects them?</label><input type="text" data-f="label" value="${esc(l.label || "")}" placeholder="e.g. same river, answers, echoes, contradicts"></div>
-        <div class="row"><button id="lSwap">Flip direction</button><button id="lDel">Remove connection</button></div></div>`;
-      const inp = p.querySelector("[data-f=label]"); let t = null;
-      inp.oninput = () => { clearTimeout(t); t = setTimeout(() => change(() => l.label = inp.value.trim()), 400); };
-      $("#lSwap").onclick = () => change(() => { [l.from, l.to] = [l.to, l.from]; });
-      $("#lDel").onclick = () => { change(() => B.links = B.links.filter(x => x !== l)); select(null); };
-      return;
-    }
-    if (sel.type === "thread") return renderThreads();
-    const c = cardById(sel.id); if (!c) return select(null);
-    const conns = B.links.filter(l => l.from === c.id || l.to === c.id);
-    const connHTML = conns.length ? conns.map(l => { const o = cardById(l.from === c.id ? l.to : l.from);
-      return `<div class="conn"><span>${l.from === c.id ? "→" : "←"}</span><div><a data-go="${o ? o.id : ""}">${esc(cardTitle(o))}</a><div class="lab">${esc(l.label || "no label yet")}</div></div></div>`; }).join("")
-      : `<div class="ro">No connections yet. Drag from the green dot on the card's edge to another card.</div>`;
-    const threadsIn = B.threads.filter(t => t.steps.includes(c.id));
-    const actions = `<div class="row" style="margin-top:12px"><button id="cThread">Add to thread</button><button id="cDel">Remove from board</button></div>`;
-    if (c.kind !== "record") {
-      p.innerHTML = `<div class="hd"><div class="eyebrow">${c.kind === "marker" ? "Week marker" : c.kind === "embed" ? "Embed" : "Note"}</div><h2>${esc(cardTitle(c))}</h2></div>
-        <div class="bd">${c.kind === "embed" ? `<div class="field"><label>Link</label><input type="url" data-f="url" value="${esc(c.url)}"></div><p class="muted">Double-click the card to play it; double-click again to move it.</p>` : `<button id="cEdit">Edit text</button>`}
-        ${actions}<h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connHTML}
-        ${threadsIn.length ? `<h3 class="eyebrow" style="margin-top:20px">In threads</h3>${threadsIn.map(t => `<div class="ro">${esc(t.name)}</div>`).join("")}` : ""}</div>`;
-      if ($("#cEdit")) $("#cEdit").onclick = () => editText(c);
-      const u = p.querySelector("[data-f=url]"); if (u) u.onchange = () => change(() => c.url = u.value.trim());
-    } else {
-      const it = LIBBY[c.ref] || {};
-      p.innerHTML = `<div class="hd"><div class="eyebrow">${esc(catLabel(it.type))}</div><h2>${esc(it.title || "Record")}</h2></div><div class="bd" id="pbody"><div class="muted">Loading the record…</div></div>`;
-      const r = await rec(c.ref);
-      if (!sel || sel.id !== c.id) return;
-      const body = $("#pbody"); if (!body) return;
-      const row = (k, v) => known(v) ? `<div class="ro"><b>${k}:</b> ${esc(v)}</div>` : "";
-      body.innerHTML = `${it.preview ? `<div class="pimg"><img data-pv="${esc(it.preview)}" alt=""></div>` : ""}
-        ${r ? `${r.summary ? `<p>${esc(r.summary)}</p>` : ""}${r.quote ? `<blockquote style="font:15px/1.5 Georgia,serif;margin:8px 0;border-left:3px solid var(--rule);padding-left:12px">${esc(r.quote)}</blockquote>` : ""}
+  // ---------- one panel: library, records, everything ----------
+  const panel = $("#drawer"), inner = panel.querySelector(".inner");
+  let VIEW = { kind: "library" };
+  const LQ = { q: "", cat: "", n: 60 };
+  function railState() {
+    document.querySelectorAll("#rail [data-tool]").forEach(b => b.classList.toggle("on", b.dataset.tool === tool ||
+      (b.dataset.tool === "library" && panel.classList.contains("open") && VIEW.kind === "library") ||
+      (b.dataset.tool === "threads" && panel.classList.contains("open") && VIEW.kind === "threads") ||
+      (b.dataset.tool === "versions" && panel.classList.contains("open") && VIEW.kind === "versions")));
+  }
+  function openView(v) { if (v) VIEW = v; panel.classList.add("open"); railState(); renderView(); }
+  function closePanel() { panel.classList.remove("open"); railState(); }
+  function select(s) {
+    sel = s; draw();
+    if (!s) return;
+    if (s.type === "card") {
+      const c = cardById(s.id); if (!c) return;
+      if (c.kind === "record") openView({ kind: "record", ref: c.ref, cardId: c.id, from: "board" });
+      else openView({ kind: "card", cardId: c.id });
+    } else if (s.type === "link") openView({ kind: "link", id: s.id });
+  }
+  const renderPanel = () => { if (panel.classList.contains("open")) renderView(); };
+  function shell(parts, body) {
+    // parts: [{label, go?, menu?}] ; the last part is where you are
+    inner.innerHTML = `<nav class="crumbs">${parts.map((p, i) => (i ? `<span class="sep">›</span>` : "") +
+        `<button class="cb ${i === parts.length - 1 && !p.menu ? "here" : ""}" data-crumb="${i}" title="${esc(p.label)}">${esc(p.label)}${p.menu ? " ▾" : ""}</button>`).join("")}
+      <span class="sp"></span><button class="x" id="pclose" title="Close panel (Esc)">×</button></nav><div class="bd">${body}</div>`;
+    inner.querySelectorAll("[data-crumb]").forEach(b => { const p = parts[+b.dataset.crumb]; if (p.menu) b.onclick = e => catMenu(b); else if (p.go) b.onclick = p.go; });
+    $("#pclose").onclick = closePanel;
+    return inner.querySelector(".bd");
+  }
+  const toLibrary = () => openView({ kind: "library" });
+  const catPart = () => ({ label: LQ.cat ? catLabel(LQ.cat) : "All", menu: true });
+  function libMatches() {
+    const q = LQ.q.toLowerCase().split(/\s+/).filter(Boolean);
+    return LIB.filter(it => !q.length || q.every(w => (it.title + " " + (it.tags || []).join(" ") + " " + it.date + " " + it.type).toLowerCase().includes(w)));
+  }
+  function catMenu(anchor) {
+    document.querySelectorAll(".catmenu").forEach(m => m.remove());
+    const base = libMatches(), n = {}; base.forEach(i => n[i.type] = (n[i.type] || 0) + 1);
+    const m = document.createElement("div"); m.className = "catmenu";
+    m.innerHTML = [["", "All"], ...CATS].map(([k, l]) => `<button data-k="${k}" class="${LQ.cat === k ? "on" : ""}" ${k && !n[k] ? 'style="opacity:.45"' : ""}><span>${l}</span><span class="c">${k ? (n[k] || 0) : base.length}</span></button>`).join("");
+    const r = anchor.getBoundingClientRect(), pr = panel.getBoundingClientRect();
+    m.style.left = (r.left - pr.left) + "px"; m.style.top = (r.bottom - pr.top + 4) + "px";
+    panel.appendChild(m);
+    m.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { LQ.cat = b.dataset.k; LQ.n = 60; m.remove(); openView({ kind: "library" }); });
+    setTimeout(() => document.addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("pointerdown", off); } }), 0);
+  }
+  function renderView() {
+    document.querySelectorAll(".catmenu").forEach(m => m.remove());
+    const v = VIEW;
+    if (v.kind === "library") return viewLibrary();
+    if (v.kind === "record") return viewRecord(v);
+    if (v.kind === "card") return viewCard(v);
+    if (v.kind === "link") return viewLink(v);
+    if (v.kind === "threads") return viewThreads();
+    if (v.kind === "versions") return viewVersions();
+  }
+
+  // Library: search + results (the category lives in the breadcrumb)
+  function viewLibrary() {
+    const onBoard = new Set(B.cards.filter(c => c.kind === "record").map(c => c.ref));
+    const items = libMatches().filter(i => !LQ.cat || i.type === LQ.cat);
+    const body = shell([{ label: "Library", go: () => { LQ.cat = ""; toLibrary(); } }, catPart()],
+      `<input type="search" id="lq" placeholder="Search titles, tags, dates" value="${esc(LQ.q)}">
+       ${!LIB.length ? `<div class="emptybox" style="margin-top:12px">The library is empty. In the <a href="../#keep">Sorting Room</a>, press <b>Refresh</b> to publish Prod images; they show up here.</div>` :
+       `<p class="muted" style="margin:8px 0 10px">${items.length.toLocaleString()} ${items.length === 1 ? "record" : "records"}${LQ.q ? ` for “${esc(LQ.q)}”` : ""}. Click to view, drag onto the board to place.</p>
+        <div class="lib">${items.slice(0, LQ.n).map(i => `<div class="li ${onBoard.has(i.id) ? "on" : ""}" draggable="true" data-id="${esc(i.id)}">
+          ${i.preview ? `<div class="img"><img data-pv="${esc(i.preview)}" alt=""></div>` : `<div class="noimg">${esc(clip(i.title, 140))}</div>`}
+          <div class="t">${esc(i.title)}</div><div class="k">${esc(catLabel(i.type))}${onBoard.has(i.id) ? " · on the board" : ""}</div></div>`).join("")}</div>
+        ${items.length > LQ.n ? `<div class="row" style="justify-content:center;margin-top:12px"><button id="lmore">Show more (${items.length - LQ.n})</button></div>` : ""}`}`);
+    const lq = $("#lq"); let t = null;
+    lq.oninput = () => { clearTimeout(t); t = setTimeout(() => { LQ.q = lq.value; LQ.n = 60; viewLibrary(); const e = $("#lq"); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 250); };
+    const list = items.map(i => i.id);
+    body.querySelectorAll(".li").forEach(li => {
+      li.ondragstart = e => e.dataTransfer.setData("text/ba-id", li.dataset.id);
+      li.onclick = () => openView({ kind: "record", ref: li.dataset.id, list, from: "library" });
+    });
+    if ($("#lmore")) $("#lmore").onclick = () => { LQ.n += 60; viewLibrary(); };
+    hydrate(body);
+  }
+
+  // Record: big picture + everything about it
+  async function viewRecord(v) {
+    const it = LIBBY[v.ref] || {};
+    const onCard = v.cardId ? cardById(v.cardId) : B.cards.find(c => c.kind === "record" && c.ref === v.ref);
+    const parts = [{ label: "Library", go: () => { LQ.cat = ""; toLibrary(); } }, { label: catLabel(it.type || ""), go: () => { LQ.cat = it.type || ""; toLibrary(); } },
+                   ...(v.from === "board" ? [{ label: "On the board", go: () => { if (onCard) { centerOn(onCard.x + onCard.w / 2, onCard.y + onCard.h / 2); } } }] : []), { label: clip(it.title || "Record", 60) }];
+    const idx = v.list ? v.list.indexOf(v.ref) : -1;
+    const nav = idx >= 0 ? `<div class="recnav"><button id="rprev" ${idx > 0 ? "" : "disabled"} title="Previous (←)">←</button><span class="muted">${idx + 1} of ${v.list.length.toLocaleString()}</span><button id="rnext" ${idx < v.list.length - 1 ? "" : "disabled"} title="Next (→)">→</button></div>` : "";
+    const body = shell(parts, `${it.preview ? `<div class="recimg" id="rimg" draggable="true" title="Click to view full size · drag onto the board"><img data-pv="${esc(it.preview)}" alt=""></div>` : ""}${nav}
+      <h2 style="margin-top:12px">${esc(it.title || "Record")}</h2><div id="rbody"><div class="muted">Loading the record…</div></div>`);
+    if ($("#rprev")) $("#rprev").onclick = () => openView({ ...v, ref: v.list[idx - 1], cardId: null });
+    if ($("#rnext")) $("#rnext").onclick = () => openView({ ...v, ref: v.list[idx + 1], cardId: null });
+    const ri = $("#rimg");
+    if (ri) { ri.onclick = () => { const u = ri.querySelector("img").src; if (u) { $("#lb img").src = u; $("#lb").style.display = "flex"; } };
+              ri.ondragstart = e => e.dataTransfer.setData("text/ba-id", v.ref); }
+    hydrate(body);
+    const r = await rec(v.ref);
+    if (VIEW !== v) return;
+    const row = (k, val) => known(val) ? `<div class="ro"><b>${k}:</b> ${esc(val)}</div>` : "";
+    const conns = onCard ? B.links.filter(l => l.from === onCard.id || l.to === onCard.id) : [];
+    const threadsIn = onCard ? B.threads.filter(t => t.steps.includes(onCard.id)) : [];
+    $("#rbody").innerHTML = `${r ? `${r.summary ? `<p>${esc(r.summary)}</p>` : ""}${r.quote ? `<blockquote style="font:15px/1.5 Georgia,serif;margin:8px 0;border-left:3px solid var(--rule);padding-left:12px">${esc(r.quote)}</blockquote>` : ""}
         ${row("Date", r.date && r.date.as_stated)}${row("Creator", r.creator_as_stated)}${row("Held by", r.holder)}
         ${r.source_url && r.source_url !== "unknown" ? `<div class="ro"><a href="${esc(r.source_url)}" target="_blank" rel="noopener">Source page</a></div>` : ""}
         ${row("Rights", r.rights && r.rights.as_stated)}${row("Care", r.care && r.care.note)}
         ${(r.tags || []).length ? `<div class="ro">${r.tags.map(esc).join(" · ")}</div>` : ""}
-        ${(r.questions || []).length ? `<h3 class="eyebrow" style="margin-top:16px">Open questions</h3>${r.questions.map(q => `<div class="ro">${esc(q.q)}${q.answer ? ` <br><span style="color:var(--teal)">${esc(q.answer)}</span>` : ""}</div>`).join("")}` : ""}` : `<div class="muted">This record is not in the library any more.</div>`}
-        ${actions}<h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connHTML}
-        ${threadsIn.length ? `<h3 class="eyebrow" style="margin-top:20px">In threads</h3>${threadsIn.map(t => `<div class="ro">${esc(t.name)}</div>`).join("")}` : ""}
-        <p class="muted" style="margin-top:20px">To edit this record, open it in the <a href="../#keep">Sorting Room</a>.</p>`;
-      hydrate(body);
-    }
-    p.querySelectorAll("[data-go]").forEach(a => a.onclick = () => { const o = cardById(a.dataset.go); if (o) { centerOn(o.x + o.w / 2, o.y + o.h / 2); select({ type: "card", id: o.id }); } });
-    $("#cDel").onclick = () => removeCard(c.id);
-    $("#cThread").onclick = () => addToThread(c.id);
+        ${(r.questions || []).length ? `<h3 class="eyebrow" style="margin-top:16px">Open questions</h3>${r.questions.map(q => `<div class="ro">${esc(q.q)}${q.answer ? ` <br><span style="color:var(--teal)">${esc(q.answer)}</span>` : ""}</div>`).join("")}` : ""}`
+        : `<div class="muted">This record is not in the library any more.</div>`}
+      <div class="row" style="margin-top:14px">${onCard ? `<button id="rshow">Show on the board</button><button id="rthr">Add to thread</button><button id="rdel">Remove from board</button>` : `<button class="primary" id="radd">Add to the board</button>`}</div>
+      ${onCard ? `<h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connList(onCard, conns)}
+        ${threadsIn.length ? `<h3 class="eyebrow" style="margin-top:20px">In threads</h3>${threadsIn.map(t => `<div class="ro">${esc(t.name)}</div>`).join("")}` : ""}` : ""}
+      <p class="muted" style="margin-top:20px">To edit this record, open it in the <a href="../#keep">Sorting Room</a>.</p>`;
+    if ($("#radd")) $("#radd").onclick = () => { addRecord(v.ref, null, true); openView({ ...v }); };
+    if ($("#rshow")) $("#rshow").onclick = () => { centerOn(onCard.x + onCard.w / 2, onCard.y + onCard.h / 2); sel = { type: "card", id: onCard.id }; draw(); };
+    if ($("#rthr")) $("#rthr").onclick = () => addToThread(onCard.id);
+    if ($("#rdel")) $("#rdel").onclick = () => { removeCard(onCard.id); openView({ ...v, cardId: null }); };
+    bindGo(inner);
   }
+  function connList(c, conns) {
+    return conns.length ? conns.map(l => { const o = cardById(l.from === c.id ? l.to : l.from);
+      return `<div class="conn"><span>${l.from === c.id ? "→" : "←"}</span><div><a data-go="${o ? o.id : ""}">${esc(cardTitle(o))}</a><div class="lab">${esc(l.label || "no label yet")}</div></div></div>`; }).join("")
+      : `<div class="ro">No connections yet. Drag from the green dot on the card's edge to another card.</div>`;
+  }
+  function bindGo(root) {
+    root.querySelectorAll("[data-go]").forEach(a => a.onclick = () => { const o = cardById(a.dataset.go); if (o) { centerOn(o.x + o.w / 2, o.y + o.h / 2); select({ type: "card", id: o.id }); } });
+  }
+
+  // Notes, embeds, markers
+  function viewCard(v) {
+    const c = cardById(v.cardId); if (!c) return toLibrary();
+    const kind = c.kind === "marker" ? "Week marker" : c.kind === "embed" ? "Embed" : "Note";
+    const conns = B.links.filter(l => l.from === c.id || l.to === c.id);
+    const threadsIn = B.threads.filter(t => t.steps.includes(c.id));
+    const body = shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => centerOn(c.x + c.w / 2, c.y + c.h / 2) }, { label: kind }],
+      `<h2>${esc(cardTitle(c))}</h2>
+       ${c.kind === "embed" ? `<div class="field"><label>Link</label><input type="url" data-f="url" value="${esc(c.url)}"></div><p class="muted">Double-click the card to play it; double-click again to move it.</p>` : `<button id="cEdit">Edit text</button>`}
+       <div class="row" style="margin-top:12px"><button id="cThread">Add to thread</button><button id="cDel">Remove from board</button></div>
+       <h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connList(c, conns)}
+       ${threadsIn.length ? `<h3 class="eyebrow" style="margin-top:20px">In threads</h3>${threadsIn.map(t => `<div class="ro">${esc(t.name)}</div>`).join("")}` : ""}`);
+    if ($("#cEdit")) $("#cEdit").onclick = () => editText(c);
+    const u = body.querySelector("[data-f=url]"); if (u) u.onchange = () => change(() => c.url = u.value.trim());
+    $("#cDel").onclick = () => { removeCard(c.id); toLibrary(); };
+    $("#cThread").onclick = () => addToThread(c.id);
+    bindGo(body);
+  }
+
+  // Connection
+  function viewLink(v) {
+    const l = B.links.find(x => x.id === v.id); if (!l) return toLibrary();
+    const a = cardById(l.from), b = cardById(l.to);
+    shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => { if (a) centerOn(a.x + a.w / 2, a.y + a.h / 2); } }, { label: "Connection" }],
+      `<h2>${esc(cardTitle(a))} → ${esc(cardTitle(b))}</h2>
+       <div class="field"><label>What connects them?</label><input type="text" data-f="label" value="${esc(l.label || "")}" placeholder="e.g. same river, answers, echoes, contradicts"></div>
+       <div class="row"><button id="lSwap">Flip direction</button><button id="lDel">Remove connection</button></div>`);
+    const inp = inner.querySelector("[data-f=label]"); let t = null;
+    inp.oninput = () => { clearTimeout(t); t = setTimeout(() => change(() => l.label = inp.value.trim()), 400); };
+    $("#lSwap").onclick = () => change(() => { [l.from, l.to] = [l.to, l.from]; });
+    $("#lDel").onclick = () => { change(() => B.links = B.links.filter(x => x !== l)); sel = null; draw(); toLibrary(); };
+  }
+
   function cardTitle(c) {
     if (!c) return "(removed)";
     if (c.kind === "record") return (LIBBY[c.ref] || {}).title || "Record";
@@ -524,36 +663,9 @@ header .stat{font-size:13px;color:var(--muted)}
   }
   function removeCard(id) {
     change(() => { B.cards = B.cards.filter(c => c.id !== id); B.links = B.links.filter(l => l.from !== id && l.to !== id); B.threads.forEach(t => t.steps = t.steps.filter(s => s !== id)); });
-    world.querySelector(`.card[data-id="${id}"]`)?.remove(); select(null);
+    world.querySelector(`.card[data-id="${id}"]`)?.remove(); sel = null; draw();
   }
-
-  // ---------- library drawer ----------
-  const LQ = { q: "", cat: "", n: 60 };
-  function renderLibrary() {
-    const d = $("#drawer");
-    const onBoard = new Set(B.cards.filter(c => c.kind === "record").map(c => c.ref));
-    const q = LQ.q.toLowerCase().split(/\s+/).filter(Boolean);
-    const match = it => !q.length || q.every(w => (it.title + " " + (it.tags || []).join(" ") + " " + it.date + " " + it.type).toLowerCase().includes(w));
-    const base = LIB.filter(match), n = {}; base.forEach(i => n[i.type] = (n[i.type] || 0) + 1);
-    const items = base.filter(i => !LQ.cat || i.type === LQ.cat);
-    d.innerHTML = `<div class="hd"><div class="row" style="justify-content:space-between"><b>Library</b><span class="muted">${LIB.length} records</span></div>
-      <input type="search" id="lq" placeholder="Search titles, tags, dates" value="${esc(LQ.q)}" style="margin-top:8px">
-      <div class="chips"><button data-c="" class="${LQ.cat ? "" : "on"}">All<span class="c">${base.length}</span></button>${CATS.map(([k, l]) => `<button data-c="${k}" class="${LQ.cat === k ? "on" : ""}">${l}<span class="c">${n[k] || 0}</span></button>`).join("")}</div></div>
-      <div class="bd">${!LIB.length ? `<div class="emptybox">The library is empty. In the <a href="../#keep">Sorting Room</a>, press <b>Refresh</b> to publish everything in Advancing; it shows up here.</div>` :
-        `<p class="muted" style="margin-top:0">Drag onto the board, or click to add it to the middle.</p><div class="lib">${items.slice(0, LQ.n).map(i => `<div class="li ${onBoard.has(i.id) ? "on" : ""}" draggable="true" data-id="${esc(i.id)}">
-          ${i.preview ? `<div class="img"><img data-pv="${esc(i.preview)}" alt=""></div>` : `<div class="noimg">${esc(clip(i.title, 140))}</div>`}
-          <div class="t">${esc(i.title)}</div><div class="k">${esc(catLabel(i.type))}${onBoard.has(i.id) ? " · on the board" : ""}</div></div>`).join("")}</div>
-          ${items.length > LQ.n ? `<div class="row" style="justify-content:center;margin-top:12px"><button id="lmore">Show more (${items.length - LQ.n})</button></div>` : ""}`}</div>`;
-    const lq = $("#lq"); let t = null;
-    lq.oninput = () => { clearTimeout(t); t = setTimeout(() => { LQ.q = lq.value; LQ.n = 60; renderLibrary(); const e = $("#lq"); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 250); };
-    d.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { LQ.cat = b.dataset.c; LQ.n = 60; renderLibrary(); });
-    d.querySelectorAll(".li").forEach(li => {
-      li.ondragstart = e => e.dataTransfer.setData("text/ba-id", li.dataset.id);
-      li.onclick = () => { const on = B.cards.find(c => c.kind === "record" && c.ref === li.dataset.id); if (on) { centerOn(on.x + on.w / 2, on.y + on.h / 2); select({ type: "card", id: on.id }); } else { addRecord(li.dataset.id); renderLibrary(); } };
-    });
-    if ($("#lmore")) $("#lmore").onclick = () => { LQ.n += 60; renderLibrary(); };
-    hydrate(d);
-  }
+  const renderLibrary = () => { if (VIEW.kind === "library" && panel.classList.contains("open")) viewLibrary(); };
 
   // ---------- threads ----------
   function addToThread(cardId) {
@@ -567,32 +679,32 @@ header .stat{font-size:13px;color:var(--muted)}
         if (tid === "__new") { const t = { id: uid("t"), name: $("#m-new").value.trim() || `Thread ${B.threads.length + 1}`, steps: [] }; B.threads.push(t); tid = t.id; }
         const t = B.threads.find(x => x.id === tid); if (!t.steps.includes(cardId)) t.steps.push(cardId);
       });
-      toast("Added to the thread"); renderPanel();
+      toast("Added to the thread"); renderView();
     });
     const s = $("#m-thr"); if (s) s.onchange = () => $("#m-newwrap").style.display = s.value === "__new" ? "" : "none";
   }
-  function renderThreads() {
-    const p = $("#panel"); p.classList.add("open");
-    p.innerHTML = `<div class="hd"><div class="eyebrow">Threads</div><h2>Paths through the board</h2>
-      <p class="muted" style="margin:0">Select a card and choose “Add to thread”. Present walks the thread one card at a time.</p></div>
-      <div class="bd">${B.threads.length ? B.threads.map(t => `<div class="thr ${sel && sel.type === "thread" && sel.id === t.id ? "on" : ""}" data-t="${t.id}">
+  function viewThreads() {
+    const body = shell([{ label: "Library", go: toLibrary }, { label: "Threads" }],
+      `<p class="muted" style="margin-top:0">Ordered paths through the board. Select a card and choose “Add to thread”; Present walks it one card at a time.</p>
+      ${B.threads.length ? B.threads.map(t => `<div class="thr ${sel && sel.type === "thread" && sel.id === t.id ? "on" : ""}" data-t="${t.id}">
         <div class="row" style="justify-content:space-between"><b>${esc(t.name)}</b><span class="muted">${t.steps.length} stops</span></div>
         <ol>${t.steps.map((s, i) => `<li data-step="${i}">${esc(cardTitle(cardById(s)))} <button class="ghost" data-up="${i}" title="Move up">↑</button><button class="ghost" data-rm="${i}" title="Remove">✕</button></li>`).join("")}</ol>
         <div class="row" style="margin-top:8px"><button class="primary" data-present="${t.id}" ${t.steps.length ? "" : "disabled"}>Present</button><button data-show="${t.id}">Show path</button><button data-ren="${t.id}">Rename</button><button data-del="${t.id}">Delete</button></div></div>`).join("")
-        : `<div class="emptybox">No threads yet.</div>`}</div>`;
+        : `<div class="emptybox">No threads yet.</div>`}`);
     const T = id => B.threads.find(t => t.id === id);
-    p.querySelectorAll(".thr").forEach(box => {
+    body.querySelectorAll(".thr").forEach(box => {
       const t = T(box.dataset.t);
-      box.querySelectorAll("[data-step]").forEach(li => li.onclick = e => { if (e.target.closest("button")) return; const c = cardById(t.steps[+li.dataset.step]); if (c) { centerOn(c.x + c.w / 2, c.y + c.h / 2); } });
-      box.querySelectorAll("[data-up]").forEach(b => b.onclick = () => { const i = +b.dataset.up; if (i > 0) change(() => { [t.steps[i - 1], t.steps[i]] = [t.steps[i], t.steps[i - 1]]; }); renderThreads(); });
-      box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { change(() => t.steps.splice(+b.dataset.rm, 1)); renderThreads(); });
+      box.querySelectorAll("[data-step]").forEach(li => li.onclick = e => { if (e.target.closest("button")) return; const c = cardById(t.steps[+li.dataset.step]); if (c) centerOn(c.x + c.w / 2, c.y + c.h / 2); });
+      box.querySelectorAll("[data-up]").forEach(b => b.onclick = () => { const i = +b.dataset.up; if (i > 0) change(() => { [t.steps[i - 1], t.steps[i]] = [t.steps[i], t.steps[i - 1]]; }); viewThreads(); });
+      box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { change(() => t.steps.splice(+b.dataset.rm, 1)); viewThreads(); });
     });
-    p.querySelectorAll("[data-present]").forEach(b => b.onclick = () => startPresent(b.dataset.present));
-    p.querySelectorAll("[data-show]").forEach(b => b.onclick = () => { sel = { type: "thread", id: b.dataset.show }; draw(); renderThreads(); });
-    p.querySelectorAll("[data-ren]").forEach(b => b.onclick = () => { const t = T(b.dataset.ren); modal(`<h2>Rename thread</h2><input type="text" id="m-new" value="${esc(t.name)}"><div class="row" style="margin-top:10px"><button class="primary" id="m-ok">Save</button><button id="m-cancel">Cancel</button></div>`, () => { change(() => t.name = $("#m-new").value.trim() || t.name); renderThreads(); }); });
-    p.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (!confirm("Delete this thread? The cards stay on the board.")) return; change(() => B.threads = B.threads.filter(t => t.id !== b.dataset.del)); renderThreads(); });
+    body.querySelectorAll("[data-present]").forEach(b => b.onclick = () => startPresent(b.dataset.present));
+    body.querySelectorAll("[data-show]").forEach(b => b.onclick = () => { sel = { type: "thread", id: b.dataset.show }; draw(); viewThreads(); });
+    body.querySelectorAll("[data-ren]").forEach(b => b.onclick = () => { const t = T(b.dataset.ren); modal(`<h2>Rename thread</h2><input type="text" id="m-new" value="${esc(t.name)}"><div class="row" style="margin-top:10px"><button class="primary" id="m-ok">Save</button><button id="m-cancel">Cancel</button></div>`, () => { change(() => t.name = $("#m-new").value.trim() || t.name); viewThreads(); }); });
+    body.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (!confirm("Delete this thread? The cards stay on the board.")) return; change(() => B.threads = B.threads.filter(t => t.id !== b.dataset.del)); viewThreads(); });
   }
-  function startPresent(tid) { present = { thread: tid, i: 0 }; $("#present").classList.add("on"); $("#panel").classList.remove("open"); setTool(null); step(0); }
+  const renderThreads = () => openView({ kind: "threads" });
+  function startPresent(tid) { present = { thread: tid, i: 0 }; $("#present").classList.add("on"); closePanel(); setTool(null); step(0); }
   function step(d) {
     const t = B.threads.find(x => x.id === present.thread); if (!t || !t.steps.length) return stopPresent();
     present.i = Math.max(0, Math.min(t.steps.length - 1, present.i + d));
@@ -604,6 +716,43 @@ header .stat{font-size:13px;color:var(--muted)}
   }
   function stopPresent() { present = null; $("#present").classList.remove("on"); draw(); }
   $("#pPrev").onclick = () => step(-1); $("#pNext").onclick = () => step(1); $("#pStop").onclick = stopPresent;
+
+  // ---------- panel width: drag the edge ----------
+  const PANEL_MIN = 320, SHORE = 140;                     // the board always keeps a 140px shore on the right
+  const railW = () => document.querySelector("#rail").offsetWidth;
+  const maxW = () => Math.max(PANEL_MIN, window.innerWidth - railW() - SHORE);
+  let pw = S.get("wb.pw", 420), pwRegular = S.get("wb.pwReg", 420);
+  const setPW = w => { pw = Math.round(Math.min(maxW(), Math.max(PANEL_MIN, w))); panel.style.setProperty("--pw", pw + "px"); panel.classList.toggle("atmax", pw >= maxW() - 1); };
+  setPW(pw);
+  window.addEventListener("resize", () => setPW(pw));
+  const snaps = () => [["Narrow", 420], ["Half", Math.round((window.innerWidth - railW()) / 2)], ["Wide", maxW()]];
+  const edge = panel.querySelector(".edge"), wlabel = panel.querySelector(".wlabel"), shore = $("#shore");
+  edge.addEventListener("pointerdown", e => {
+    e.preventDefault(); e.stopPropagation(); edge.setPointerCapture(e.pointerId);
+    const x0 = e.clientX, w0 = pw; panel.classList.add("resizing"); document.body.classList.add("resizing");
+    shore.style.width = SHORE + "px";
+    const mv = ev => {
+      let w = w0 + ev.clientX - x0;
+      const mx = maxW(), soft = mx - 90;
+      if (w > soft) w = soft + (w - soft) * 0.4;           // resistance as you near the far side
+      let name = "";
+      for (const [n, sw] of snaps()) if (Math.abs(w - sw) < 22) { w = sw; name = n; }
+      setPW(w);
+      shore.classList.toggle("on", pw > mx - 200);
+      wlabel.textContent = (name ? name + " · " : "") + pw + " px" + (pw >= mx - 1 ? " · the board stays in view" : "");
+    };
+    const up = () => {
+      edge.removeEventListener("pointermove", mv); edge.removeEventListener("pointerup", up);
+      panel.classList.remove("resizing"); document.body.classList.remove("resizing"); shore.classList.remove("on");
+      S.set("wb.pw", pw); if (pw < maxW() - 60) { pwRegular = pw; S.set("wb.pwReg", pw); }
+    };
+    edge.addEventListener("pointermove", mv); edge.addEventListener("pointerup", up);
+  });
+  edge.addEventListener("dblclick", () => {
+    panel.style.transition = "width .22s ease, transform .18s";
+    setPW(pw >= maxW() - 60 ? pwRegular : maxW()); S.set("wb.pw", pw);
+    setTimeout(() => panel.style.transition = "", 260);
+  });
 
   // ---------- save + versions ----------
   async function saveBoard(message) {
@@ -631,11 +780,12 @@ header .stat{font-size:13px;color:var(--muted)}
   }
   $("#saveBtn").onclick = () => saveBoard();
   setInterval(() => { if (dirty && token) saveBoard("Board autosave"); }, 120000);
-  async function renderVersions() {
-    const p = $("#panel"); p.classList.add("open"); sel = null; draw();
-    p.innerHTML = `<div class="hd"><div class="eyebrow">Versions</div><h2>Saved boards</h2><p class="muted" style="margin:0">Every save is kept in the repo. Restoring loads that version; save to keep it.</p></div><div class="bd" id="vbody"><div class="muted">Loading…</div></div>`;
+  async function viewVersions() {
+    const body = shell([{ label: "Library", go: toLibrary }, { label: "Versions" }],
+      `<p class="muted" style="margin-top:0">Every save is kept in the repo. Restoring loads that version; save to keep it.</p><div id="vbody"><div class="muted">Loading…</div></div>`);
     try {
       const list = await (await api(`/commits?path=${BOARD_PATH}&per_page=40`)).json();
+      if (VIEW.kind !== "versions") return;
       $("#vbody").innerHTML = (Array.isArray(list) && list.length) ? list.map(c => `<div class="ver"><div>${esc(c.commit.message)}</div>
         <div class="row" style="justify-content:space-between"><span class="muted">${new Date(c.commit.author.date).toLocaleString()}</span><button data-v="${c.sha}">Restore</button></div></div>`).join("")
         : `<div class="emptybox">No saved versions yet. Press Save at the top.</div>`;
@@ -650,11 +800,12 @@ header .stat{font-size:13px;color:var(--muted)}
   // ---------- tools ----------
   function setTool(t) {
     tool = t === tool ? null : t;
-    document.querySelectorAll("#rail [data-tool]").forEach(b => b.classList.toggle("on", b.dataset.tool === tool || (b.dataset.tool === "library" && $("#drawer").classList.contains("open"))));
     board.classList.toggle("linking", tool === "link");
-    if (tool === "library") { const d = $("#drawer"); d.classList.toggle("open"); tool = null; if (d.classList.contains("open")) renderLibrary(); setTool(tool); return; }
-    if (tool === "threads") { tool = null; sel = null; renderThreads(); setTool(null); return; }
-    if (tool === "versions") { tool = null; renderVersions(); setTool(null); return; }
+    const toggleView = k => { if (panel.classList.contains("open") && VIEW.kind === k) closePanel(); else openView({ kind: k }); };
+    if (tool === "library") { tool = null; toggleView("library"); return; }
+    if (tool === "threads") { tool = null; toggleView("threads"); return; }
+    if (tool === "versions") { tool = null; toggleView("versions"); return; }
+    railState();
     if (tool === "fit") { tool = null; fit(); setTool(null); return; }
     if (tool === "note" || tool === "embed" || tool === "marker") toast("Click on the board to place it");
     if (tool === "link") toast("Click a card, then the card to connect it to");
@@ -676,7 +827,8 @@ header .stat{font-size:13px;color:var(--muted)}
     if ((e.metaKey || e.ctrlKey) && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.metaKey || e.ctrlKey) && k === "s") { e.preventDefault(); saveBoard(); return; }
     if (present) { if (k === "arrowright" || k === " ") step(1); else if (k === "arrowleft") step(-1); else if (k === "escape") stopPresent(); return; }
-    if (k === "escape") { setTool(null); linkFrom = null; select(null); $("#lb").style.display = "none"; }
+    if (k === "escape") { if ($("#lb").style.display === "flex") { $("#lb").style.display = "none"; return; } setTool(null); linkFrom = null; sel = null; draw(); closePanel(); }
+    else if ((k === "arrowright" || k === "arrowleft") && panel.classList.contains("open") && VIEW.kind === "record" && VIEW.list) { const b = $(k === "arrowright" ? "#rnext" : "#rprev"); if (b && !b.disabled) b.click(); }
     else if ((k === "backspace" || k === "delete") && sel) {
       if (sel.type === "card") removeCard(sel.id);
       else if (sel.type === "link") { change(() => B.links = B.links.filter(l => l.id !== sel.id)); select(null); }
