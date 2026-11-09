@@ -106,7 +106,7 @@ body.resizing{cursor:col-resize;user-select:none}
 .catmenu button{display:flex;justify-content:space-between;gap:16px;width:100%;border:0;text-align:left;padding:7px 10px;border-radius:6px}
 .catmenu button.on{background:var(--wash);font-weight:600}
 .catmenu .c{color:var(--muted)}
-.recimg{background:#1b1718;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:zoom-in;position:relative}
+.recimg{background:#1b1718;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:grab;position:relative}
 .recimg img{max-width:100%;max-height:calc(100vh - 260px);object-fit:contain;display:block}
 .recnav{display:flex;align-items:center;gap:8px;margin:10px 0 2px}
 .recnav .muted{flex:1;text-align:center}
@@ -115,6 +115,7 @@ body.resizing{cursor:col-resize;user-select:none}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chips button{padding:3px 10px;font-size:13px;border-radius:999px}
 .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chips button:disabled{opacity:.4;cursor:default;background:#fff}
 .chips .c{opacity:.6;margin-left:4px}
 .lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .li{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;cursor:grab}
@@ -150,8 +151,6 @@ body.resizing{cursor:col-resize;user-select:none}
 #toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:999px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
 #gate{position:fixed;inset:0;background:var(--wash);z-index:80;display:none;align-items:center;justify-content:center}
 #gate .box{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:28px;max-width:520px}
-#lb{position:fixed;inset:0;background:rgba(10,8,9,.92);z-index:90;display:none;align-items:center;justify-content:center;cursor:zoom-out}
-#lb img{max-width:94vw;max-height:94vh}
 .modal{position:fixed;inset:0;background:rgba(20,16,17,.35);z-index:70;display:none;align-items:center;justify-content:center}
 .modal .box{background:#fff;border-radius:12px;padding:20px;width:min(460px,92vw)}
 
@@ -228,7 +227,6 @@ body.resizing{cursor:col-resize;user-select:none}
 <div id="present"><button id="pPrev">←</button><span class="where" id="pWhere"></span><button id="pNext">→</button><button id="pStop">Done</button></div>
 <div id="zoomctl"><button id="zOut" title="Zoom out">−</button><button id="zPct" title="Reset to 100%">100%</button><button id="zIn" title="Zoom in">+</button></div>
 <div id="toast"></div>
-<div id="lb"><img alt=""></div>
 <div class="modal" id="modal"><div class="box" id="mbox"></div></div>
 <div id="gate"><div class="box">
   <h2>Connect to GitHub</h2>
@@ -475,7 +473,8 @@ body.resizing{cursor:col-resize;user-select:none}
       const mid = document.createElement("div"); mid.className = "lmid" + (on ? " sel" : ""); mid.dataset.link = l.id;
       mid.style.left = pp.mx + "px"; mid.style.top = pp.my + "px";
       mid.innerHTML = (l.label ? `<span class="lbl ${on ? "sel" : ""}">${esc(l.label)}</span>` : `<span class="dot" title="Name this connection"></span>`) + `<button class="brk" title="Break this connection">×</button>`;
-      mid.onpointerdown = e => { e.stopPropagation(); if (e.target.closest(".brk")) return; selIds = new Set(); select({ type: "link", id: l.id }); };
+      mid.onpointerdown = e => { e.stopPropagation(); if (e.target.closest(".brk")) return; selIds = new Set(); sel = { type: "link", id: l.id }; draw(); };
+      mid.ondblclick = e => { e.stopPropagation(); select({ type: "link", id: l.id }); setTimeout(() => { const i = $("#drawer [data-f=label]"); if (i) i.focus(); }, 30); };
       mid.querySelector(".brk").onclick = e => { e.stopPropagation(); breakLink(l.id); };
       world.appendChild(mid);
     }
@@ -488,16 +487,16 @@ body.resizing{cursor:col-resize;user-select:none}
       const vis = svg.querySelector(`path.vis[data-v="${p.dataset.link}"]`), mid = world.querySelector(`.lmid[data-link="${p.dataset.link}"]`);
       p.onpointerenter = () => { vis && vis.classList.add("hot"); mid && mid.classList.add("hot"); };
       p.onpointerleave = () => { vis && vis.classList.remove("hot"); mid && mid.classList.remove("hot"); };
-      p.onpointerdown = e => { e.stopPropagation(); selIds = new Set(); select({ type: "link", id: p.dataset.link }); };
+      p.onpointerdown = e => { e.stopPropagation(); selIds = new Set(); sel = { type: "link", id: p.dataset.link }; draw(); };
+      p.ondblclick = e => { e.stopPropagation(); select({ type: "link", id: p.dataset.link }); };
     });
   }
 
   // ---------- card interaction ----------
   let selIds = new Set(), editing = null;
   function afterMultiSelect() {
-    if (selIds.size === 1) { const id = [...selIds][0]; select({ type: "card", id }); }
-    else if (selIds.size > 1) { sel = null; draw(); openView({ kind: "multi" }); }
-    else { sel = null; draw(); }
+    sel = selIds.size === 1 ? { type: "card", id: [...selIds][0] } : null; draw();
+    if (panel.classList.contains("open") && VIEW.kind === "multi") selIds.size > 1 ? viewMulti() : toLibrary();
   }
   function duplicate(ids, dx, dy) {
     const map = {}, copies = [];
@@ -515,10 +514,10 @@ body.resizing{cursor:col-resize;user-select:none}
       if (e.target.classList.contains("handle")) return startLinkDrag(e, c);
       if (e.target.closest("a,iframe,video")) return;
       if (e.shiftKey || e.metaKey) {                                // add to / remove from the selection
-        selIds.has(id) ? selIds.delete(id) : selIds.add(id); sel = null; paintSel(); afterMultiSelect(); return;
+        selIds.has(id) ? selIds.delete(id) : selIds.add(id); sel = selIds.size === 1 ? { type: "card", id: [...selIds][0] } : null; paintSel(); return;
       }
-      if (!selIds.has(id)) { selIds = new Set([id]); select({ type: "card", id }); }
-      else if (selIds.size === 1 && !(VIEW.cardId === id && panel.classList.contains("open"))) select({ type: "card", id });
+      // a click only selects; double-click opens the card in the panel
+      if (!selIds.has(id)) { selIds = new Set([id]); sel = { type: "card", id }; paintSel(); drawLinks(); }
       const grip = e.target.classList.contains("grip"), ew = e.target.classList.contains("ew");
       let ids = [...selIds];
       const start = { x: e.clientX, y: e.clientY, w: c.w, h: c.h, ratio: c.h / c.w, pos: {} };
@@ -547,14 +546,14 @@ body.resizing{cursor:col-resize;user-select:none}
     });
     el.addEventListener("dblclick", e => {
       const c = cardById(el.dataset.id); if (!c) return;
+      if (selIds.size > 1 && selIds.has(c.id)) { openView({ kind: "multi" }); return; }
+      selIds = new Set([c.id]); select({ type: "card", id: c.id });          // the only way a card opens in the panel
       if (c.kind === "embed") { el.classList.toggle("live"); return; }
       if (c.kind === "ftext") return editRich(c, el.querySelector(".rt"));
       if (c.kind === "note") { if (e.target.closest(".nlabel")) return editLabel(c, el.querySelector(".lt")); return editRich(c, el.querySelector(".rt")); }
       if (c.kind === "marker") return editText(c);
-      if (c.kind === "record") { const it = LIBBY[c.ref]; if (it && it.preview) preview(it.preview).then(u => { if (u) { $("#lb img").src = u; $("#lb").style.display = "flex"; } }); }
     });
   }
-  $("#lb").onclick = () => $("#lb").style.display = "none";
 
   // ---------- rich text: Notion-style, in place, no visible chrome ----------
   const SIZES = [11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 120];
@@ -666,7 +665,7 @@ body.resizing{cursor:col-resize;user-select:none}
   function addLink(from, to) {
     if (B.links.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from))) { toast("Already connected"); return; }
     const id = uid("l"); change(() => B.links.push({ id, from, to, label: "" }));
-    selIds = new Set(); select({ type: "link", id }); setTimeout(() => { const i = $("#drawer [data-f=label]"); if (i) i.focus(); }, 50);
+    selIds = new Set(); sel = { type: "link", id }; draw(); toast("Connected · double-click the dot to name it");
   }
   function breakLink(id) {
     change(() => B.links = B.links.filter(l => l.id !== id));
@@ -707,7 +706,7 @@ body.resizing{cursor:col-resize;user-select:none}
     const c = { id: uid("c"), kind: "record", ref: id, x: Math.round(p.x - w / 2), y: Math.round(p.y - h / 2), w, h };
     change(() => B.cards.push(c));
     selIds = new Set([c.id]);
-    if (quiet) { sel = { type: "card", id: c.id }; draw(); } else select({ type: "card", id: c.id });
+    sel = { type: "card", id: c.id }; draw();
   }
   board.addEventListener("dblclick", e => { if (e.target.closest(".card,.lmid")) return; const t = tool; tool = "text"; placeAt(e); tool = t; });
   board.addEventListener("dragover", e => e.preventDefault());
@@ -776,15 +775,19 @@ body.resizing{cursor:col-resize;user-select:none}
   // Library: search + results (the category lives in the breadcrumb)
   function viewLibrary() {
     const onBoard = new Set(B.cards.filter(c => c.kind === "record").map(c => c.ref));
-    const items = libMatches().filter(i => !LQ.cat || i.type === LQ.cat);
-    const body = shell([{ label: "Library", go: () => { LQ.cat = ""; toLibrary(); } }, catPart()],
+    const base = libMatches(), n = {}; base.forEach(i => n[i.type] = (n[i.type] || 0) + 1);
+    const items = base.filter(i => !LQ.cat || i.type === LQ.cat);
+    const body = shell([{ label: "Library", go: () => { LQ.cat = ""; toLibrary(); } }, ...(LQ.cat ? [{ label: catLabel(LQ.cat) }] : [])],
       `<input type="search" id="lq" placeholder="Search titles, tags, dates" value="${esc(LQ.q)}">
+       <div class="chips"><button data-c="" class="${LQ.cat ? "" : "on"}">All<span class="c">${base.length}</span></button>${CATS.map(([k, l]) =>
+         `<button data-c="${k}" class="${LQ.cat === k ? "on" : ""}" ${n[k] ? "" : "disabled"}>${l}<span class="c">${n[k] || 0}</span></button>`).join("")}</div>
        ${!LIB.length ? `<div class="emptybox" style="margin-top:12px">The library is empty. In the <a href="../#keep">Sorting Room</a>, press <b>Refresh</b> to publish Prod images; they show up here.</div>` :
        `<p class="muted" style="margin:8px 0 10px">${items.length.toLocaleString()} ${items.length === 1 ? "record" : "records"}${LQ.q ? ` for “${esc(LQ.q)}”` : ""}. Click to view, drag onto the board to place.</p>
         <div class="lib">${items.slice(0, LQ.n).map(i => `<div class="li ${onBoard.has(i.id) ? "on" : ""}" draggable="true" data-id="${esc(i.id)}">
           ${i.preview ? `<div class="img"><img data-pv="${esc(i.preview)}" alt=""></div>` : `<div class="noimg">${esc(clip(i.title, 140))}</div>`}
           <div class="t">${esc(i.title)}</div><div class="k">${esc(catLabel(i.type))}${onBoard.has(i.id) ? " · on the board" : ""}</div></div>`).join("")}</div>
         ${items.length > LQ.n ? `<div class="row" style="justify-content:center;margin-top:12px"><button id="lmore">Show more (${items.length - LQ.n})</button></div>` : ""}`}`);
+    body.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { LQ.cat = b.dataset.c; LQ.n = 60; viewLibrary(); });
     const lq = $("#lq"); let t = null;
     lq.oninput = () => { clearTimeout(t); t = setTimeout(() => { LQ.q = lq.value; LQ.n = 60; viewLibrary(); const e = $("#lq"); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 250); };
     const list = items.map(i => i.id);
@@ -800,17 +803,16 @@ body.resizing{cursor:col-resize;user-select:none}
   async function viewRecord(v) {
     const it = LIBBY[v.ref] || {};
     const onCard = v.cardId ? cardById(v.cardId) : B.cards.find(c => c.kind === "record" && c.ref === v.ref);
-    const parts = [{ label: "Library", go: () => { LQ.cat = ""; toLibrary(); } }, { label: catLabel(it.type || ""), go: () => { LQ.cat = it.type || ""; toLibrary(); } },
+    const parts = [{ label: "Library", go: () => { LQ.cat = ""; toLibrary(); } }, { label: catLabel(it.type || ""), menu: true },
                    ...(v.from === "board" ? [{ label: "On the board", go: () => { if (onCard) { centerOn(onCard.x + onCard.w / 2, onCard.y + onCard.h / 2); } } }] : []), { label: clip(it.title || "Record", 60) }];
     const idx = v.list ? v.list.indexOf(v.ref) : -1;
     const nav = idx >= 0 ? `<div class="recnav"><button id="rprev" ${idx > 0 ? "" : "disabled"} title="Previous (←)">←</button><span class="muted">${idx + 1} of ${v.list.length.toLocaleString()}</span><button id="rnext" ${idx < v.list.length - 1 ? "" : "disabled"} title="Next (→)">→</button></div>` : "";
-    const body = shell(parts, `${it.preview ? `<div class="recimg" id="rimg" draggable="true" title="Click to view full size · drag onto the board"><img data-pv="${esc(it.preview)}" alt=""></div>` : ""}${nav}
+    const body = shell(parts, `${it.preview ? `<div class="recimg" id="rimg" draggable="true" title="Drag onto the board"><img data-pv="${esc(it.preview)}" alt=""></div>` : ""}${nav}
       <h2 style="margin-top:12px">${esc(it.title || "Record")}</h2><div id="rbody"><div class="muted">Loading the record…</div></div>`);
     if ($("#rprev")) $("#rprev").onclick = () => openView({ ...v, ref: v.list[idx - 1], cardId: null });
     if ($("#rnext")) $("#rnext").onclick = () => openView({ ...v, ref: v.list[idx + 1], cardId: null });
     const ri = $("#rimg");
-    if (ri) { ri.onclick = () => { const u = ri.querySelector("img").src; if (u) { $("#lb img").src = u; $("#lb").style.display = "flex"; } };
-              ri.ondragstart = e => e.dataTransfer.setData("text/ba-id", v.ref); }
+    if (ri) ri.ondragstart = e => e.dataTransfer.setData("text/ba-id", v.ref);
     hydrate(body);
     const r = await rec(v.ref);
     if (VIEW !== v) return;
@@ -1085,7 +1087,6 @@ body.resizing{cursor:col-resize;user-select:none}
     }
     if (present) { if (k === "arrowright") step(1); else if (k === "arrowleft") step(-1); else if (k === "escape") stopPresent(); return; }
     if (k === "escape") {
-      if ($("#lb").style.display === "flex") { $("#lb").style.display = "none"; return; }
       if (selIds.size || sel) { selIds = new Set(); sel = null; setTool(null); draw(); return; }
       setTool(null); closePanel(); return;
     }
