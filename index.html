@@ -205,12 +205,12 @@
   <nav id="tabs">
     <button data-tab="all">All <span class="n" id="n-all">0</span></button>
     <button data-tab="swipe">Swipe <span class="n" id="n-swipe">0</span></button>
-    <button data-tab="keep">Advancing <span class="n" id="n-keep">0</span></button>
+    <button data-tab="keep">Prod images <span class="n" id="n-keep">0</span></button>
     <button data-tab="nix">Nixed <span class="n" id="n-nix">0</span></button>
     <button data-tab="reflect">Reflections</button>
   </nav>
   <div class="status"><span class="dot" id="dot"></span><span id="stat">Not connected</span>
-    <button class="linkbtn" id="v4live" title="When on, Refresh publishes everything in Advancing to the v4 library"></button><button class="linkbtn" id="refresh">Refresh</button><button class="linkbtn" id="settings">Settings</button></div>
+    <button class="linkbtn" id="v4live" title="When on, Refresh publishes everything in Prod images to the v4 workbench"></button><button class="linkbtn" id="refresh">Refresh</button><button class="linkbtn" id="settings">Settings</button></div>
 </header>
 <main id="main"></main>
 <aside id="drawer"></aside>
@@ -370,6 +370,10 @@
     // packaged items first in sheet order (images before text records), then agent finds newest first
     // lookalike groups first (likely duplicates, then very similar, then similar; lookalikes side by side),
     // then packaged items in sheet order (images before text records), then agent finds newest first
+    if (which === "keep") {
+      const ci = x => { const i = CATS.findIndex(c => c[0] === catOf(x)); return i < 0 ? 99 : i; };
+      return items.sort((a, b) => ci(a) - ci(b) || (a.v4 && b.v4 ? a.ord - b.ord : a.v4 ? -1 : b.v4 ? 1 : (a.path < b.path ? 1 : -1)));
+    }
     const ord = x => SIM.by[x.id] ? 0 : x.v4 ? (x.v4.type === "image" ? 1 : 2) : 3;
     return items.sort((a, b) => ord(a) - ord(b) ||
       (SIM.by[a.id] && SIM.by[b.id] ? (SIM.by[a.id].gid - SIM.by[b.id].gid || SIM.by[a.id].pos - SIM.by[b.id].pos) :
@@ -461,7 +465,10 @@
   function tileHTML(x, which, gs, n) {
     const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st, sim = SIM.by[x.id];
     let head = "";
-    if (sim && sim.gid !== gs.lastG) {
+    if (which === "keep") {
+      const c = catOf(x);
+      if (c !== gs.lastCat) { gs.lastCat = c; head = `<div class="ghead"><b>${esc((CATS.find(k => k[0] === c) || [, c])[1])}</b> · ${(gs.catCount[c] || 0).toLocaleString()}</div>`; }
+    } else if (sim && sim.gid !== gs.lastG) {
       const gt = gs.gTier[sim.gid] || sim.tier;
       head = `<div class="ghead"><b>Lookalike group ${sim.gid}</b> · ${tierWord[gt] || "Similar"} · ${gs.gCount[sim.gid] || 1} here</div>`;
     } else if (!sim && gs.lastG !== null && gs.lastG !== "none") head = `<div class="ghead"><b>Everything else</b></div>`;
@@ -485,7 +492,7 @@
   function decide(el, act) {
     const id = el.dataset.id;
     setStatus(id, statusOf(id) === act ? "" : act);
-    toast(statusOf(id) === "keep" ? "Advancing" : statusOf(id) === "nix" ? "Nixed" : "Back to unsorted");
+    toast(statusOf(id) === "keep" ? "Added to Prod images" : statusOf(id) === "nix" ? "Nixed" : "Back to unsorted");
     el.style.transition = "opacity .15s"; el.style.opacity = 0;
     setTimeout(() => { el.remove(); if (gridState) { gridState.left--; const n = $("#toSort"); if (n) n.textContent = gridState.left; } }, 150);
   }
@@ -535,15 +542,16 @@
   function renderGrid(which) {
     const allItems = list(which === "all" ? "all" : which);
     const empty = { all: "Nothing left to sort.",
-                    keep: "Nothing advancing yet. Swipe right or press Keep.", nix: "Nothing nixed." }[which];
+                    keep: "Nothing in Prod images yet. Keep something in All.", nix: "Nothing nixed." }[which];
     const waiting = which === "keep" ? allItems.filter(x => !PUB.ids.has(x.id) && !x.rec._hold).length : 0;
     const heldN = which === "keep" ? allItems.filter(x => x.rec._hold).length : 0;
-    const pub = which === "keep" ? `<div class="pubbar">Advancing is the v4 library. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
+    const pub = which === "keep" ? `<div class="pubbar">Prod images is what the v4 workbench reads. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
     const finish = which === "all" && allItems.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <span><b id="toSort">${allItems.length}</b> to sort.</span><button class="linkbtn" id="finishnix">Done: nix everything I've scrolled past</button></div>` : "";
     const gCount = {}, gTier = {};
     allItems.forEach(x => { const g = SIM.by[x.id]; if (g) { gCount[g.gid] = (gCount[g.gid] || 0) + 1; if (g.tier === "duplicate") gTier[g.gid] = "duplicate"; } });
-    gridState = { which, items: allItems, shown: 0, lastG: null, gCount, gTier, left: allItems.length };
+    const catCount = {}; if (which === "keep") allItems.forEach(x => { const c = catOf(x); catCount[c] = (catCount[c] || 0) + 1; });
+    gridState = { which, items: allItems, shown: 0, lastG: null, lastCat: null, catCount, gCount, gTier, left: allItems.length };
     $("#main").innerHTML = filtersHTML() + pub + finish + (allItems.length ? `<div class="grid"></div><div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>` : `<div class="empty">${empty}</div>`);
     bindFilters();
     const want = Math.max(CHUNK, shownN);
@@ -1099,7 +1107,7 @@
     if (liveOn()) syncV4(false);
   };
   liveLabel();
-  $("#v4live").onclick = () => { S.set("v4live", !liveOn()); liveLabel(); toast(liveOn() ? "v4 live is on: Refresh publishes Advancing to v4" : "v4 live is off: decisions save, nothing publishes"); };
+  $("#v4live").onclick = () => { S.set("v4live", !liveOn()); liveLabel(); toast(liveOn() ? "v4 live is on: Refresh publishes Prod images to the v4 workbench" : "v4 live is off: decisions save, nothing publishes"); };
   $("#settings").onclick = () => renderSetup();
   $("#lb").onclick = () => { $("#lb").style.display = "none"; $("#lbimg").src = ""; };
   document.addEventListener("keydown", e => {
@@ -1111,7 +1119,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108183943";
+  const BUILD = "20261108192741";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
