@@ -278,58 +278,86 @@
   const b64 = s => btoa(unescape(encodeURIComponent(s)));
   const unb64 = s => decodeURIComponent(escape(atob(s.replace(/\n/g, ""))));
 
+  // ---------- Saved copy: the last sync is kept on this computer, so the page opens with real numbers at once ----------
+  const SNAP = { editsSha: null, reflSha: null, recPaths: [] };
+  const idb = (() => {
+    let dbp = null;
+    const db = () => dbp || (dbp = new Promise((ok, no) => { const r = indexedDB.open("ba-sorting-room", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }));
+    const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, no) => { const t = d.transaction("kv", mode); const q = fn(t.objectStore("kv")); t.oncomplete = () => ok(q && q.result); t.onerror = () => no(t.error); }); };
+    return { get: k => tx("readonly", s => s.get(k)).catch(() => null), set: (k, v) => tx("readwrite", s => s.put(v, k)).catch(() => {}) };
+  })();
+  function buildRecords(recPaths) {
+    records = {};
+    for (const p of recPaths) if (cache[p]) { const r = cache[p]; const id = r.id || p.split("/").pop().slice(0, -5); records[id] = { rec: Object.assign({}, r), orig: r, path: p }; }
+    CARDS.list.forEach((c, i) => {
+      const care = (c.care_codes || []).length > 0;
+      records[c.id] = { v4: c, ord: i, path: `v4/${c.batch}/${c.id}`, rec: {
+        id: c.id, title: c.title, lane: c.type === "image" ? "Flat master images" : `v3 ${c.type}`,
+        holder: c.holder, date_of_item: c.date, creator: c.creator, rights: c.rights, source_url: c.source_url,
+        passage: c.summary, kind: c.type, _pv: c.preview, _hold: c.hold,
+        care_flag: care, care_note: care ? `${c.care_codes.join(", ").replace(/_/g, " ")}${c.care_note ? ": " + c.care_note : ""}` : "" } };
+    });
+  }
+  let snapT = null;
+  function saveSnap() {
+    clearTimeout(snapT);
+    snapT = setTimeout(() => idb.set("snap:" + repo, { v: 1, at: Date.now(), CARDS: { sha: CARDS.sha, list: CARDS.list }, sort, sortSha, EDITS, reflections,
+      SIM: { sha: SIM.sha, by: SIM.by }, CV: { sha: CV.sha, by: CV.by, styleSha: CV.styleSha, style: CV.style },
+      PUB: { sha: PUB.sha, ids: [...PUB.ids] }, SNAP: { ...SNAP }, keptFolders: [...keptFolders] }), 400);
+  }
+  async function warm() {
+    if (!token) return false;
+    const d = await idb.get("snap:" + repo);
+    if (!d || d.v !== 1 || Object.keys(records).length) return false;
+    Object.assign(CARDS, d.CARDS); sort = Object.assign(d.sort || {}, pending); sortSha = d.sortSha; EDITS = Object.assign(d.EDITS || {}, editsPending); reflections = d.reflections || "";
+    Object.assign(SIM, d.SIM); Object.assign(CV, d.CV); PUB.sha = d.PUB.sha; PUB.ids = new Set(d.PUB.ids || []); Object.assign(SNAP, d.SNAP); keptFolders = new Set(d.keptFolders || []);
+    buildRecords(SNAP.recPaths || []); applyEdits();
+    $("#stat").textContent = `Saved copy from ${new Date(d.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · checking for changes…`;
+    render();
+    return true;
+  }
+
   async function load() {
     if (!token) { renderSetup(); return; }
-    $("#stat").textContent = "Syncing...";
+    if (!Object.keys(records).length) $("#stat").textContent = "Loading records…";
     try {
       const tree = await (await api(`/git/trees/main?recursive=1`)).json();
       const paths = (tree.tree || []).map(t => t.path);
       const recPaths = paths.filter(p => /^inbox\/[^/]+\/[^/]+\/find-[^/]+\.json$/.test(p));
       keptFolders = new Set(paths.filter(p => /^kept\/[^/]+\/[^/]+\.(jpe?g|png|tiff?|gif|webp|bin|jp2)$/i.test(p)).map(p => p.split("/")[1]));
+      const ent = p => (tree.tree || []).find(t => t.path === p) || null;
+      const changed = (p, have) => { const e = ent(p); return e && e.sha !== have ? e : null; };
       const missing = recPaths.filter(p => !cache[p]);
-      for (let i = 0; i < missing.length; i += 8) {
-        await Promise.all(missing.slice(i, i + 8).map(async p => {
-          try { const txt = await raw(p); if (txt) cache[p] = JSON.parse(txt); } catch (e) { console.warn(p, e); }
-        }));
-      }
-      S.set("cache", cache);
-      records = {};
-      for (const p of recPaths) if (cache[p]) { const r = cache[p]; const id = r.id || p.split("/").pop().slice(0, -5); records[id] = { rec: Object.assign({}, r), orig: r, path: p }; }
-      // packaged batches (v4/intake): one card per item, arriving as no-go like every find
-      const cardsEnt = (tree.tree || []).find(t => t.path === "v4/intake/cards.json");
-      if (cardsEnt && cardsEnt.sha !== CARDS.sha) {
-        const txt = await raw("v4/intake/cards.json");
-        if (txt) { CARDS.list = JSON.parse(txt).cards || []; CARDS.sha = cardsEnt.sha; }
-      }
-      CARDS.list.forEach((c, i) => {
-        const care = (c.care_codes || []).length > 0;
-        records[c.id] = { v4: c, ord: i, path: `v4/${c.batch}/${c.id}`, rec: {
-          id: c.id, title: c.title, lane: c.type === "image" ? "Flat master images" : `v3 ${c.type}`,
-          holder: c.holder, date_of_item: c.date, creator: c.creator, rights: c.rights, source_url: c.source_url,
-          passage: c.summary, kind: c.type, _pv: c.preview, _hold: c.hold,
-          care_flag: care, care_note: care ? `${c.care_codes.join(", ").replace(/_/g, " ")}${c.care_note ? ": " + c.care_note : ""}` : "" } };
-      });
-      const sr = await api(`/contents/decisions/sort.json?ref=main`);
-      if (sr.status !== 404) { const j = await sr.json(); const txt = await bodyOf(j, "decisions/sort.json"); sort = JSON.parse(txt); sortSha = j.sha; }
-      Object.assign(sort, pending);
-      reflections = (await raw("journal/reflections.md")) || "";
-      const er = await api(`/contents/v4/edits.json?ref=main`);
-      if (er.status !== 404) EDITS = JSON.parse(await bodyOf(await er.json(), "v4/edits.json"));
-      Object.assign(EDITS, editsPending);
-      const simEnt = (tree.tree || []).find(t => t.path === "v4/intake/similar.json");
-      if (simEnt && simEnt.sha !== SIM.sha) { try { SIM.by = JSON.parse(await raw("v4/intake/similar.json")).by_id || {}; SIM.sha = simEnt.sha; } catch {} }
+      const jobs = [];
+      // every file that changed is fetched at the same time; unchanged files are not downloaded again
+      jobs.push((async () => { for (let i = 0; i < missing.length; i += 8) await Promise.all(missing.slice(i, i + 8).map(async p => {
+        try { const txt = await raw(p); if (txt) cache[p] = JSON.parse(txt); } catch (e) { console.warn(p, e); } })); if (missing.length) S.set("cache", cache); })());
+      let e;
+      if ((e = changed("v4/intake/cards.json", CARDS.sha))) jobs.push(raw(e.path).then(t => { if (t) { CARDS.list = JSON.parse(t).cards || []; CARDS.sha = e.sha; } }));
+      const se = changed("decisions/sort.json", sortSha);
+      if (se) jobs.push(raw(se.path).then(t => { if (t !== null) { sort = JSON.parse(t); sortSha = se.sha; } else throw new Error("could not read decisions"); }));
+      const ee = changed("v4/edits.json", SNAP.editsSha);
+      if (ee) jobs.push(raw(ee.path).then(t => { if (t !== null) { EDITS = JSON.parse(t); SNAP.editsSha = ee.sha; } }));
+      const re = changed("journal/reflections.md", SNAP.reflSha);
+      if (re) jobs.push(raw(re.path).then(t => { reflections = t || ""; SNAP.reflSha = re.sha; }));
+      const sme = changed("v4/intake/similar.json", SIM.sha);
+      if (sme) jobs.push(raw(sme.path).then(t => { SIM.by = JSON.parse(t).by_id || {}; SIM.sha = sme.sha; }).catch(() => {}));
       // card designs for records without a picture (same picks as the workbench, from the card studio)
-      const cvEnt = (tree.tree || []).find(t => t.path === "v4/intake/cardview.json");
-      if (cvEnt && cvEnt.sha !== CV.sha) { try { CV.by = JSON.parse(await raw("v4/intake/cardview.json")).by_id || {}; CV.sha = cvEnt.sha; } catch {} }
-      const csEnt = (tree.tree || []).find(t => t.path === "v4/design/card-styles.json");
-      if (csEnt && csEnt.sha !== CV.styleSha) { try { CV.style = JSON.parse(await raw("v4/design/card-styles.json")) || {}; CV.styleSha = csEnt.sha; } catch {} }
-      const pubEnt = (tree.tree || []).find(t => t.path === "v4/library/index.json");
-      if (pubEnt && pubEnt.sha !== PUB.sha) {
-        try { const ix = JSON.parse(await raw("v4/library/index.json")); PUB.ids = new Set((ix.items || []).map(i => i.id)); PUB.sha = pubEnt.sha; } catch {}
-      }
+      const cve = changed("v4/intake/cardview.json", CV.sha);
+      if (cve) jobs.push(raw(cve.path).then(t => { CV.by = JSON.parse(t).by_id || {}; CV.sha = cve.sha; }).catch(() => {}));
+      const cse = changed("v4/design/card-styles.json", CV.styleSha);
+      if (cse) jobs.push(raw(cse.path).then(t => { CV.style = JSON.parse(t) || {}; CV.styleSha = cse.sha; }).catch(() => {}));
+      const pe = changed("v4/library/index.json", PUB.sha);
+      if (pe) jobs.push(raw(pe.path).then(t => { PUB.ids = new Set((JSON.parse(t).items || []).map(i => i.id)); PUB.sha = pe.sha; }).catch(() => {}));
+      await Promise.all(jobs);
+      Object.assign(sort, pending);
+      Object.assign(EDITS, editsPending);
+      SNAP.recPaths = recPaths;
+      buildRecords(recPaths);
       applyEdits();
       $("#dot").className = "dot live";
       $("#stat").textContent = `Live · synced ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+      saveSnap();
       // redraw only when something changed, so a background sync never jumps the page while you scroll
       const sig = [Object.keys(records).length, sortSha, CARDS.sha, SIM.sha, PUB.sha, JSON.stringify(EDITS).length,
                    Object.values(sort).filter(v => v && v.status).length].join("|");
@@ -561,6 +589,7 @@
   let whereT = null;
   window.addEventListener("scroll", () => { clearTimeout(whereT); whereT = setTimeout(updateWhere, 60); }, { passive: true });
   function renderGrid(which) {
+    if (!Object.keys(records).length) { $("#main").innerHTML = `<div class="empty">Loading records…</div>`; return; }
     const allItems = list(which === "all" ? "all" : which);
     const empty = { all: "Nothing left to sort.",
                     keep: "Nothing in Prod images yet. Keep something in All.", nix: "Nothing nixed." }[which];
@@ -1141,7 +1170,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108212033";
+  const BUILD = "20261108213303";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
@@ -1151,7 +1180,8 @@
   }, 60000);
 
   if (tab === "activity") tab = "all";
-  render(); load();
+  render();
+  warm().finally(load);
   setInterval(() => { if (token && document.visibilityState === "visible") load(); }, POLL_MS);
 })();
 </script>
