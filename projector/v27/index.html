@@ -17,10 +17,11 @@ canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 #thumbs{position:absolute;right:8px;top:8px;width:112px;height:112px;border:2px solid #000;background:#222;z-index:2}
 body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
 canvas#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
-#cosmoLabs{position:absolute;inset:0;pointer-events:none;z-index:1}
-.lab{position:absolute;white-space:nowrap;font:500 12px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:.02em;color:#141414;
+#cosmoLabs{position:absolute;inset:0;pointer-events:none;z-index:2}
+.lab{position:absolute;white-space:nowrap;font:500 11.5px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:.02em;color:#141414;
   text-shadow:0 0 2px #f4f3ee,0 0 3px #f4f3ee,0 0 5px #f4f3ee,0 0 8px rgba(244,243,238,.9)}
-.lab.mom{font-weight:600;font-size:11px;letter-spacing:.22em;transform:translate(-50%,-50%)}
+.lab.mom{font-weight:700;font-size:15px;letter-spacing:.28em;transform:translate(-50%,-50%)}
+.lab.nd{pointer-events:auto;cursor:pointer;color:#2c2c2c}.lab.nd:hover{color:#000;text-decoration:underline;text-underline-offset:3px}
 .lab.sel{font-weight:700}
 @media(max-width:600px){.lab.nd{white-space:normal;width:84px;font-size:10px;line-height:1.15}.lab.mom{font-size:10px}}
 #cp{position:absolute;z-index:6;left:16px;top:16px;width:min(380px,calc(100vw - 32px));max-height:calc(100svh - 170px);overflow:auto;
@@ -101,6 +102,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
    <label><span>Rain <output id="o_rain"></output></span><input type="range" id="rain" min="0" max="2" step="0.05" value="0.7"></label>
    <label><span>Rise / crash pace <output id="o_rise"></output></span><input type="range" id="rise" min="0" max="3" step="0.05" value="1"></label>
    <label><span>New photo every (seconds) <output id="o_turn"></output></span><input type="range" id="turn" min="1" max="30" step="1" value="4"></label>
+   <label><span>Quiet basin <output id="o_basin"></output></span><input type="range" id="basin" min="0" max="1" step="0.05" value="1"></label>
    <label><span>Meander / cascade <output id="o_curl"></output></span><input type="range" id="curl" min="0" max="2" step="0.05" value="1"></label>
    <label><span>Glimpses (calm patches) <output id="o_glimpse"></output></span><input type="range" id="glimpse" min="0" max="1" step="0.05" value="0.5"></label>
    <label><span>Wave height <output id="o_disp"></output></span><input type="range" id="disp" min="0" max="0.8" step="0.02" value="0.3"></label>
@@ -142,7 +144,9 @@ in vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
 const fs=`#version 300 es
 precision highp float;
 uniform vec2 u_res;uniform float u_glimpse,u_disp,u_refl,u_pickOn;uniform vec2 u_pickXY;
-float g_pick=-1.;float g_far=0.;uniform vec2 u_swap;uniform float u_curl;
+float g_pick=-1.;float g_far=0.;uniform vec2 u_swap;uniform float u_curl;uniform float u_basin;
+// a quiet basin around the cosmogram: calmer, glassier, darker water, fewer photos
+float basinAt(vec2 p){return u_basin*(1.-smoothstep(2.4,5.4,length(p)));}
 uniform float u_t,u_wt,u_head,u_iso,u_layer,u_span,u_smear,u_chroma,u_adv,u_simOK,u_steps,u_wy,u_foam,u_wmix,u_under,u_rain,u_pt;
 uniform int u_bn;
 uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec4 u_b[12];uniform vec4 u_cr[4];
@@ -345,7 +349,7 @@ float rainFall(vec2 fc,float t,float sceneT){
 float wH(vec2 p,float t){
   vec2 v=simAt(p);
   vec2 pp=p+v*.9;
-  float h=wbase(pp,t)+.16*length(v)*sin(t*2.6+pp.x*3.+pp.y*2.);
+  float h=(wbase(pp,t)+.16*length(v)*sin(t*2.6+pp.x*3.+pp.y*2.))*mix(1.,.32,basinAt(p));
   float fd=field(vec3(p.x,u_wy,p.y));
   float ring=smoothstep(1.1,.15,abs(fd));
   h+=ring*.06*sin(t*3.4+fd*5.);
@@ -359,7 +363,7 @@ vec3 skyCol(vec3 rd){
   return c+vec3(.95,.93,.85)*sun*.30;
 }
 float hMarch(vec2 p){p+=simAt(p)*.9;p+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*.9;
-  return (wv(p,vec2(.38,.20),.55,.26,u_wt,0.)+wv(p,vec2(.55,.28),.9,.20,u_wt,1.3)+wv(p,vec2(.45,.26),2.2,.12,u_wt,2.9))*u_disp;}
+  return (wv(p,vec2(.38,.20),.55,.26,u_wt,0.)+wv(p,vec2(.55,.28),.9,.20,u_wt,1.3)+wv(p,vec2(.45,.26),2.2,.12,u_wt,2.9))*u_disp*mix(1.,.32,basinAt(p));}
 vec4 water(vec3 ro,vec3 rd){
   float tw=(u_wy-ro.y)/rd.y;
   if(tw<=0.&&u_disp<.001)return vec4(skyCol(rd),1e6);
@@ -421,6 +425,7 @@ vec4 water(vec3 ro,vec3 rd){
   float bnd=bandK(cq0.x,cq0.y);
   float bf=bnd-floor(bnd);
   float pool=smoothstep(.62-.3*u_glimpse,.74-.3*u_glimpse,vnoise(g.xz*.27+vec2(u_wt*.025,-u_wt*.018)));
+  float bsn=basinAt(g.xz);pool=max(pool,bsn*.85);
   vec3 img=flowCell(rhw,ridge,vv,n,pool);
   float bd=min(bf,1.-bf);
   float bw=clamp(fwidth(bnd)*4.,mix(.20,.10,pool),mix(.40,.24,pool));
@@ -450,10 +455,12 @@ vec4 water(vec3 ro,vec3 rd){
   vec3 col=mix(tint*2.,body,clamp(u_wmix,0.,1.));
   col=mix(col,skyCol(reflect(rd,n)),clamp(fres*u_refl*(1.-.5*pool),0.,.6));
   col*=1.-.16*smoothstep(1.7,.2,abs(fd));
+  // the basin: deep glass that mirrors the sky, the archive only glimmering through
+  col=mix(col,mix(vec3(.06,.15,.18)+img*.16,skyCol(reflect(rd,n))*.85,clamp(fres*1.1+.05,0.,.42)),bsn*.74);
   vec3 ld=normalize(vec3(.35,.6,.45));
   float sp=pow(max(dot(reflect(rd,n),ld),0.),220.);
   col+=vec3(1.,.98,.9)*sp*.6;
-  col=mix(col,vec3(.965,.965,.94),foam*.82);
+  col=mix(col,vec3(.965,.965,.94),foam*.82*(1.-.85*bsn));
   col+=vec3(.93,.96,.95)*rfx.y*.34*rainAmt()*exp(-tw*.012);
   col+=vec3(.95,.97,1.)*max(rfx.x,0.)*2.1*rainAmt()*exp(-tw*.008);
   col=mix(col,vec3(.66,.90,.87),1.-exp(-tw*.006));
@@ -651,7 +658,7 @@ gl.useProgram(pr);
 const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
 const al=gl.getAttribLocation(pr,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
-const U={};['u_curl','u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
+const U={};['u_basin','u_curl','u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
 const tex=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,ATLASW,ATLASH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
@@ -1045,8 +1052,8 @@ cv.addEventListener('keydown',e=>{const k=e.key;let h=true;
   if(h)e.preventDefault();});
 
 // ---------- controls ----------
-const P={curl:1,turn:4,glimpse:.5,disp:.3,refl:.7,iso:.13,layer:.75,span:7,smear:.12,chroma:.25,adv:.1,nsw:0,slow:.5,wmix:1,fps:6,scrub:1,foam:.55,rise:1,wlvl:-.15,rain:.7};
-['curl','turn','glimpse','disp','refl','iso','layer','span','smear','chroma','adv','nsw','slow','wmix','fps','scrub','foam','rise','wlvl','rain'].forEach(k=>{
+const P={basin:1,curl:1,turn:4,glimpse:.5,disp:.3,refl:.7,iso:.13,layer:.75,span:7,smear:.12,chroma:.25,adv:.1,nsw:0,slow:.5,wmix:1,fps:6,scrub:1,foam:.55,rise:1,wlvl:-.15,rain:.7};
+['basin','curl','turn','glimpse','disp','refl','iso','layer','span','smear','chroma','adv','nsw','slow','wmix','fps','scrub','foam','rise','wlvl','rain'].forEach(k=>{
   const el=$(k),out=$('o_'+k);const set=()=>{P[k]=+el.value;out.textContent=(+el.value).toFixed(k==='iso'?3:(k==='span'||k==='fps'||k==='nsw'?0:2));};
   el.addEventListener('input',set);set();});
 let paused=false,showThumb=true;
@@ -1115,8 +1122,8 @@ const inkC=$('ink'),ix=inkC.getContext('2d'),labs$=$('cosmoLabs');
 let on=!new URLSearchParams(location.search).has('nocosmo');
 const R=1.0,CY=()=>P.wlvl;
 const MOM={KALA:0,TUKULA:90,LUVEMBA:180,MUSONI:270};
-const POLE={KALA:'#16161a',TUKULA:'#c03028',LUVEMBA:'#6a6558',MUSONI:'#fed85d'};
-const LABCOL={KALA:'#16161a',TUKULA:'#c03028',LUVEMBA:'#6a6558',MUSONI:'#7a6000'};
+const POLE={KALA:'#16161a',TUKULA:'#c03028',LUVEMBA:'#9a5428',MUSONI:'#f0b81c'};
+const LABCOL={KALA:'#16161a',TUKULA:'#c03028',LUVEMBA:'#8a4a22',MUSONI:'#9a7200'};
 const SEA=[64,104,108];
 const NODES=CON.filter(c=>c.status!=='removed'&&c.angle!==undefined);
 let selId=null;
@@ -1155,9 +1162,9 @@ function flushSegs(){
   for(const g of SEGS){const {pts,ww,under}=g;
     ix.lineCap='round';ix.lineJoin='round';
     // below the kalunga line the ink sinks: softer, tinted by the water around it
-    const A=under?.62:1,sink=under?.38:0;
+    const gold=g.col===POLE.MUSONI;const A=under?(gold?.85:.62):1,sink=under?(gold?.12:.38):0;
     const draw=(st,ox,oy,lw,al)=>{ix.globalAlpha=al;ix.strokeStyle=st;ix.lineWidth=lw;ix.beginPath();pts.forEach((q,i)=>i?ix.lineTo(q[0]+ox,q[1]+oy):ix.moveTo(q[0]+ox,q[1]+oy));ix.stroke();};
-    draw(under?'rgba(220,236,234,.35)':'rgba(244,243,238,.8)',0,0,ww+3.5,1);
+    draw(under?'rgba(220,236,234,.3)':'rgba(244,243,238,.82)',0,0,ww+4.5,1);
     draw(shade(g.col,-.62,sink),1.2,1.6,ww+.6,A);
     draw(shade(g.col,0,sink),0,0,ww,A);
     draw(shade(g.col,.55,sink),-1,-1.2,ww*.36,A);}
@@ -1175,7 +1182,7 @@ function linePts(a,b,n){const o=[];for(let i=0;i<=n;i++){const u=i/n;o.push([a[0
 function nodePos(c){const th=c.angle*Math.PI/180;return [Math.cos(th)*R,CY()+Math.sin(th)*R,0];}
 function mkLabel(txt,cls){const d=document.createElement('div');d.className='lab '+cls;d.textContent=txt;labs$.appendChild(d);return d;}
 const momEls={};for(const k in MOM){momEls[k]=mkLabel(k,'mom');momEls[k].style.color=LABCOL[k];}
-NODES.forEach(c=>{c._el=mkLabel(c.name,'nd');});
+NODES.forEach(c=>{c._el=mkLabel(c.name,'nd');c._el.setAttribute('role','button');c._el.tabIndex=0;c._el.onclick=()=>openC(c.id);c._el.onkeydown=e=>{if(e.key==='Enter')openC(c.id);};});
 let hitList=[];
 function draw(now,camv){
   CV=camv;const t=now/1000,dpr=Math.min(devicePixelRatio||1,2),w=inkC.clientWidth,h=inkC.clientHeight;
@@ -1183,22 +1190,46 @@ function draw(now,camv){
   ix.setTransform(dpr,0,0,dpr,0,0);ix.clearRect(0,0,w,h);
   labs$.style.display=on?'block':'none';if(!on){hitList=[];return;}
   const cy=CY(),sc=Math.min(1.25,Math.max(.8,Math.min(w,h)/700));
-  const spin=t*.16,spin2=-t*.11;
-  stroke(circlePts(0,cy,0,R,'xy',1.3,-.55+spin,-.55+spin+6.28+.26,150),1,4.4*sc,t,{color:colXY});
-  stroke(circlePts(0,cy,0,R*1.006,'xy',4.1,1.9+spin*1.7,1.9+spin*1.7+3.1,70),2,1.7*sc,t,{jit:.01,color:colXY});
-  stroke(circlePts(0,cy,0,R*1.012,'xy',6.6,4.4+spin2*1.4,4.4+spin2*1.4+1.9,46),7,1.3*sc,t,{jit:.012,color:colXY});
-  stroke(circlePts(0,cy,0,R*.46,'xy',2.2,.4,.4+6.28+.2,90),3,2.4*sc,t,{color:colXY});
-  stroke(circlePts(0,cy,0,R,'xz',5.7,.2+spin2,.2+spin2+6.28+.22,120),4,2.0*sc,t,{jit:.007,flat:true,color:colXZ});
-  stroke(circlePts(0,cy,0,R*1.01,'xz',8.2,2.6+spin*1.3,2.6+spin*1.3+2.4,50),8,1.2*sc,t,{jit:.01,flat:true,color:colXZ});
-  stroke(linePts([-R*1.55,cy,0],[R*1.55,cy,0],40),5,3.4*sc,t,{flat:true,jit:.004,color:colKal});
-  stroke(linePts([0,cy+R*1.14,0],[0,cy-R*1.14,0],60),6,3.4*sc,t,{solid:false,color:colAxis});
+  const spin=t*.07,spin2=-t*.05;
+  stroke(circlePts(0,cy,0,R,'xy',1.3,-.55+spin,-.55+spin+6.28+.26,150),1,8.6*sc,t,{color:colXY});
+  stroke(circlePts(0,cy,0,R*1.006,'xy',4.1,1.9+spin*1.7,1.9+spin*1.7+3.1,70),2,3.0*sc,t,{jit:.01,color:colXY});
+  stroke(circlePts(0,cy,0,R*.46,'xy',2.2,.4,.4+6.28+.2,90),3,4.6*sc,t,{color:colXY});
+  stroke(circlePts(0,cy,0,R,'xz',5.7,.2+spin2,.2+spin2+6.28+.22,120),4,4.2*sc,t,{jit:.007,flat:true,color:colXZ});
+  stroke(linePts([-R*1.55,cy,0],[R*1.55,cy,0],40),5,6.4*sc,t,{flat:true,jit:.004,color:colKal});
+  stroke(linePts([0,cy+R*1.2,0],[0,cy-R*1.2,0],60),6,6.4*sc,t,{solid:false,color:colAxis});
   [[0,1],[Math.PI/2,2],[Math.PI,3],[Math.PI*1.5,4]].forEach(([th,k])=>{
     const q=[Math.cos(th)*R*1.09,cy+Math.sin(th)*R*1.09,0],r0=[Math.cos(th)*R*.93,cy+Math.sin(th)*R*.93,0];
-    stroke(linePts(r0,q,6),20+k,2.4*sc,t,{color:()=>quadColor(th*180/Math.PI)});});
+    stroke(linePts(r0,q,6),20+k,4.4*sc,t,{color:()=>quadColor(th*180/Math.PI)});});
   flushSegs();
-  hitList=[];const labs=[];
+  hitList=[];
+  // the turn of the sun, counterclockwise: four tapered strokes between the poles, thick in the middle,
+  // fading to nothing at both ends (no heads), travelling slowly around outside the ring
+  for(let k=0;k<4;k++){const mid=(45+90*k)*Math.PI/180+t*.07,half=.42,n=34,RR=R*1.3;
+    const top=[],bot=[];let under=0;
+    for(let i=0;i<=n;i++){const u=i/n,th=mid-half+2*half*u;
+      const p=[Math.cos(th)*RR,cy+Math.sin(th)*RR,0];if(p[1]<cy)under++;
+      const a=proj(ripple(p,t,p[1])),b=proj(ripple([Math.cos(th+.01)*RR,cy+Math.sin(th+.01)*RR,0],t,p[1]));if(!a||!b)continue;
+      let nx=-(b[1]-a[1]),ny=b[0]-a[0];const L=Math.hypot(nx,ny)||1;nx/=L;ny/=L;
+      const wd=9.5*sc*Math.pow(Math.sin(Math.PI*u),1.15)*(.85+.15*Math.sin(u*9+k));
+      top.push([a[0]+nx*wd/2,a[1]+ny*wd/2]);bot.push([a[0]-nx*wd/2,a[1]-ny*wd/2]);}
+    if(top.length<4)continue;
+    const sub=under>n/2,col=quadColor((mid*180/Math.PI));
+    const path=()=>{ix.beginPath();top.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));for(let i=bot.length-1;i>=0;i--)ix.lineTo(bot[i][0],bot[i][1]);ix.closePath();};
+    ix.globalAlpha=1;ix.lineJoin='round';ix.lineWidth=3.2;ix.strokeStyle=sub?'rgba(220,236,234,.35)':'rgba(244,243,238,.85)';path();ix.stroke();
+    ix.globalAlpha=sub?.62:1;ix.fillStyle=shade(col,0,sub?.38:0);path();ix.fill();ix.globalAlpha=1;}
+  // the four poles at the ends of the cross: large open circles, like the drawn cosmogram
+  [['TUKULA',[0,cy+R*1.2,0]],['KALA',[R*1.2,cy,0]],['LUVEMBA',[-R*1.2,cy,0]],['MUSONI',[0,cy-R*1.2,0]]].forEach(([k,p])=>{
+    const s=proj(ripple(p,t,p[1]));if(!s)return;const under=p[1]<cy-.01,sink=under?.32:0;
+    const r=Math.max(13,Math.min(28,.09*(h/s[2])*.55*1.9));const pc=POLE[k];
+    const ringAt=rr=>{const o=[];for(let i=0;i<=30;i++){const th=-.2+i/30*(6.28+.35);const q=rr*(1+.06*Math.sin(th*2+MOM[k])+.04*Math.sin(th*3));o.push([s[0]+Math.cos(th)*q,s[1]+Math.sin(th)*q]);}return o;};
+    const path=pts=>{ix.beginPath();pts.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));};
+    path(ringAt(r+2.5));ix.fillStyle=under?'rgba(225,238,236,.55)':'rgba(244,243,238,.9)';ix.fill();
+    ix.globalAlpha=under?.8:1;ix.lineWidth=6.5*sc;ix.strokeStyle=shade(pc,0,sink);path(ringAt(r));ix.stroke();
+    ix.lineWidth=1.4*sc;ix.strokeStyle=shade(pc,.55,sink);path(ringAt(r-1.8));ix.stroke();ix.globalAlpha=1;
+    hitList.push({c:{id:'pole-'+k,pole:k},x:s[0],y:s[1],pole:true});});
+  const labs=[];
   NODES.forEach(c=>{const p=nodePos(c),s=proj(p);if(!s){c._el.style.display='none';return;}
-    const rad=.034*(h/s[2])*.55;const px=Math.max(7,Math.min(14,rad));
+    const rad=.026*(h/s[2])*.55;const px=Math.max(6,Math.min(10,rad));
     const sel=c.id===selId,under=p[1]<cy-.01,sink=under?.3:0;
     const ringAt=r=>{const o=[];for(let i=0;i<=26;i++){const th=-.3+i/26*(6.28+.5);const rr=r*(1+.14*Math.sin(th*2+c.angle)+.07*Math.sin(th*3+1));o.push([s[0]+Math.cos(th)*rr,s[1]+Math.sin(th)*rr]);}return o;};
     const ring=ringAt(px),ring2=ringAt(px-2.2);
@@ -1222,7 +1253,7 @@ function draw(now,camv){
     const el=o.el;el.style.display='block';el.style.left=x+'px';el.style.top=o.y+'px';el.style.transform=`translate(${tx},${ty})`;
     if(w<600){const bx=el.getBoundingClientRect(),lx=bx.left;if(lx<6)el.style.left=(parseFloat(el.style.left)+6-lx)+'px';else if(lx+bx.width>w-6)el.style.left=(parseFloat(el.style.left)-(lx+bx.width-w+6))+'px';}
     el.classList.toggle('sel',o.c.id===selId);el.style.opacity=o.under?.78:1;});
-  for(const k in MOM){const th=MOM[k]*Math.PI/180,s=proj([Math.cos(th)*R*1.4,cy+Math.sin(th)*R*1.4,0]);
+  for(const k in MOM){const th=MOM[k]*Math.PI/180,s=proj([Math.cos(th)*R*1.5,cy+Math.sin(th)*R*1.5,0]);
     const el=momEls[k];if(!s){el.style.display='none';continue;}
     el.style.display='block';el.style.left=Math.max(34,Math.min(w-34,s[0]))+'px';el.style.top=Math.max(14,Math.min(h-14,s[1]-(k==='KALA'||k==='LUVEMBA'?26:0)))+'px';}
 }
@@ -1233,12 +1264,14 @@ function openC(id){const c=CON.find(k=>k.id===id);if(!c)return;selId=id;const v=
   cpEl.hidden=false;$('cpx').onclick=closeC;}
 function closeC(){selId=null;cpEl.hidden=true;}
 addEventListener('keydown',e=>{if(e.key==='Escape'&&!cpEl.hidden){closeC();e.stopPropagation();}});
+const MOMTXT={TUKULA:'Tukula: the sun at its height, the fullness of life in the upper world.',KALA:'Kala: birth, the rising sun, where a life begins.',LUVEMBA:'Luvemba: the setting sun, the crossing of the kalunga line into the world below the water.',MUSONI:'Musoni: midnight, the world of the ancestors beneath the water, before return.'};
+function openPole(k){selId=null;cpEl.innerHTML=`<button class="x" id="cpx" aria-label="Close">&times;</button><div class="k" style="color:${LABCOL[k]}">Moment</div><h2>${k[0]+k.slice(1).toLowerCase()}</h2><p>${MOMTXT[k]}</p><p class="m">${NODES.filter(c=>c.moment===k).map(c=>esc(c.name)).join(' &middot; ')}</p>`;cpEl.hidden=false;$('cpx').onclick=closeC;}
 function nearest(x,y,r){let best=null,bd=r;hitList.forEach(o=>{const d=Math.hypot(o.x-x,o.y-y);if(d<bd){bd=d;best=o;}});return best;}
 // taps on a node open it; drags still orbit the water
 let dn=null;
 cv.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY,t:performance.now()};});
 cv.addEventListener('pointerup',e=>{if(!dn||!on)return;const r=cv.getBoundingClientRect();
-  if(Math.hypot(e.clientX-dn.x,e.clientY-dn.y)<8&&performance.now()-dn.t<400){const b=nearest(e.clientX-r.left,e.clientY-r.top,26);if(b)openC(b.c.id);}dn=null;});
+  if(Math.hypot(e.clientX-dn.x,e.clientY-dn.y)<8&&performance.now()-dn.t<400){const b=nearest(e.clientX-r.left,e.clientY-r.top,26);if(b){if(b.pole)openPole(b.c.pole);else openC(b.c.id);}}dn=null;});
 cv.addEventListener('pointermove',e=>{if(!on||ptrs.size)return;const r=cv.getBoundingClientRect();cv.style.cursor=nearest(e.clientX-r.left,e.clientY-r.top,22)?'pointer':'grab';});
 function setOn(v){on=v;const b=$('cosmoBtn');if(b)b.setAttribute('aria-pressed',on);if(!on)closeC();}
 $('cosmoBtn').onclick=()=>setOn(!on);
@@ -1304,7 +1337,7 @@ function frame(now){
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,simOK?vel.a.t:dummy);
   gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
   if(atlasDirty&&(!SHEETS||performance.now()-lastMip>250)){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.generateMipmap(gl.TEXTURE_2D);atlasDirty=false;lastMip=performance.now();if(SHEETS&&slotItem.every(Boolean))mipsBuilt=true;}
-  gl.uniform1f(U.u_curl,P.curl);gl.uniform2f(U.u_swap,swap.slot,swap.fade);gl.uniform1f(U.u_glimpse,P.glimpse);gl.uniform1f(U.u_disp,P.disp);gl.uniform1f(U.u_refl,P.refl);gl.uniform1f(U.u_pickOn,0);
+  gl.uniform1f(U.u_basin,P.basin);gl.uniform1f(U.u_curl,P.curl);gl.uniform2f(U.u_swap,swap.slot,swap.fade);gl.uniform1f(U.u_glimpse,P.glimpse);gl.uniform1f(U.u_disp,P.disp);gl.uniform1f(U.u_refl,P.refl);gl.uniform1f(U.u_pickOn,0);
   gl.drawArrays(gl.TRIANGLES,0,3);
   if(showThumb&&hoverOn)pickNow();
   else if(showThumb&&!hoverOn){tx.drawImage(cap,0,0,th.width,th.height);}
