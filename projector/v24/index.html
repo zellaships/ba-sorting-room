@@ -772,7 +772,7 @@ async function sheetBlob(i){
 }
 async function tilesFromUrl(items){
   // GO images that live on museum sites and are not in a sheet yet: fetched one by one
-  const out=[];for(const it of items){try{const r=await fetch(it.url,{mode:'cors'});if(!r.ok)continue;
+  const out=[];for(const it of items){try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),6000);const r=await fetch(it.url,{mode:'cors',signal:ac.signal});clearTimeout(to);if(!r.ok)continue;
     const bm=await createImageBitmap(await r.blob());const c=document.createElement('canvas');const T=SHEETS.tile;c.width=c.height=T;
     const sc=Math.max(T/bm.width,T/bm.height);c.getContext('2d').drawImage(bm,(T-bm.width*sc)/2,(T-bm.height*sc)/2,bm.width*sc,bm.height*sc);bm.close&&bm.close();
     out.push({it,c:toTile(c),thumb:thumbOf(c)});}catch(e){it.bad=true;}}
