@@ -32,6 +32,22 @@ header .stat{font-size:13px;color:var(--muted)}
 #rail .tip{position:relative}
 #rail button[title]:hover::after{content:attr(title);position:absolute;left:48px;background:var(--ink);color:#fff;font-size:12px;padding:3px 8px;border-radius:4px;white-space:nowrap;pointer-events:none}
 #rail button{position:relative}
+#rail #railLib{width:40px;height:auto;padding:16px 0 14px;border-radius:10px;border:1px solid var(--rule);background:#fff;writing-mode:vertical-rl;
+  font:500 13px/1 system-ui;letter-spacing:.08em;color:var(--ink);gap:9px;transition:background .25s,color .25s,border-color .25s,transform .4s cubic-bezier(.34,1.56,.64,1)}
+#rail #railLib::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--teal);transition:background .25s,transform .4s cubic-bezier(.34,1.56,.64,1)}
+#rail #railLib:hover{border-color:#cfc9c6;transform:translateY(-1px)}
+#rail #railLib.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+#rail #railLib.on::before{background:#83b5a5;transform:scale(1.2)}
+#rail .railsep{width:24px;height:1px;background:var(--rule);margin:8px 0 4px;flex:none}
+#libtab{display:none!important}
+/* the note that comes out of the rail */
+#ghostNote{position:fixed;left:0;top:0;z-index:60;pointer-events:none;background:#fffbe9;border:1px solid #efe3b5;border-radius:10px;
+  box-shadow:0 18px 40px rgba(37,31,33,.18),0 3px 8px rgba(37,31,33,.08);transform-origin:18px 14px;will-change:transform;opacity:.97}
+#ghostNote::before{content:"";position:absolute;left:12px;top:12px;width:8px;height:8px;border-radius:50%;background:#a8741a;opacity:.7}
+#ghostNote::after{content:"Write…";position:absolute;left:12px;top:30px;font-size:15px;color:#a39a86}
+.card.landed{animation:land .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes land{0%{transform:scale(1.06);box-shadow:0 18px 40px rgba(37,31,33,.18)}100%{transform:none}}
+body.carrying,body.carrying *{cursor:grabbing!important}
 
 /* board */
 #board{position:fixed;top:56px;left:var(--rail);right:0;bottom:0;overflow:hidden;cursor:grab;background:
@@ -240,11 +256,11 @@ body.resizing{cursor:col-resize;user-select:none}
 </header>
 
 <nav id="rail">
-  <button data-tool="library" title="Library (L)">▦</button>
+  <button data-tool="library" id="railLib" aria-label="Library (L)"><span>Library</span></button>
+  <span class="railsep"></span>
   <button data-tool="text" title="Add text (T)" style="font:600 18px Georgia,serif">T</button>
-  <button data-tool="note" title="Add a note (N)">✎</button>
+  <button data-tool="note" id="noteBtn" title="Click or drag out a note (N)">✎</button>
   <button data-tool="embed" title="Add video, GIF or link (E)">▶</button>
-  <button data-tool="marker" title="Place a week marker (W)">⚑</button>
   <button data-tool="threads" title="Threads">≋</button>
   <button data-tool="versions" title="Versions">⟲</button>
   <button data-tool="studio" title="Card studio: how each category looks">◧</button>
@@ -1190,7 +1206,44 @@ body.resizing{cursor:col-resize;user-select:none}
     if (tool === "fit") { tool = null; fit(); setTool(null); return; }
     if (tool === "note" || tool === "embed" || tool === "marker" || tool === "text") toast(tool === "text" ? "Click where the text should go" : "Click on the board to place it");
   }
-  document.querySelectorAll("#rail [data-tool]").forEach(b => b.onclick = () => setTool(b.dataset.tool));
+  document.querySelectorAll("#rail [data-tool]").forEach(b => { if (b.dataset.tool !== "note") b.onclick = () => setTool(b.dataset.tool); });
+  // ---------- notes come out of the rail: drag one out, or click and it follows you until you set it down ----------
+  let lastPt = { x: innerWidth / 2, y: innerHeight / 2 };
+  addEventListener("pointermove", e => { lastPt = { x: e.clientX, y: e.clientY }; }, { passive: true });
+  $("#noteBtn").addEventListener("pointerdown", e => { e.preventDefault(); carryNote(e.clientX, e.clientY, e); });
+  function carryNote(cx, cy, downEv) {
+    if (document.getElementById("ghostNote")) return;
+    const W = 260 * view.z, H = 180 * view.z, g = document.createElement("div"); g.id = "ghostNote";
+    g.style.width = W + "px"; g.style.height = H + "px"; document.body.appendChild(g); document.body.classList.add("carrying");
+    const off = { x: 18, y: 14 };                      // the note hangs from the pointer by its top-left corner
+    let x = cx, y = cy, tx = cx, ty = cy, s = .15, sv = 0, rot = 0, raf = 0, sticky = !downEv, moved = 0, dead = false;
+    const x0 = cx, y0 = cy, t0 = performance.now();
+    function frame() {
+      if (dead) return;
+      const vx = tx - x, vy = ty - y; x += vx * .38; y += vy * .38;
+      sv += (1 - s) * .22; sv *= .62; s += sv;           // a springy little poof as it appears
+      rot += (Math.max(-9, Math.min(9, vx * .35)) - rot) * .2;
+      g.style.transform = `translate3d(${(x - off.x).toFixed(1)}px,${(y - off.y).toFixed(1)}px,0) rotate(${rot.toFixed(2)}deg) scale(${s.toFixed(3)})`;
+      raf = requestAnimationFrame(frame);
+    }
+    const mv = ev => { tx = ev.clientX; ty = ev.clientY; moved = Math.max(moved, Math.hypot(tx - x0, ty - y0)); };
+    function end() { dead = true; cancelAnimationFrame(raf); g.remove(); document.body.classList.remove("carrying");
+      removeEventListener("pointermove", mv, true); removeEventListener("pointerup", up, true); removeEventListener("pointerdown", down, true); removeEventListener("keydown", key, true); }
+    function drop(px, py) {
+      const r = board.getBoundingClientRect();
+      if (px < r.left || py < r.top || px > r.right || py > r.bottom) { end(); return; }   // let go off the board: it goes back
+      const p = toWorld(px - off.x, py - off.y); end();
+      const c = { id: uid("c"), kind: "note", x: Math.round(p.x), y: Math.round(p.y), w: 260, h: 180, label: "", color: "sand", html: "" };
+      change(() => B.cards.push(c)); selIds = new Set([c.id]); sel = { type: "card", id: c.id }; paintSel();
+      requestAnimationFrame(() => { const el = world.querySelector(`.card[data-id="${c.id}"]`); if (!el) return;
+        el.classList.add("landed"); setTimeout(() => el.classList.remove("landed"), 520); editRich(c, el.querySelector(".rt")); });
+    }
+    const up = ev => { if (sticky) return; if (moved < 6 && performance.now() - t0 < 500) { sticky = true; return; } drop(ev.clientX, ev.clientY); };
+    const down = ev => { if (!sticky) return; ev.preventDefault(); ev.stopPropagation(); if (ev.target.closest && ev.target.closest("#noteBtn")) { end(); return; } drop(ev.clientX, ev.clientY); };
+    const key = ev => { if (ev.key === "Escape") { ev.stopPropagation(); end(); } };
+    addEventListener("pointermove", mv, true); addEventListener("pointerup", up, true); addEventListener("pointerdown", down, true); addEventListener("keydown", key, true);
+    raf = requestAnimationFrame(frame);
+  }
   function modal(html, ok) {
     $("#mbox").innerHTML = html; $("#modal").style.display = "flex";
     const close = () => $("#modal").style.display = "none";
@@ -1232,8 +1285,8 @@ body.resizing{cursor:col-resize;user-select:none}
       return;
     }
     if (m || e.altKey) return;
-    if (k === "l") setTool("library"); else if (k === "n") setTool("note"); else if (k === "t") setTool("text"); else if (k === "e") setTool("embed");
-    else if (k === "w") setTool("marker"); else if (k === "f") fit();
+    if (k === "l") setTool("library"); else if (k === "n") carryNote(lastPt.x, lastPt.y, null); else if (k === "t") setTool("text"); else if (k === "e") setTool("embed");
+    else if (k === "f") fit();
   });
   document.addEventListener("keyup", e => { if (e.key === " ") { spaceDown = false; board.classList.remove("spacepan"); } });
   window.addEventListener("blur", () => { spaceDown = false; board.classList.remove("spacepan"); });
