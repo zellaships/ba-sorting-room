@@ -11,12 +11,18 @@ html,body{margin:0;height:100%;background:#0b1a20;color:var(--ink);font:400 17px
 #ocean{position:fixed;left:0;top:0;width:100%;height:calc(100% - var(--bar) - var(--strip));border:0;display:block}
 
 /* the drawer: closed, only its bar and the black strip show at the bottom; open, it fills the screen */
+/* the drawer is moved by a spring on the compositor (transform only): no layout work while it travels */
 #drawer{position:fixed;left:0;right:0;top:0;height:100%;display:flex;flex-direction:column;background:var(--paper);
-  transform:translateY(calc(100% - var(--bar) - var(--strip)));transition:transform .75s cubic-bezier(.2,.75,.15,1);z-index:2;
-  box-shadow:0 -1px 0 var(--line)}
-#drawer.open{transform:translateY(0)}
+  transform:translate3d(0,calc(100% - var(--bar) - var(--strip)),0);will-change:transform;z-index:2;
+  box-shadow:0 -1px 0 var(--line),0 -18px 40px rgba(0,0,0,0);contain:layout paint}
+#veil{position:fixed;inset:0;background:#06141a;opacity:0;pointer-events:none;z-index:1;will-change:opacity}
+#read .layout{will-change:transform,opacity}
 #bar{flex:none;height:var(--bar);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 28px;
-  background:var(--paper);border-top:1px solid var(--line);cursor:pointer;user-select:none}
+  background:var(--paper);border-top:1px solid var(--line);cursor:grab;user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+#bar:active{cursor:grabbing}
+#bar .label{transition:opacity .25s ease}
+#bar .handle i{transition:transform .45s cubic-bezier(.22,1,.36,1),opacity .3s}
+#drawer.open #bar .handle i:nth-child(1){transform:translateY(2px)}#drawer.open #bar .handle i:nth-child(3){transform:translateY(-2px)}
 #bar .label{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
 #bar .handle{width:60px;height:24px;display:flex;flex-direction:column;justify-content:space-between;padding:4px 0}
 #bar .handle i{display:block;height:1.5px;background:#333}
@@ -33,9 +39,11 @@ html,body{margin:0;height:100%;background:#0b1a20;color:var(--ink);font:400 17px
 #wb:hover,#wb:focus-visible{border-color:#999;color:#000}
 .layout{display:grid;grid-template-columns:minmax(200px,clamp(220px,20vw,320px)) minmax(0,46rem);gap:0 clamp(32px,6vw,120px);padding:clamp(28px,4vw,64px) clamp(20px,5vw,96px) 30vh clamp(20px,7vw,140px)}
 nav#sections{position:sticky;top:46px;align-self:start;border-top:1.5px solid #222;border-bottom:1px solid #999;padding:22px 0 26px}
-nav#sections a{display:block;padding:9px clamp(16px,2vw,30px);color:#444;text-decoration:none;font-size:clamp(15px,.4vw + 13px,18px);line-height:1.35;border-left:2px solid transparent;transition:color .2s,border-color .2s}
+nav#sections{position:sticky}
+#ind{position:absolute;left:0;top:0;width:2px;background:#000;border-radius:1px;transform-origin:0 0;will-change:transform;transition:transform .55s cubic-bezier(.22,1,.36,1),height .55s cubic-bezier(.22,1,.36,1);pointer-events:none}
+nav#sections a{display:block;padding:9px clamp(16px,2vw,30px);color:#6a6a6a;text-decoration:none;font-size:clamp(15px,.4vw + 13px,18px);line-height:1.35;transition:color .35s ease}
 nav#sections a:hover{color:#000}
-nav#sections a.on{color:#000;border-left-color:#000}
+nav#sections a.on{color:#000}
 article h1{font-weight:400;font-size:clamp(34px,2.6vw + 14px,56px);line-height:1.08;margin:0 0 clamp(32px,4vw,64px);letter-spacing:-.015em}
 article section{scroll-margin-top:40px}
 article h2{font-weight:400;font-size:clamp(23px,1.2vw + 16px,32px);line-height:1.25;margin:clamp(56px,6vw,96px) 0 clamp(18px,2vw,28px)}
@@ -55,12 +63,13 @@ article p.labeled b{font-weight:600}
   #menu select{font:inherit;font-size:16px;width:100%;padding:8px;border:1px solid #bbb;background:#fff;border-radius:3px}
   #wb{position:static;float:none;display:block;margin:14px 22px 0;text-align:center}
 }
-@media (prefers-reduced-motion:reduce){#drawer{transition:none}}
+@media (prefers-reduced-motion:reduce){#ind,nav#sections a{transition:none}}
 </style>
 </head>
 <body>
 <iframe id="ocean" src="../projector/v27/?embed=1" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
 
+<div id="veil" aria-hidden="true"></div>
 <div id="drawer" aria-label="Essay drawer">
   <div id="bar" role="button" tabindex="0" aria-expanded="false" aria-controls="read">
     <span class="label" id="barLabel">Open the drawer</span>
@@ -74,7 +83,7 @@ article p.labeled b{font-weight:600}
   <div id="read" tabindex="-1">
     <a id="wb" href="../workbench/">Workbench &rsaquo;</a>
     <div class="layout">
-      <nav id="sections" aria-label="Essay sections">
+      <nav id="sections" aria-label="Essay sections"><span id="ind" aria-hidden="true"></span>
 <a href="#what-water-gives" data-s="what-water-gives">What water gives</a>
 <a href="#what-we-make-of-it" data-s="what-we-make-of-it">What we make of it</a>
 <a href="#what-water-keeps" data-s="what-water-keeps">What water keeps</a>
@@ -135,48 +144,105 @@ article p.labeled b{font-weight:600}
 <script>
 (()=>{
 const $=s=>document.querySelector(s);
-const drawer=$('#drawer'),bar=$('#bar'),read=$('#read'),ocean=$('#ocean');
+const drawer=$('#drawer'),bar=$('#bar'),read=$('#read'),ocean=$('#ocean'),veil=$('#veil'),layout=read.querySelector('.layout'),ind=$('#ind');
 const secs=[...document.querySelectorAll('article section')];
 const links=[...document.querySelectorAll('nav#sections a')];
 const jump=$('#jump');
 secs.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.dataset.title;jump.appendChild(o);});
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function setOpen(open,{fromHash=false}={}){
-  drawer.classList.toggle('open',open);
-  bar.setAttribute('aria-expanded',open);
-  $('#barLabel').textContent=open?'Close the drawer':'Open the drawer';
-  // the ocean rests while the essay covers it
-  clearTimeout(setOpen.t);
-  if(open){setOpen.t=setTimeout(()=>{ocean.style.visibility='hidden';},800);}else{ocean.style.visibility='visible';}
-  if(!open&&!fromHash&&location.hash)history.pushState(null,'',location.pathname+location.search);
-  if(open)setTimeout(()=>read.focus({preventScroll:true}),50);
+// ---------- the drawer: one spring, driven by the frame clock, on transform only ----------
+// p = how far open (0 closed, 1 open). Clicks set a target; drags move p directly and fling on release.
+let p=0,v=0,target=0,raf=0,dragging=false,last=0;
+const closedY=()=>drawer.offsetHeight-bar.offsetHeight-$('#strip').offsetHeight;
+function paint(){
+  const y=(1-p)*closedY();
+  drawer.style.transform=`translate3d(0,${y.toFixed(2)}px,0)`;
+  veil.style.opacity=(Math.max(0,Math.min(1,p))*.55).toFixed(3);
+  // the essay rises into place a beat behind the drawer
+  const q=Math.max(0,Math.min(1,(p-.35)/.65));const e=1-Math.pow(1-q,3);
+  layout.style.opacity=e.toFixed(3);layout.style.transform=`translate3d(0,${((1-e)*28).toFixed(2)}px,0)`;
 }
-bar.addEventListener('click',()=>setOpen(!drawer.classList.contains('open')));
-bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();bar.click();}});
-addEventListener('keydown',e=>{if(e.key==='Escape'&&drawer.classList.contains('open'))setOpen(false);});
+function tick(now){
+  const dt=Math.min(.032,(now-(last||now))/1000)||.016;last=now;
+  if(!dragging){
+    // a gently damped spring: quick to leave, soft to land, no bounce
+    const k=reduce?400:150,c=reduce?40:2*Math.sqrt(150)*1.02;
+    const a=k*(target-p)-c*v;v+=a*dt;p+=v*dt;
+    if(Math.abs(target-p)<.0008&&Math.abs(v)<.002){p=target;v=0;paint();settle();raf=0;last=0;return;}
+  }
+  paint();raf=requestAnimationFrame(tick);
+}
+function run(){if(!raf){last=0;raf=requestAnimationFrame(tick);}oceanRest(false);}
+// the ocean slows while the drawer travels and rests while it covers the water, so the motion never fights the GPU
+function oceanRest(full){try{ocean.contentWindow.postMessage({ba:'ocean',state:full?'rest':(p>.02||target>0)?'slow':'live'},'*');}catch(e){}}
+function settle(){
+  const open=target>.5;
+  drawer.classList.toggle('open',open);bar.setAttribute('aria-expanded',open);
+  $('#barLabel').textContent=open?'Close the drawer':'Open the drawer';
+  ocean.style.visibility=open?'hidden':'visible';oceanRest(open);
+  if(!open)try{ocean.contentWindow.postMessage({ba:'ocean',state:'live'},'*');}catch(e){}
+  if(open)read.focus({preventScroll:true});
+}
+function setOpen(open,{fromHash=false,instant=false}={}){
+  target=open?1:0;ocean.style.visibility='visible';
+  $('#barLabel').style.opacity=0;setTimeout(()=>{$('#barLabel').textContent=open?'Close the drawer':'Open the drawer';$('#barLabel').style.opacity=1;},180);
+  if(!open&&!fromHash&&location.hash)history.pushState(null,'',location.pathname+location.search);
+  if(instant){p=target;v=0;paint();settle();return;}
+  run();
+}
+// drag the bar: it follows the hand exactly, then a flick decides
+let sy=0,sp=0,moved=0,lastY=0,lastT=0,vel=0;
+bar.addEventListener('pointerdown',e=>{dragging=true;moved=0;sy=lastY=e.clientY;lastT=performance.now();sp=p;vel=0;bar.setPointerCapture(e.pointerId);run();});
+bar.addEventListener('pointermove',e=>{if(!dragging)return;const H=closedY();moved=Math.max(moved,Math.abs(e.clientY-sy));
+  const now=performance.now();vel=((lastY-e.clientY)/H)/Math.max(.008,(now-lastT)/1000)*.6+vel*.4;lastY=e.clientY;lastT=now;
+  let np=sp+(sy-e.clientY)/H;if(np<0)np*=.3;if(np>1)np=1+(np-1)*.3;p=np;v=0;});
+function endDrag(e){if(!dragging)return;dragging=false;
+  if(moved<6){setOpen(target<.5);return;}            // a click
+  v=vel;target=(p+vel*.18)>.5?1:0;                   // a flick or a drop
+  if(target===0&&location.hash)history.pushState(null,'',location.pathname+location.search);
+  run();}
+bar.addEventListener('pointerup',endDrag);bar.addEventListener('pointercancel',endDrag);
+bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setOpen(target<.5);}});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&target>.5)setOpen(false);});
+addEventListener('resize',()=>{paint();placeInd(curId,true);});
 
+// ---------- reading: eased scrolling, a sliding marker, the address in step ----------
+let curId=secs[0].id,anim=null;
+function placeInd(id,instant){const a=links.find(l=>l.dataset.s===id);if(!a||!ind)return;
+  if(instant)ind.style.transition='none';
+  ind.style.height=a.offsetHeight+'px';ind.style.transform=`translate3d(0,${a.offsetTop}px,0)`;
+  if(instant){ind.offsetHeight;ind.style.transition='';}}
+function setCur(id){if(id===curId)return;curId=id;links.forEach(a=>a.classList.toggle('on',a.dataset.s===id));jump.value=id;placeInd(id);
+  if(target>.5&&location.hash!=='#'+id)history.replaceState(null,'','#'+id);}
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function scrollToY(y){
+  cancelAnimationFrame(anim&&anim.raf);const y0=read.scrollTop,d=y-y0;if(Math.abs(d)<2){read.scrollTop=y;return;}
+  const dur=reduce?0:Math.min(1100,Math.max(520,Math.sqrt(Math.abs(d))*14)),t0=performance.now();
+  anim={raf:0};const step=now=>{const t=dur?Math.min(1,(now-t0)/dur):1;read.scrollTop=y0+d*ease(t);if(t<1)anim.raf=requestAnimationFrame(step);else anim=null;};
+  anim.raf=requestAnimationFrame(step);}
+['wheel','touchstart','keydown'].forEach(ev=>read.addEventListener(ev,()=>{if(anim){cancelAnimationFrame(anim.raf);anim=null;}},{passive:true}));
 function goTo(id,push=true){
   const el=document.getElementById(id);if(!el)return;
-  if(!drawer.classList.contains('open'))setOpen(true,{fromHash:true});
-  setTimeout(()=>{read.scrollTo({top:el.offsetTop-30,behavior:drawer.classList.contains('open')?'smooth':'auto'});},drawer.classList.contains('open')?0:60);
+  const y=el.offsetTop-30;
+  if(target<.5){setOpen(true,{fromHash:true});read.scrollTop=y;}else scrollToY(y);
+  links.forEach(a=>a.classList.toggle('on',a.dataset.s===id));curId=id;jump.value=id;placeInd(id);
   if(push&&location.hash!=='#'+id)history.pushState(null,'','#'+id);
 }
 links.forEach(a=>a.addEventListener('click',e=>{e.preventDefault();goTo(a.dataset.s);}));
 jump.addEventListener('change',()=>goTo(jump.value));
-
-// highlight the section being read, and keep the address in step with it
-let ticking=false;
-read.addEventListener('scroll',()=>{if(ticking)return;ticking=true;requestAnimationFrame(()=>{ticking=false;
-  const y=read.scrollTop+read.clientHeight*.3;let cur=secs[0];
-  for(const s of secs)if(s.offsetTop<=y)cur=s;
-  links.forEach(a=>a.classList.toggle('on',a.dataset.s===cur.id));jump.value=cur.id;
-  if(drawer.classList.contains('open')&&location.hash!=='#'+cur.id&&read.scrollTop>20)history.replaceState(null,'','#'+cur.id);
-});},{passive:true});
+// which section is being read: the browser reports crossings, nothing runs on every scroll frame
+const io=new IntersectionObserver(es=>{if(anim)return;
+  const vis=secs.filter(s=>{const r=s.getBoundingClientRect(),R=read.getBoundingClientRect();return r.top<R.top+R.height*.35&&r.bottom>R.top+R.height*.35;});
+  if(vis[0])setCur(vis[0].id);},{root:read,rootMargin:'-35% 0px -64% 0px',threshold:0});
+secs.forEach(s=>io.observe(s));
 
 function fromUrl(){const id=location.hash.slice(1);
-  if(id&&document.getElementById(id)){setOpen(true,{fromHash:true});setTimeout(()=>{const el=document.getElementById(id);read.scrollTop=el.offsetTop-30;},30);}
-  else if(!id)setOpen(false,{fromHash:true});}
+  if(id&&document.getElementById(id)){setOpen(true,{fromHash:true,instant:!raf&&p===0&&!fromUrl.ran});const el=document.getElementById(id);read.scrollTop=el.offsetTop-30;curId='';setCur(id);}
+  else if(!id&&target>.5)setOpen(false,{fromHash:true});
+  fromUrl.ran=true;}
 addEventListener('popstate',fromUrl);
+paint();placeInd(curId,true);links[0]&&links[0].classList.add('on');
 fromUrl();
 })();
 </script>

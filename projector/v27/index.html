@@ -390,7 +390,12 @@ vec4 water(vec3 ro,vec3 rd){
   float hx=wH(g.xz+vec2(e,0.),u_wt)-h;
   float hz=wH(g.xz+vec2(0.,e),u_wt)-h;
   vec3 n=normalize(vec3(-hx/e*.8,1.,-hz/e*.8));
-  g_wn=n;
+  // up close the water becomes a clear skin with fine fast ripples; the photos lie just beneath it
+  float nearF=1.-smoothstep(1.6,6.,tw);
+  vec2 fr=vec2(vnoise(g.xz*17.+vec2(u_wt*1.3,-u_wt*.9))-.5,vnoise(g.xz*17.+vec2(5.2-u_wt*1.1,u_wt*1.2))-.5)
+     +.5*vec2(vnoise(g.xz*41.+u_wt*2.)-.5,vnoise(g.xz*41.+vec2(9.,9.)-u_wt*2.2)-.5);
+  vec3 nS=normalize(n+vec3(fr.x,0.,fr.y)*.45*nearF);
+  g_wn=nS;
   float fd=field(vec3(g.x,u_wy,g.z));
   float ring=smoothstep(.7,.05,abs(fd));
   float sl=length(vec2(hx,hz))/e;
@@ -417,21 +422,24 @@ vec4 water(vec3 ro,vec3 rd){
   // the wave carries the photographs: sample the cell field where this water
   // parcel came from, so each photo travels and reshapes with the surface
   vec2 gr0=vec2(ridgeH(g.xz+vec2(.06,0.))-ridgeH(g.xz-vec2(.06,0.)),ridgeH(g.xz+vec2(0.,.06))-ridgeH(g.xz-vec2(0.,.06)))/.12;
-  vec2 mx=meander(g.xz-gr0*.05);
+  // seen through the skin: the photo field is bent by the ripples above it, and swirls less up close
+  vec2 q0=g.xz-gr0*.05+nS.xz*.20*nearF;
+  vec2 mq=meander(q0);
+  vec2 mx=mix(mq,q0+(mq-q0)*.35,nearF);
   float ridge=dot(mx,sp2);
   // ridge field: just the long parallel wind-wave trains, so the lines stay lake-like
   float rh=ridgeH(mx);
-  float wob2=(vnoise(mx*1.1+vec2(u_wt*.06,-u_wt*.04))-.5)*.11+(vnoise(mx*2.3+vec2(3.3+u_wt*.03,7.7))-.5)*.05;
+  float wob2=((vnoise(mx*1.1+vec2(u_wt*.06,-u_wt*.04))-.5)*.11+(vnoise(mx*2.3+vec2(3.3+u_wt*.03,7.7))-.5)*.05)*(1.-.7*nearF);
   vec2 rfx=rainFX(mx,u_wt,simAt(g.xz));
   float rhw=rh+wob2+rfx.x*1.6*rainAmt();
   vec2 cq0=cwarp(rhw,ridge);
   float bnd=bandK(cq0.x,cq0.y);
   float bf=bnd-floor(bnd);
   float pool=smoothstep(.62-.3*u_glimpse,.74-.3*u_glimpse,vnoise(g.xz*.27+vec2(u_wt*.025,-u_wt*.018)));
-  float bsn=basinAt(g.xz);pool=max(pool,bsn*.85);
+  float bsn=basinAt(g.xz);pool=max(max(pool,bsn*.85),nearF*.75);
   vec3 img=flowCell(rhw,ridge,vv,n,pool);
   float bd=min(bf,1.-bf);
-  float bw=clamp(fwidth(bnd)*4.,mix(.20,.10,pool),mix(.40,.24,pool));
+  float bw=clamp(fwidth(bnd)*4.,mix(.20,.10,pool)+.14*nearF,mix(.40,.24,pool)+.22*nearF);
   float wb=.5*(1.-smoothstep(.0,bw,bd));
   if(wb>.001)img=mix(img,flowCell(rhw+(bf<.5?-.147:.147),ridge,vv,n,pool),wb);
   float bi0=floor(bnd);
@@ -441,7 +449,7 @@ vec4 water(vec3 ro,vec3 rd){
     +u_curl*1.1*(bf-.5)*(bf-.5)*(hash(vec2(bi0,3.3))>.5?1.:-1.);
   float sf=slc0-floor(slc0);
   float sd=min(sf,1.-sf);
-  float sw=clamp(fwidth(slc0)*4.,mix(.20,.10,pool),mix(.40,.24,pool));
+  float sw=clamp(fwidth(slc0)*4.,mix(.20,.10,pool)+.14*nearF,mix(.40,.24,pool)+.22*nearF);
   float ws=.5*(1.-smoothstep(.0,sw,sd));
   if(ws>.001)img=mix(img,flowCell(rhw,ridge+(sf<.5?-slen0:slen0),vv,n,pool),ws);
   img=mix(vec3(dot(img,vec3(.333))),img,1.18);
@@ -454,14 +462,21 @@ vec4 water(vec3 ro,vec3 rd){
   img=mix(img,vec3(.52,.58,.57),melt*.65);
   vec3 body=img*(tint*.8+.82)*(1.+pool*.15);
   body=mix(body,img*1.04,pool*.45);
+  // beneath the skin: dimmed and cooled by the water above, with caustic light drifting over the photos
+  float cs=vnoise(g.xz*5.5+nS.xz*2.5+vec2(u_wt*.35,-u_wt*.28))*.6+vnoise(g.xz*11.+nS.xz*4.-u_wt*.5)*.4;
+  float caus=pow(smoothstep(.5,.92,cs),2.2);
+  body=mix(body,body*.76+vec3(.03,.09,.10)+vec3(.85,.97,.92)*caus*.34,nearF);
   float fres=.02+.98*pow(1.-max(dot(n,-rd),0.),5.);
   vec3 col=mix(tint*2.,body,clamp(u_wmix,0.,1.));
-  col=mix(col,skyCol(reflect(rd,n)),clamp(fres*u_refl*(1.-.5*pool),0.,.6));
+  col=mix(col,skyCol(reflect(rd,n)),clamp(fres*u_refl*(1.-.5*pool),0.,.6)*(1.-nearF));
+  float fres2=.02+.98*pow(1.-max(dot(nS,-rd),0.),5.);
+  col=mix(col,skyCol(reflect(rd,nS)),clamp(fres2*1.15+.05,0.,.72)*nearF*u_refl);
   col*=1.-.16*smoothstep(1.7,.2,abs(fd));
   // the basin: deep glass that mirrors the sky, the archive only glimmering through
   col=mix(col,mix(vec3(.06,.15,.18)+img*.16,skyCol(reflect(rd,n))*.85,clamp(fres*1.1+.05,0.,.42)),bsn*.74);
   vec3 ld=normalize(vec3(.35,.6,.45));
-  float sp=pow(max(dot(reflect(rd,n),ld),0.),220.);
+  vec3 ns=normalize(mix(n,nS,nearF));
+  float sp=pow(max(dot(reflect(rd,ns),ld),0.),220.);
   col+=vec3(1.,.98,.9)*sp*.6;
   col=mix(col,vec3(.965,.965,.94),foam*.82*(1.-.85*bsn));
   col+=vec3(.93,.96,.95)*rfx.y*.34*rainAmt()*exp(-tw*.012);
@@ -604,9 +619,9 @@ const float PR=.135,PT=.04;
 vec2 cMap(vec3 p){
   vec2 r=vec2(sdTorXY(p,1.,.064),1.);
   float d=sdTorXY(p,.46,.048);if(d<r.x)r=vec2(d,2.);
-  d=sdTorXZ(p,1.,.052);if(d<r.x)r=vec2(d,3.);
+  d=sdTorXZ(p+vec3(0.,.032,0.),1.,.052);if(d<r.x)r=vec2(d,3.);
   d=sdCap(p,vec3(0.,-1.2+PR,0.),vec3(0.,1.2-PR,0.),.052);if(d<r.x)r=vec2(d,4.);
-  d=sdCap(p,vec3(-1.2+PR,0.,0.),vec3(1.2-PR,0.,0.),.049);if(d<r.x)r=vec2(d,5.);
+  d=sdCap(p,vec3(-1.2+PR,-.026,0.),vec3(1.2-PR,-.026,0.),.049);if(d<r.x)r=vec2(d,5.);
   d=sdTorXY(p-vec3(0.,1.2,0.),PR,PT);if(d<r.x)r=vec2(d,6.);
   d=sdTorXY(p-vec3(1.2,0.,0.),PR,PT);if(d<r.x)r=vec2(d,7.);
   d=sdTorXY(p-vec3(-1.2,0.,0.),PR,PT);if(d<r.x)r=vec2(d,8.);
@@ -1138,7 +1153,7 @@ function camVecs(){
   const rl=Math.hypot(...rt);rt=rt.map(v=>v/rl);
   const up=[rt[1]*fw[2]-rt[2]*fw[1],rt[2]*fw[0]-rt[0]*fw[2],rt[0]*fw[1]-rt[1]*fw[0]];
   return {ro,fw,rt,up};}
-const ptrs=new Map();let pinch0=0,downAt=0,moved=0,lastTouch=0;
+const ptrs=new Map();let camMid=null,pinch0=0,downAt=0,moved=0,lastTouch=0;
 function sceneXY(e){const r=cv.getBoundingClientRect();
   return [((e.clientX-r.left)/r.width*2-1)*(r.width/r.height)*1.05,-((e.clientY-r.top)/r.height*2-1)*1.05];}
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);lastTouch=performance.now();
@@ -1155,7 +1170,7 @@ cv.addEventListener('pointermove',e=>{
   const dx=e.clientX-o[0],dy=e.clientY-o[1];ptrs.set(e.pointerId,[e.clientX,e.clientY]);
   if(ptrs.size===1){moved+=Math.abs(dx)+Math.abs(dy);camT.yaw-=dx*.006;camT.pitch=Math.max(-1.2,Math.min(.5,camT.pitch+dy*.006));}
   else if(ptrs.size===2){const [a,b]=[...ptrs.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);
-    camT.dist=Math.max(2.2,Math.min(9,camT.dist*pinch0/Math.max(d,1)));pinch0=d;}
+    camT.dist=Math.max(1.7,Math.min(10,camT.dist*Math.pow(pinch0/Math.max(d,1),1.7)));pinch0=d;}
 });
 function up(e){
   if(ptrs.size===1&&moved<8&&performance.now()-downAt<350){
@@ -1163,7 +1178,8 @@ function up(e){
   ptrs.delete(e.pointerId);if(!ptrs.size)cv.style.cursor='grab';}
 cv.addEventListener('pointerleave',()=>{lastPX=null;});
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
-cv.addEventListener('wheel',e=>{e.preventDefault();camT.dist=Math.max(2.2,Math.min(9,camT.dist*Math.exp(e.deltaY*.001)));},{passive:false});
+cv.addEventListener('wheel',e=>{e.preventDefault();lastTouch=performance.now();const dy=e.deltaMode===1?e.deltaY*16:e.deltaMode===2?e.deltaY*400:e.deltaY;
+  const k=e.ctrlKey?.0125:.0026;camT.dist=Math.max(1.7,Math.min(10,camT.dist*Math.exp(Math.max(-60,Math.min(60,dy))*k)));},{passive:false});
 cv.addEventListener('keydown',e=>{const k=e.key;let h=true;
   kick=Math.min(kick+30*P.scrub,140);lastTouch=performance.now();
   if(k==='ArrowLeft')camT.yaw-=.12;else if(k==='ArrowRight')camT.yaw+=.12;
@@ -1338,12 +1354,15 @@ function resize(){
 addEventListener('resize',resize);
 prefill();
 if(reduce){togglePause();}
-let clock=0,simAcc=0;
+let clock=0,simAcc=0,hostState='live',hostSkip=0;
+// the essay page tells the ocean when its drawer is moving (draw every other frame) or covering it (rest)
+addEventListener('message',e=>{const d=e.data;if(d&&d.ba==='ocean'&&/^(live|slow|rest)$/.test(d.state))hostState=d.state;});
 function frame(now){
+  if(hostState==='rest'||(hostState==='slow'&&(++hostSkip&1))){last=now;requestAnimationFrame(frame);return;}
   const dtr=Math.min((now-last)/1000,.1);last=now;
   fpsS+=(1/Math.max(dtr,1e-3)-fpsS)*.05;
   // hold a smooth frame rate: soften the render a little only when it starts to drop
-  if(now-lastAdapt>1200&&!document.hidden){lastAdapt=now;
+  if(now-lastAdapt>1200&&!document.hidden&&hostState==='live'){lastAdapt=now;
     if(fpsS<38&&dyn>.72)dyn=Math.max(.72,dyn*.93);else if(fpsS>50&&dyn<1)dyn=Math.min(1,dyn*1.06);}
   if(spinN>0)for(let z=0;z<spinN;z++)spinAcc+=Math.random(); // capture hook: hold wall time so the archive can decode and frames keep flowing
   resize();
@@ -1366,7 +1385,8 @@ function frame(now){
   }
   if(performance.now()-lastTouch>6000)camT.yaw+=dtr*.03; // idle drift
   const k=1-Math.exp(-dtr*10);
-  cam.yaw+=(camT.yaw-cam.yaw)*k;cam.pitch+=(camT.pitch-cam.pitch)*k;cam.dist+=(camT.dist-cam.dist)*k;
+  cam.yaw+=(camT.yaw-cam.yaw)*k;cam.pitch+=(camT.pitch-cam.pitch)*k;
+  if(camMid===null)camMid=cam.dist;const kz=1-Math.exp(-dtr*9);camMid+=(camT.dist-camMid)*kz;cam.dist+=(camMid-cam.dist)*kz;
   const c=camVecs();
   gl.viewport(0,0,W,H);
   gl.useProgram(pr);

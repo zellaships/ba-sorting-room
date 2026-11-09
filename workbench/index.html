@@ -40,7 +40,8 @@ header .stat{font-size:13px;color:var(--muted)}
 #board.linking{cursor:crosshair}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
 #links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
-#links path{fill:none;stroke:#8a8486;stroke-width:1.6}
+#links path{fill:none;stroke:#8a8486;stroke-width:1.6;vector-effect:non-scaling-stroke}
+#rope path{vector-effect:non-scaling-stroke}
 #links path.sel{stroke:var(--teal);stroke-width:2.6}
 #links path.thread{stroke:var(--gold);stroke-dasharray:6 5;stroke-width:2.2}
 #links .hit{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
@@ -56,9 +57,21 @@ header .stat{font-size:13px;color:var(--muted)}
 .card .cap .t{font:15px/1.3 Georgia,serif;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .card .cap .m{font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .kind{position:absolute;top:8px;left:8px;background:rgba(255,255,255,.92);border-radius:999px;font-size:11px;padding:1px 8px;color:var(--muted)}
-.card .handle{position:absolute;right:-1px;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;background:var(--teal);border:3px solid #fff;cursor:crosshair;opacity:0;transition:opacity .1s}
-.card:hover .handle,.card.sel .handle{opacity:1}
-.card .grip{position:absolute;right:2px;bottom:2px;width:14px;height:14px;cursor:nwse-resize;opacity:.5;background:linear-gradient(135deg,transparent 50%,#bbb 50%)}
+.card .handle{position:absolute;right:0;top:50%;width:40px;height:52px;margin-top:-26px;transform:scale(var(--hz,1));transform-origin:right center;cursor:grab;z-index:4;touch-action:none}
+.card .handle::after{content:"";position:absolute;right:7px;top:50%;width:16px;height:16px;margin-top:-8px;border-radius:50%;background:var(--teal);border:3px solid #fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);opacity:0;transform:scale(.6);transition:opacity .18s,transform .35s cubic-bezier(.34,1.56,.64,1)}
+.card:hover .handle::after,.card.sel .handle::after{opacity:1;transform:none}
+.card .handle:hover::after{transform:scale(1.35)}
+.card .handle:active{cursor:grabbing}
+.card .grip{position:absolute;right:0;bottom:0;width:34px;height:34px;transform:scale(var(--hz,1));transform-origin:right bottom;cursor:nwse-resize;z-index:4;touch-action:none;background:none!important}
+.card .grip::after{content:"";position:absolute;right:5px;bottom:5px;width:14px;height:14px;border-right:3px solid #b9b2b4;border-bottom:3px solid #b9b2b4;border-bottom-right-radius:6px;opacity:.55;transition:opacity .15s,transform .3s cubic-bezier(.34,1.56,.64,1),border-color .15s}
+.card:hover .grip::after{opacity:.9}
+.card .grip:hover::after{border-color:var(--teal);opacity:1;transform:translate(2px,2px) scale(1.15)}
+.card.linktarget{outline:3px solid var(--teal2);outline-offset:2px;transition:outline-color .15s}
+#rope{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:50}
+#rope path{fill:none;stroke:var(--teal);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+#rope circle{fill:var(--teal);stroke:#fff;stroke-width:2}
+body.roping,body.roping *{cursor:crosshair!important}
 .card.note{background:#fffbe9;border-color:#efe3b5}
 .card.note .body{padding:12px 14px;font-size:15px;white-space:pre-wrap;word-break:break-word;height:100%;overflow:auto}
 .card.marker{background:var(--ink);color:#fff;border:0;border-radius:999px;padding:0}
@@ -74,6 +87,17 @@ header .stat{font-size:13px;color:var(--muted)}
 
 /* drawer + panel */
 .side{position:fixed;top:56px;bottom:0;background:#fff;z-index:20;overflow:hidden;display:flex;flex-direction:column;transition:transform .18s}
+#drawer{transition:transform .46s cubic-bezier(.55,0,.75,.2),box-shadow .4s;will-change:transform}
+#drawer.open{transition:transform .62s cubic-bezier(.22,1.12,.36,1),box-shadow .4s;box-shadow:8px 0 30px rgba(0,0,0,.06)}
+#drawer .inner{transition:opacity .3s ease}
+#drawer:not(.open) .inner{opacity:0}
+#drawer.squeeze .inner{transition:none}
+#libtab{position:fixed;left:var(--rail);top:50%;z-index:19;transform:translate(-110%,-50%) ;border:1px solid var(--rule);border-left:0;background:#fff;border-radius:0 12px 12px 0;
+  padding:16px 9px 16px 7px;writing-mode:vertical-rl;transform-origin:left center;font-size:13px;letter-spacing:.06em;color:var(--ink);cursor:pointer;box-shadow:3px 2px 14px rgba(0,0,0,.08);
+  display:flex;align-items:center;gap:8px;transition:transform .5s cubic-bezier(.34,1.56,.64,1) .32s,background .15s}
+#libtab::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--teal)}
+#libtab.on{transform:translate(0,-50%)}
+#libtab:hover{background:var(--wash);transform:translate(3px,-50%);transition-delay:0s}
 #drawer{left:var(--rail);width:var(--pw,420px);border-right:1px solid var(--rule);transform:translateX(calc(-100% - var(--rail)));overflow:visible}
 #drawer.open{transform:none}
 #drawer.resizing{transition:none}
@@ -88,10 +112,9 @@ header .stat{font-size:13px;color:var(--muted)}
 .edge:hover .grip,#drawer.resizing .edge .grip{opacity:1;transform:none}
 #drawer.resizing .edge .grip{border-color:var(--teal);background:var(--teal)}
 #drawer.resizing .edge .grip i{background:#fff}
-#drawer.atmax .edge::before{background:var(--gold)}
-.wlabel{position:absolute;top:50%;left:calc(100% + 14px);transform:translateY(-50%);background:var(--ink);color:#fff;font-size:12px;border-radius:999px;padding:3px 10px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
+.wlabel{display:none;position:absolute;top:50%;left:calc(100% + 14px);transform:translateY(-50%);background:var(--ink);color:#fff;font-size:12px;border-radius:999px;padding:3px 10px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
 #drawer.resizing .wlabel{opacity:1}
-#shore{position:fixed;top:56px;bottom:0;right:0;width:0;pointer-events:none;z-index:19;background:linear-gradient(90deg,rgba(37,31,33,.18),rgba(37,31,33,0));opacity:0;transition:opacity .2s}
+#shore{display:none;position:fixed;top:56px;bottom:0;right:0;width:0;pointer-events:none;z-index:19;background:linear-gradient(90deg,rgba(37,31,33,.18),rgba(37,31,33,0));opacity:0;transition:opacity .2s}
 #shore.on{opacity:1}
 body.resizing{cursor:col-resize;user-select:none}
 .crumbs{display:flex;align-items:center;gap:4px;padding:12px 14px;border-bottom:1px solid var(--rule);min-height:52px;font-size:14px}
@@ -117,7 +140,12 @@ body.resizing{cursor:col-resize;user-select:none}
 .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .chips button:disabled{opacity:.4;cursor:default;background:#fff}
 .chips .c{opacity:.6;margin-left:4px}
-.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.lib{display:grid;grid-template-columns:repeat(var(--libcols,2),minmax(0,1fr));gap:12px}
+/* tiles keep their shape and grow with the panel; columns step only at wide breakpoints */
+.li .img{height:auto!important;aspect-ratio:4/3}
+.li .img img{width:100%;height:100%;object-fit:contain}
+.li .noimg{height:auto!important;aspect-ratio:4/3}
+.li .t{font-size:clamp(13px,calc(var(--pw,420px)*.011),15px)}
 .li{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;cursor:grab}
 .li .img{height:140px;background:#1b1718;display:flex;align-items:center;justify-content:center}
 .li .img img{max-width:100%;max-height:100%;object-fit:contain}
@@ -148,6 +176,12 @@ body.resizing{cursor:col-resize;user-select:none}
 #present .where{font-size:13px;padding:0 6px;opacity:.85;white-space:nowrap;max-width:360px;overflow:hidden;text-overflow:ellipsis}
 #zoomctl{position:fixed;right:14px;bottom:14px;z-index:15;display:flex;gap:4px;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:4px}
 #zoomctl button{border:0;padding:4px 10px}
+#zoomctl #mapBtn{border-left:1px solid var(--rule);border-radius:0;font-size:13px;color:var(--muted)}
+#zoomctl #mapBtn.on{color:var(--teal);font-weight:600}
+#minimap{position:fixed;right:14px;bottom:58px;z-index:15;width:220px;height:150px;background:rgba(255,255,255,.94);border:1px solid var(--rule);border-radius:10px;
+  box-shadow:0 6px 20px rgba(0,0,0,.08);cursor:pointer;opacity:0;transform:translateY(8px) scale(.96);transform-origin:right bottom;pointer-events:none;
+  transition:opacity .25s,transform .4s cubic-bezier(.34,1.4,.64,1)}
+#minimap.on{opacity:1;transform:none;pointer-events:auto}
 #toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:999px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
 #gate{position:fixed;inset:0;background:var(--wash);z-index:80;display:none;align-items:center;justify-content:center}
 #gate .box{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:28px;max-width:520px}
@@ -184,7 +218,7 @@ body.resizing{cursor:col-resize;user-select:none}
 .swatches button{width:26px;height:26px;border-radius:50%;padding:0;border:2px solid #fff;box-shadow:0 0 0 1px var(--rule)}
 .swatches button.on{box-shadow:0 0 0 2px var(--ink)}
 /* connections: hover to break */
-.lmid{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:2px;z-index:2}
+.lmid{position:absolute;transform:translate(-50%,-50%) scale(var(--iz,1));display:flex;align-items:center;gap:2px;z-index:2}
 .lmid .lbl{position:static;transform:none}
 .lmid .dot{width:9px;height:9px;border-radius:50%;background:#fff;border:1.5px solid #8a8486;cursor:pointer;transition:transform .12s}
 .lmid .brk{display:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);background:#fff;color:#b5432f;font-size:14px;line-height:1;padding:0;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.08)}
@@ -222,10 +256,12 @@ body.resizing{cursor:col-resize;user-select:none}
 <div id="board"><div id="world"><svg id="links"></svg></div></div>
 
 <aside id="drawer" class="side"><div class="inner"></div><div class="edge" title="Drag to resize · double-click to switch between your width and wide"><span class="grip"><i></i><i></i><i></i></span></div><span class="wlabel"></span></aside>
+<button id="libtab" title="Open the panel">Library</button>
 <div id="shore"></div>
 
 <div id="present"><button id="pPrev">←</button><span class="where" id="pWhere"></span><button id="pNext">→</button><button id="pStop">Done</button></div>
-<div id="zoomctl"><button id="zOut" title="Zoom out">−</button><button id="zPct" title="Reset to 100%">100%</button><button id="zIn" title="Zoom in">+</button></div>
+<div id="zoomctl"><button id="zOut" title="Zoom out">−</button><button id="zPct" title="Reset to 100%">100%</button><button id="zIn" title="Zoom in">+</button><button id="mapBtn" title="Show or hide the map (M)">Map</button></div>
+<canvas id="minimap" title="Click or drag to move around the board"></canvas>
 <div id="toast"></div>
 <div class="modal" id="modal"><div class="box" id="mbox"></div></div>
 <div id="gate"><div class="box">
@@ -339,7 +375,52 @@ body.resizing{cursor:col-resize;user-select:none}
     $("#zPct").textContent = Math.round(view.z * 100) + "%";
     board.style.backgroundSize = `${28 * view.z}px ${28 * view.z}px`; board.style.backgroundPosition = `${view.x}px ${view.y}px`;
     S.set("wb.view", view);
+    const z = view.z; world.style.setProperty("--iz", (1 / z).toFixed(4)); world.style.setProperty("--hz", Math.min(1.8, Math.max(.6, 1 / z)).toFixed(4));
+    const m = document.getElementById("arr"); if (m) { m.setAttribute("markerWidth", (6 / z).toFixed(3)); m.setAttribute("markerHeight", (6 / z).toFixed(3)); }
+    mapSoon();
   }
+  // ---------- the map: silhouettes of everything on the board, and where you are ----------
+  const mm = document.getElementById("minimap"), mctx = mm.getContext("2d"); let mmRaf = 0, mmFit = null;
+  let mapOn = S.get("wb.map", true);
+  function mapSoon() { try { if (mapOn && !mmRaf) mmRaf = requestAnimationFrame(drawMap); } catch (e) {} }
+  function drawMap() {
+    mmRaf = 0; if (!mapOn) return;
+    const dpr = devicePixelRatio || 1, W = 220, H = 150; if (mm.width !== W * dpr) { mm.width = W * dpr; mm.height = H * dpr; }
+    mctx.setTransform(dpr, 0, 0, dpr, 0, 0); mctx.clearRect(0, 0, W, H);
+    const r = board.getBoundingClientRect(), vx0 = -view.x / view.z, vy0 = -view.y / view.z, vw = r.width / view.z, vh = r.height / view.z;
+    let x0 = vx0, y0 = vy0, x1 = vx0 + vw, y1 = vy0 + vh;
+    for (const c of B.cards) { const h = cardH(c) || 80; x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + h); }
+    const pad = 10, k = Math.min((W - pad * 2) / (x1 - x0 || 1), (H - pad * 2) / (y1 - y0 || 1));
+    const ox = pad + ((W - pad * 2) - (x1 - x0) * k) / 2 - x0 * k, oy = pad + ((H - pad * 2) - (y1 - y0) * k) / 2 - y0 * k;
+    mmFit = { k, ox, oy };
+    mctx.strokeStyle = "rgba(138,132,134,.45)"; mctx.lineWidth = 1;
+    const byId = Object.fromEntries(B.cards.map(c => [c.id, c]));
+    for (const l of B.links) { const a = byId[l.from], b = byId[l.to]; if (!a || !b) continue;
+      mctx.beginPath(); mctx.moveTo(ox + (a.x + a.w / 2) * k, oy + (a.y + (cardH(a) || 80) / 2) * k); mctx.lineTo(ox + (b.x + b.w / 2) * k, oy + (b.y + (cardH(b) || 80) / 2) * k); mctx.stroke(); }
+    for (const c of B.cards) {
+      const h = cardH(c) || 80, on = selIds.has(c.id);
+      mctx.fillStyle = on ? "#2f6f68" : c.kind === "note" ? "#e9d98f" : c.kind === "marker" ? "#251f21" : c.kind === "record" && (LIBBY[c.ref] || {}).preview ? "#3a3335" : "#bdb6b8";
+      const x = ox + c.x * k, y = oy + c.y * k, w = Math.max(2, c.w * k), hh = Math.max(2, h * k);
+      mctx.beginPath(); mctx.roundRect ? mctx.roundRect(x, y, w, hh, Math.min(2, w / 3)) : mctx.rect(x, y, w, hh); mctx.fill();
+    }
+    mctx.strokeStyle = "#2f6f68"; mctx.lineWidth = 1.5; mctx.fillStyle = "rgba(47,111,104,.07)";
+    mctx.beginPath(); mctx.rect(ox + vx0 * k, oy + vy0 * k, vw * k, vh * k); mctx.fill(); mctx.stroke();
+  }
+  function setMap(on) { mapOn = on; S.set("wb.map", on); mm.classList.toggle("on", on); $("#mapBtn").classList.toggle("on", on); if (on) mapSoon(); }
+  $("#mapBtn").onclick = () => setMap(!mapOn);
+  mm.addEventListener("pointerdown", e => {
+    e.preventDefault(); mm.setPointerCapture(e.pointerId);
+    const go = ev => { if (!mmFit) return; const b = mm.getBoundingClientRect(), r = board.getBoundingClientRect();
+      const wx = (ev.clientX - b.left - mmFit.ox) / mmFit.k, wy = (ev.clientY - b.top - mmFit.oy) / mmFit.k;
+      const tx = r.width / 2 - wx * view.z, ty = r.height / 2 - wy * view.z;
+      if (ev.type === "pointerdown") glide(tx, ty); else { view.x = tx; view.y = ty; applyView(); } };
+    const up = () => { mm.removeEventListener("pointermove", go); mm.removeEventListener("pointerup", up); };
+    go(e); mm.addEventListener("pointermove", go); mm.addEventListener("pointerup", up);
+  });
+  function glide(tx, ty) { const sx = view.x, sy = view.y, t0 = performance.now(), d = 420;
+    const f = now => { const t = Math.min(1, (now - t0) / d), e = 1 - Math.pow(1 - t, 3); view.x = sx + (tx - sx) * e; view.y = sy + (ty - sy) * e; applyView(); if (t < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); }
+  addEventListener("keydown", e => { if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !typing()) setMap(!mapOn); });
+  requestAnimationFrame(() => setMap(mapOn));
   const toWorld = (cx, cy) => { const r = board.getBoundingClientRect(); return { x: (cx - r.left - view.x) / view.z, y: (cy - r.top - view.y) / view.z }; };
   function zoomAt(f, cx, cy) {
     const r = board.getBoundingClientRect(); cx = cx ?? r.left + r.width / 2; cy = cy ?? r.top + r.height / 2;
@@ -463,6 +544,7 @@ body.resizing{cursor:col-resize;user-select:none}
     return { x: a.x + dx * s, y: a.y + dy * s };
   }
   function drawLinks() {
+    mapSoon();
     const svg = $("#links"); let h = "";
     const thr = present ? B.threads.find(t => t.id === present.thread) : (sel && sel.type === "thread" ? B.threads.find(t => t.id === sel.id) : null);
     const path = (a, b) => { const p = edgePoint(a, b), q = edgePoint(b, a); const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2; return { d: `M${p.x},${p.y} Q${mx + (q.y - p.y) * 0.08},${my - (q.x - p.x) * 0.08} ${q.x},${q.y}`, mx, my }; };
@@ -482,7 +564,7 @@ body.resizing{cursor:col-resize;user-select:none}
       const a = cardById(thr.steps[i]), b = cardById(thr.steps[i + 1]); if (!a || !b) continue;
       h += `<path class="thread" d="${path(center(a), center(b)).d}"/>`;
     }
-    svg.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8486"/></marker></defs>` + h;
+    svg.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${(6 / view.z).toFixed(3)}" markerHeight="${(6 / view.z).toFixed(3)}" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8486"/></marker></defs>` + h;
     svg.querySelectorAll(".hit").forEach(p => {
       const vis = svg.querySelector(`path.vis[data-v="${p.dataset.link}"]`), mid = world.querySelector(`.lmid[data-link="${p.dataset.link}"]`);
       p.onpointerenter = () => { vis && vis.classList.add("hot"); mid && mid.classList.add("hot"); };
@@ -651,16 +733,51 @@ body.resizing{cursor:col-resize;user-select:none}
     };
     lt.onblur = () => { lt.contentEditable = "false"; lt.onkeydown = lt.onblur = null; editing = null; const v = lt.textContent.trim(); if (v !== (c.label || "")) change(() => c.label = v); renderPanel(); };
   }
+  // a rope: it hangs with slack while you carry it, finds the nearest card, and pulls taut when it ties on
+  let roping = null;
   function startLinkDrag(e, c) {
-    const tmp = document.createElementNS("http://www.w3.org/2000/svg", "path"); tmp.setAttribute("class", "sel"); $("#links").appendChild(tmp);
-    const a = center(c);
-    const mv = ev => { const p = toWorld(ev.clientX, ev.clientY); tmp.setAttribute("d", `M${a.x},${a.y} L${p.x},${p.y}`); };
-    const up = ev => {
-      document.removeEventListener("pointermove", mv); document.removeEventListener("pointerup", up); tmp.remove();
-      const t = document.elementFromPoint(ev.clientX, ev.clientY); const target = t && t.closest(".card");
-      if (target && target.dataset.id !== c.id) addLink(c.id, target.dataset.id);
-    };
-    document.addEventListener("pointermove", mv); document.addEventListener("pointerup", up);
+    e.preventDefault(); if (roping) roping.cancel();
+    let svg = $("#rope"); if (!svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "rope"; world.appendChild(svg); }
+    svg.innerHTML = `<path/><circle r="5"/>`; const pathEl = svg.firstChild, bead = svg.lastChild;
+    const N = 26, from = center(c);
+    let cur = toWorld(e.clientX, e.clientY), end = { ...cur }, target = null, L = 0, done = false, tieT = 0, sticky = false, raf = 0;
+    const pts = Array.from({ length: N }, () => ({ x: from.x, y: from.y, px: from.x, py: from.y }));
+    const x0 = e.clientX, y0 = e.clientY, t0 = performance.now(); let moved = 0;
+    document.body.classList.add("roping");
+    const markTarget = t => { if (t === target) return; world.querySelectorAll(".card.linktarget").forEach(k => k.classList.remove("linktarget")); target = t; if (t) world.querySelector(`.card[data-id="${t.id}"]`)?.classList.add("linktarget"); };
+    const hit = (cx, cy) => { const el = document.elementFromPoint(cx, cy); const k = el && el.closest && el.closest(".card"); return k && k.dataset.id !== c.id ? cardById(k.dataset.id) : null; };
+    function step() {
+      const A0 = center(c), goal = target ? edgePoint(center(target), A0) : cur, A = edgePoint(A0, goal);
+      end.x += (goal.x - end.x) * (target ? .32 : .5); end.y += (goal.y - end.y) * (target ? .32 : .5);
+      const d = Math.hypot(end.x - A.x, end.y - A.y);
+      const want = done || target ? d * (done ? .985 : 1.02) : Math.max(d * 1.16, d + 30);
+      L += (want - L) * (L ? (target ? .16 : .1) : 1);
+      const seg = L / (N - 1), g = (target ? .06 : .55) / Math.max(.4, view.z);
+      for (let i = 1; i < N - 1; i++) { const p = pts[i], vx = (p.x - p.px) * .93, vy = (p.y - p.py) * .93; p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + g; }
+      pts[0].x = A.x; pts[0].y = A.y; pts[N - 1].x = end.x; pts[N - 1].y = end.y;
+      for (let k = 0; k < 14; k++) for (let i = 0; i < N - 1; i++) {
+        const p = pts[i], q = pts[i + 1], dx = q.x - p.x, dy = q.y - p.y, dd = Math.hypot(dx, dy) || 1e-6, f = (dd - seg) / dd * .5;
+        if (i > 0) { p.x += dx * f; p.y += dy * f; } if (i + 1 < N - 1) { q.x -= dx * f; q.y -= dy * f; }
+      }
+      let dstr = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+      for (let i = 1; i < N - 1; i++) { const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2; dstr += ` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`; }
+      pathEl.setAttribute("d", dstr); bead.setAttribute("cx", end.x); bead.setAttribute("cy", end.y);
+      bead.setAttribute("r", target ? 6.5 : 5);
+      if (done) { tieT += 1 / 60; svg.style.opacity = Math.max(0, 1 - Math.max(0, tieT - .32) / .2); if (tieT > .55) return finish(); }
+      raf = requestAnimationFrame(step);
+    }
+    function finish() { cancelAnimationFrame(raf); svg.innerHTML = ""; svg.style.opacity = ""; roping = null; }
+    function cleanup() { document.removeEventListener("pointermove", mv, true); document.removeEventListener("pointerup", up, true); document.removeEventListener("pointerdown", down, true); document.removeEventListener("keydown", key, true); document.body.classList.remove("roping"); }
+    function tie() { cleanup(); const t = target; markTarget(null);
+      if (!t) { finish(); return; }
+      done = true; target = t; addLink(c.id, t.id); }
+    const mv = ev => { moved = Math.max(moved, Math.hypot(ev.clientX - x0, ev.clientY - y0)); cur = toWorld(ev.clientX, ev.clientY); markTarget(hit(ev.clientX, ev.clientY)); };
+    const up = ev => { if (!sticky && moved < 6 && performance.now() - t0 < 450) { sticky = true; toast("Click a card to tie the rope · Esc to let go"); return; } if (!sticky) tie(); };
+    const down = ev => { if (!sticky) return; ev.stopPropagation(); ev.preventDefault(); markTarget(hit(ev.clientX, ev.clientY)); tie(); };
+    const key = ev => { if (ev.key === "Escape") { ev.stopPropagation(); target = null; cleanup(); markTarget(null); finish(); } };
+    document.addEventListener("pointermove", mv, true); document.addEventListener("pointerup", up, true); document.addEventListener("pointerdown", down, true); document.addEventListener("keydown", key, true);
+    roping = { cancel() { cleanup(); markTarget(null); finish(); } };
+    raf = requestAnimationFrame(step);
   }
   function addLink(from, to) {
     if (B.links.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from))) { toast("Already connected"); return; }
@@ -722,8 +839,11 @@ body.resizing{cursor:col-resize;user-select:none}
       (b.dataset.tool === "threads" && panel.classList.contains("open") && VIEW.kind === "threads") ||
       (b.dataset.tool === "versions" && panel.classList.contains("open") && VIEW.kind === "versions")));
   }
-  function openView(v) { if (v) VIEW = v; panel.classList.add("open"); railState(); renderView(); }
-  function closePanel() { panel.classList.remove("open"); railState(); }
+  function openView(v) { if (v) VIEW = v; panel.classList.add("open"); railState(); renderView(); tabState(); }
+  function closePanel() { panel.classList.remove("open"); railState(); tabState(); }
+  function tabState() { const t = $("#libtab"); if (!t) return; t.textContent = VIEW.kind === "threads" ? "Threads" : VIEW.kind === "versions" ? "Versions" : "Library"; t.classList.toggle("on", !panel.classList.contains("open")); }
+  $("#libtab").onclick = () => openView();
+  requestAnimationFrame(tabState);
   function select(s) {
     sel = s; draw();
     if (!s) return;
@@ -972,28 +1092,38 @@ body.resizing{cursor:col-resize;user-select:none}
   const railW = () => document.querySelector("#rail").offsetWidth;
   const maxW = () => Math.max(PANEL_MIN, window.innerWidth - railW() - SHORE);
   let pw = S.get("wb.pw", 420), pwRegular = S.get("wb.pwReg", 420);
-  const setPW = w => { pw = Math.round(Math.min(maxW(), Math.max(PANEL_MIN, w))); panel.style.setProperty("--pw", pw + "px"); panel.classList.toggle("atmax", pw >= maxW() - 1); };
+  const setPW = w => { pw = Math.round(Math.min(maxW(), Math.max(PANEL_MIN, w))); panel.style.setProperty("--pw", pw + "px"); panel.style.setProperty("--libcols", pw < 520 ? 1 : pw < 900 ? 2 : pw < 1400 ? 3 : 4); panel.classList.toggle("atmax", pw >= maxW() - 1); };
   setPW(pw);
   window.addEventListener("resize", () => setPW(pw));
   const snaps = () => [["Narrow", 420], ["Half", Math.round((window.innerWidth - railW()) / 2)], ["Wide", maxW()]];
   const edge = panel.querySelector(".edge"), wlabel = panel.querySelector(".wlabel"), shore = $("#shore");
   edge.addEventListener("pointerdown", e => {
     e.preventDefault(); e.stopPropagation(); edge.setPointerCapture(e.pointerId);
-    const x0 = e.clientX, w0 = pw; panel.classList.add("resizing"); document.body.classList.add("resizing");
+    const x0 = e.clientX, w0 = pw; let squeeze = 0; panel.classList.add("resizing"); document.body.classList.add("resizing");
     shore.style.width = SHORE + "px";
     const mv = ev => {
       let w = w0 + ev.clientX - x0;
       const mx = maxW(), soft = mx - 90;
+      if (w < PANEL_MIN) {                                  // past the narrowest width the panel gives way, ready to tuck in
+        const r = PANEL_MIN - (PANEL_MIN - w) * .55; squeeze = r; panel.style.setProperty("--pw", Math.round(r) + "px");
+        panel.classList.add("squeeze"); panel.querySelector(".inner").style.opacity = Math.max(.15, (r - 140) / (PANEL_MIN - 140)).toFixed(2); return;
+      }
+      squeeze = 0; panel.classList.remove("squeeze"); panel.querySelector(".inner").style.opacity = "";
       if (w > soft) w = soft + (w - soft) * 0.4;           // resistance as you near the far side
       let name = "";
       for (const [n, sw] of snaps()) if (Math.abs(w - sw) < 22) { w = sw; name = n; }
       setPW(w);
-      shore.classList.toggle("on", pw > mx - 200);
       wlabel.textContent = (name ? name + " · " : "") + pw + " px" + (pw >= mx - 1 ? " · the board stays in view" : "");
     };
     const up = () => {
       edge.removeEventListener("pointermove", mv); edge.removeEventListener("pointerup", up);
-      panel.classList.remove("resizing"); document.body.classList.remove("resizing"); shore.classList.remove("on");
+      panel.classList.remove("resizing"); document.body.classList.remove("resizing");
+      if (squeeze) {
+        const inner = panel.querySelector(".inner"); panel.classList.remove("squeeze");
+        if (squeeze < PANEL_MIN - 40) { inner.style.opacity = ""; closePanel(); setTimeout(() => setPW(pw), 480); }
+        else { inner.style.opacity = ""; panel.style.transition = "width .4s cubic-bezier(.34,1.4,.64,1)"; setPW(pw); setTimeout(() => panel.style.transition = "", 420); }
+        squeeze = 0; return;
+      } shore.classList.remove("on");
       S.set("wb.pw", pw); if (pw < maxW() - 60) { pwRegular = pw; S.set("wb.pwReg", pw); }
     };
     edge.addEventListener("pointermove", mv); edge.addEventListener("pointerup", up);
