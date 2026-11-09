@@ -265,7 +265,7 @@
 
   async function api(path, opts = {}) {
     const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
-      cache: "no-store", ...opts, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json",
+      ...(/decisions\/|v4\/edits\.json/.test(path) ? { cache: "no-store" } : {}), ...opts, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json",
                           "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) }
     });
     if (!res.ok && res.status !== 404) throw new Error(`${res.status} ${res.statusText}`);
@@ -308,21 +308,26 @@
     clearTimeout(snapT);
     snapT = setTimeout(() => idb.set("snap:" + repo, { v: 2, at: Date.now(), CARDS: { sha: CARDS.sha, list: CARDS.list }, sort, sortSha, EDITS, reflections,
       SIM: { sha: SIM.sha, by: SIM.by }, CV: { sha: CV.sha, by: CV.by, styleSha: CV.styleSha, style: CV.style },
-      PUB: { sha: PUB.sha, ids: [...PUB.ids] }, SNAP: { ...SNAP }, keptFolders: [...keptFolders] }), 400);
+      PUB: { sha: PUB.sha, ids: [...PUB.ids] }, SNAP: { ...SNAP }, finds: cache, keptFolders: [...keptFolders] }), 400);
   }
   async function warm() {
     if (!token) return false;
     const d = await idb.get("snap:" + repo);
     if (!d || d.v !== 2 || Object.keys(records).length || !Object.values(d.sort || {}).some(v => v && v.status)) return false;
     Object.assign(CARDS, d.CARDS); sort = Object.assign(d.sort || {}, pending); sortSha = d.sortSha; EDITS = Object.assign(d.EDITS || {}, editsPending); reflections = d.reflections || "";
-    Object.assign(SIM, d.SIM); Object.assign(CV, d.CV); PUB.sha = d.PUB.sha; PUB.ids = new Set(d.PUB.ids || []); Object.assign(SNAP, d.SNAP); keptFolders = new Set(d.keptFolders || []);
+    Object.assign(SIM, d.SIM); Object.assign(CV, d.CV); PUB.sha = d.PUB.sha; PUB.ids = new Set(d.PUB.ids || []); Object.assign(SNAP, d.SNAP); if (d.finds) Object.assign(cache, d.finds); keptFolders = new Set(d.keptFolders || []);
     buildRecords(SNAP.recPaths || []); applyEdits();
     $("#stat").textContent = `Saved copy from ${new Date(d.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · checking for changes…`;
     render();
     return true;
   }
 
+  let findsBusy = false, loadBusy = false;
   async function load() {
+    if (loadBusy) return; loadBusy = true;
+    try { await loadInner(); } finally { loadBusy = false; }
+  }
+  async function loadInner() {
     if (!token) { renderSetup(); return; }
     if (!Object.keys(records).length) $("#stat").textContent = "Loading records…";
     try {
@@ -335,8 +340,6 @@
       const missing = recPaths.filter(p => !cache[p]);
       const jobs = [];
       // every file that changed is fetched at the same time; unchanged files are not downloaded again
-      jobs.push((async () => { for (let i = 0; i < missing.length; i += 8) await Promise.all(missing.slice(i, i + 8).map(async p => {
-        try { const txt = await raw(p); if (txt) cache[p] = JSON.parse(txt); } catch (e) { console.warn(p, e); } })); if (missing.length) S.set("cache", cache); })());
       let e;
       if ((e = changed("v4/intake/cards.json", CARDS.sha))) jobs.push(raw(e.path).then(t => { if (t) { CARDS.list = JSON.parse(t).cards || []; CARDS.sha = e.sha; } }));
       const se = changed("decisions/sort.json", sortSha);
@@ -363,6 +366,15 @@
       Object.assign(EDITS, editsPending);
       SNAP.recPaths = recPaths;
       buildRecords(recPaths);
+      // agent finds not seen before arrive in the background; the page is usable before they do
+      if (missing.length && !findsBusy) {
+        findsBusy = true;
+        (async () => {
+          for (let i = 0; i < missing.length; i += 24) await Promise.all(missing.slice(i, i + 24).map(async p => {
+            try { const txt = await raw(p); if (txt) cache[p] = JSON.parse(txt); } catch (e) { console.warn(p, e); } }));
+          findsBusy = false; buildRecords(recPaths); applyEdits(); saveSnap(); render();
+        })();
+      }
       applyEdits();
       $("#dot").className = "dot live";
       $("#stat").textContent = `Live · synced ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
@@ -1187,7 +1199,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108214325";
+  const BUILD = "20261108214858";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
