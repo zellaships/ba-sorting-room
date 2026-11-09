@@ -632,6 +632,13 @@ float crack2(vec2 x){vec2 i=floor(x),f=fract(x);float d1=8.,d2=8.;
   for(int y=-1;y<=1;y++)for(int k=-1;k<=1;k++){vec2 g=vec2(float(k),float(y));vec2 o=vec2(h31(vec3(i+g,1.)),h31(vec3(i+g,7.)));
     float d=length(g+o-f);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
   return d2-d1;}
+float craze(vec2 x){
+  vec2 w=x+(vec2(vn3(vec3(x*.31,1.)),vn3(vec3(x*.31,5.)))-.5)*2.2;
+  float e1=crack2(w),e2=crack2(w*2.6+vec2(4.1,1.7));
+  float l1=1.-smoothstep(.0,.035,e1),l2=1.-smoothstep(.0,.05,e2);
+  float m1=smoothstep(.30,.62,vn3(vec3(x*.42,9.))),m2=smoothstep(.50,.80,vn3(vec3(x*.85,3.)));
+  float depth=.55+.45*vn3(vec3(x*1.7,6.));
+  return clamp(l1*m1*depth*.85+l2*m2*.45,0.,1.);}
 const vec3 C_KALA=vec3(.12,.10,.09),C_TUK=vec3(.66,.19,.15),C_LUV=vec3(.58,.31,.15),C_MUS=vec3(.86,.62,.13);
 vec3 quadC(float a){a=mod(a,360.);return (a<45.||a>=315.)?C_KALA:(a<135.)?C_TUK:(a<225.)?C_LUV:C_MUS;}
 vec3 idxC(float k){return k<.5?C_KALA:k<1.5?C_TUK:k<2.5?C_LUV:C_MUS;}
@@ -654,23 +661,23 @@ vec3 cShade(vec3 pw,vec3 rdw,float id,float sub){
   float piece=floor(uv.x/.2+.5*h31(vec3(floor(uv.x/.2),id,3.)));
   base*=.88+.24*h31(vec3(piece,id,1.));
   float mott=vn3(pt*9.)*.6+vn3(pt*23.)*.4;
-  base*=.82+.32*mott;
-  float cr=crack2(uv*vec2(26.,26.)+piece*3.1);
-  base*=mix(.55,1.,smoothstep(.0,.06,cr));
-  float seam=abs(fract(uv.x/.2+.5*h31(vec3(floor(uv.x/.2),id,3.)))-.5)*2.;
-  base*=mix(1.,.38,smoothstep(.93,.99,seam));
-  float chip=smoothstep(.70,.78,vn3(pt*14.+3.7));
-  base=mix(base,vec3(.70,.55,.42)*(.85+.3*mott),chip*.55);
-  float sp=h31(floor(pt*190.));base*=sp>.985?.45:sp<.012?1.35:1.;
+  base*=.86+.24*mott;
+  float cr=craze(uv*22.+piece*3.1);
+  base*=1.-.48*cr;
+  float seam=abs(fract(uv.x/.2+.5*h31(vec3(floor(uv.x/.2),id,3.))+.035*sin(uv.y*55.+piece)+.02*sin(uv.y*131.))-.5)*2.;
+  base*=mix(1.,.6,smoothstep(.965,.995,seam));
+  float chip=smoothstep(.77,.83,vn3(pt*24.+3.7))*smoothstep(.4,.7,vn3(pt*7.+1.3));
+  base=mix(base,vec3(.40,.28,.20)*(.8+.3*mott),chip*.75);
+  float sp=h31(floor(pt*210.));base*=sp>.988?.55:sp<.006?1.15:1.;
   // light: matte diffuse, soft sky fill, a broad low glaze sheen, the wet line at the water
   vec3 L=normalize(vec3(.35,.6,.45));
   float dif=max(dot(n,L),0.),wrap=max(dot(n,L)*.5+.5,0.);
-  float ao=clamp(cMap(p+n*.06).x/.06,0.,1.)*.4+.6;
-  vec3 col=base*(vec3(.30,.40,.42)*(.6+.4*n.y)+vec3(1.,.95,.86)*(dif*.85+wrap*.2))*ao;
+  float ao=clamp(cMap(p+n*.06).x/.06,0.,1.)*.55+.45;
+  vec3 col=base*(vec3(.20,.27,.29)*(.55+.45*n.y)+vec3(1.,.95,.86)*(dif*1.0+wrap*.06))*ao;
   float gl=pow(max(dot(reflect(rd,n),L),0.),28.)*(1.-chip)*(1.-sub*.8);
-  col+=vec3(1.,.97,.9)*gl*.22;
+  col+=vec3(1.,.97,.9)*gl*.14;
   float fr=pow(1.-max(dot(n,-rd),0.),4.);
-  col+=skyCol(reflect(rd,n))*fr*.10*(1.-sub);
+  col+=skyCol(reflect(rd,n))*fr*.05*(1.-sub);
   float above=pw.y-u_wy;
   col*=1.-.38*smoothstep(.07,.0,above)*step(-.01,above);
   if(abs(id-10.-u_selB)<.5)col+=vec3(.10,.09,.07);
@@ -700,7 +707,7 @@ void main(){
       // what stands below: bent by the surface, dimmed and coloured by the depth of water above it
       vec3 rr=refract(rd,n,.75);float id2;float t2=cTrace(g,rr,6.,id2);
       if(t2>0.){vec3 q=g+rr*t2;float depth=max(u_wy-q.y,0.);
-        vec3 ab=exp(-vec3(1.5,.7,.58)*(t2*.7+depth*.9));
+        vec3 ab=exp(-vec3(1.05,.6,.52)*(t2*.6+depth*.8));
         float clear=mix(.5,.88,basinAt(g.xz));
         col=mix(col,cShade(q,rr,id2,1.)*ab+vec3(.03,.08,.09)*(1.-ab),clamp((1.-fres)*clear,0.,1.));}
       // what stands above, mirrored in the surface
@@ -708,8 +715,8 @@ void main(){
       if(t3>0.)col=mix(col,cShade(g+rf*t3,rf,id3,0.),clamp(fres*1.5+.14,0.,.62));
       // where the clay breaks the surface: a bright meniscus and a darker ring of wet water around it
       float dm=cMap(toLoc(g)).x;
-      col*=1.-.22*smoothstep(.10,.01,dm);
-      col=mix(col,vec3(.93,.97,.96),smoothstep(.022,.0,abs(dm-.004))*.6);}}
+      col*=1.-.14*smoothstep(.06,.005,dm);
+      col=mix(col,vec3(.86,.93,.92),smoothstep(.010,.0,abs(dm-.003))*.22);}}
   vec3 inv=1./rd;vec3 t0=(-1.3-ro)*inv,t1=(1.3-ro)*inv;
   vec3 tmn=min(t0,t1),tmx=max(t0,t1);
   float ta=max(max(tmn.x,tmn.y),tmn.z),tb=min(min(tmx.x,tmx.y),tmx.z);
