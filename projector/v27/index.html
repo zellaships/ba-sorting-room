@@ -1156,18 +1156,36 @@ function stroke(pts,seed,w,t,o){o=o||{};const jit=o.jit===undefined?.006:o.jit;c
     const wob=.65+.7*(vn(i*.4,seed+33)*.5+.5);
     if(!cur){cur={pts:[a.s],col:a.col,zs:0,ws:0,n:0,under};SEGS.push(cur);}
     cur.pts.push(b.s);cur.zs+=(a.s[2]+b.s[2])/2;cur.ws+=w*wob*(under?.85:1);cur.n++;}}
+// each stroke is laid down as matte shards fitted end to end, like a mended ceramic:
+// small seams between pieces, each piece a slightly different firing, a soft shadow on the water.
+// Below the kalunga line the shards go to a separate layer that is darkened and blurred.
+const uC=document.createElement('canvas'),ux=uC.getContext('2d');
+function shard(ctx,pts,ww,col,seed,alpha){
+  if(pts.length<2)return;
+  // trim each end a little so neighbouring shards leave a hairline seam
+  const trim=(a,b,d)=>{const L=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return [a[0]+(b[0]-a[0])*Math.min(d/L,.45),a[1]+(b[1]-a[1])*Math.min(d/L,.45)];};
+  const P2=pts.slice();P2[0]=trim(P2[0],P2[1],1.1);P2[P2.length-1]=trim(P2[P2.length-1],P2[P2.length-2],1.1);
+  const fire=(hsh(seed*3.1)-.5)*.16, w=ww*1.5*(.9+.2*hsh(seed*7.7));
+  const path=(ox,oy)=>{ctx.beginPath();P2.forEach((q,i)=>i?ctx.lineTo(q[0]+ox,q[1]+oy):ctx.moveTo(q[0]+ox,q[1]+oy));};
+  ctx.lineJoin='round';ctx.lineCap='butt';
+  ctx.globalAlpha=alpha*.22;ctx.strokeStyle='#0d1a1d';ctx.lineWidth=w+1.2;path(1.6,2.2);ctx.stroke();   // shadow on the water
+  ctx.globalAlpha=alpha;ctx.strokeStyle=shade(col,fire,0);ctx.lineWidth=w;path(0,0);ctx.stroke();      // the fired body
+  ctx.globalAlpha=alpha*.28;ctx.strokeStyle=shade(col,-.35,0);ctx.lineWidth=Math.max(1,w*.32);path(.5,w*.18);ctx.stroke(); // a darker glaze pooled on one side
+}
 function flushSegs(){
   for(const g of SEGS){g.z=g.zs/g.n;g.ww=g.ws/g.n;}
   SEGS.sort((p,q)=>q.z-p.z);
-  for(const g of SEGS){const {pts,ww,under}=g;
-    ix.lineCap='round';ix.lineJoin='round';
-    // below the kalunga line the ink sinks: softer, tinted by the water around it
-    const gold=g.col===POLE.MUSONI;const A=under?(gold?.85:.62):1,sink=under?(gold?.12:.38):0;
-    const draw=(st,ox,oy,lw,al)=>{ix.globalAlpha=al;ix.strokeStyle=st;ix.lineWidth=lw;ix.beginPath();pts.forEach((q,i)=>i?ix.lineTo(q[0]+ox,q[1]+oy):ix.moveTo(q[0]+ox,q[1]+oy));ix.stroke();};
-    draw(under?'rgba(220,236,234,.3)':'rgba(244,243,238,.82)',0,0,ww+4.5,1);
-    draw(shade(g.col,-.62,sink),1.2,1.6,ww+.6,A);
-    draw(shade(g.col,0,sink),0,0,ww,A);
-    draw(shade(g.col,.55,sink),-1,-1.2,ww*.36,A);}
+  if(uC.width!==inkC.width||uC.height!==inkC.height){uC.width=inkC.width;uC.height=inkC.height;}
+  ux.setTransform(ix.getTransform());ux.clearRect(0,0,uC.width,uC.height);
+  let k=0,anyUnder=false;
+  for(const g of SEGS){k++;
+    if(g.under){anyUnder=true;shard(ux,g.pts,g.ww,g.col,k,1);}
+    else shard(ix,g.pts,g.ww,g.col,k,1);}
+  if(anyUnder){
+    // what lies beneath: darker, softer, held by the water
+    ix.save();ix.setTransform(1,0,0,1,0,0);
+    ix.filter='blur(2.2px) brightness(.62) saturate(.8)';ix.globalAlpha=.78;ix.drawImage(uC,0,0);
+    ix.restore();}
   ix.globalAlpha=1;SEGS.length=0;}
 function quadColor(a){a=((a%360)+360)%360;return a<45||a>=315?POLE.KALA:a<135?POLE.TUKULA:a<225?POLE.LUVEMBA:POLE.MUSONI;}
 const colXY=q=>quadColor(Math.atan2(q[1]-CY(),q[0])*180/Math.PI);
@@ -1202,46 +1220,33 @@ function draw(now,camv){
     stroke(linePts(r0,q,6),20+k,4.4*sc,t,{color:()=>quadColor(th*180/Math.PI)});});
   flushSegs();
   hitList=[];
-  // the turn of the sun, counterclockwise: four tapered strokes between the poles, thick in the middle,
-  // fading to nothing at both ends (no heads), travelling slowly around outside the ring
-  for(let k=0;k<4;k++){const mid=(45+90*k)*Math.PI/180+t*.07,half=.42,n=34,RR=R*1.3;
-    const top=[],bot=[];let under=0;
-    for(let i=0;i<=n;i++){const u=i/n,th=mid-half+2*half*u;
-      const p=[Math.cos(th)*RR,cy+Math.sin(th)*RR,0];if(p[1]<cy)under++;
-      const a=proj(ripple(p,t,p[1])),b=proj(ripple([Math.cos(th+.01)*RR,cy+Math.sin(th+.01)*RR,0],t,p[1]));if(!a||!b)continue;
-      let nx=-(b[1]-a[1]),ny=b[0]-a[0];const L=Math.hypot(nx,ny)||1;nx/=L;ny/=L;
-      const wd=9.5*sc*Math.pow(Math.sin(Math.PI*u),1.15)*(.85+.15*Math.sin(u*9+k));
-      top.push([a[0]+nx*wd/2,a[1]+ny*wd/2]);bot.push([a[0]-nx*wd/2,a[1]-ny*wd/2]);}
-    if(top.length<4)continue;
-    const sub=under>n/2,col=quadColor((mid*180/Math.PI));
-    const path=()=>{ix.beginPath();top.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));for(let i=bot.length-1;i>=0;i--)ix.lineTo(bot[i][0],bot[i][1]);ix.closePath();};
-    ix.globalAlpha=1;ix.lineJoin='round';ix.lineWidth=3.2;ix.strokeStyle=sub?'rgba(220,236,234,.35)':'rgba(244,243,238,.85)';path();ix.stroke();
-    ix.globalAlpha=sub?.62:1;ix.fillStyle=shade(col,0,sub?.38:0);path();ix.fill();ix.globalAlpha=1;}
   // the four poles at the ends of the cross: large open circles, like the drawn cosmogram
   [['TUKULA',[0,cy+R*1.2,0]],['KALA',[R*1.2,cy,0]],['LUVEMBA',[-R*1.2,cy,0]],['MUSONI',[0,cy-R*1.2,0]]].forEach(([k,p])=>{
     const s=proj(ripple(p,t,p[1]));if(!s)return;const under=p[1]<cy-.01,sink=under?.32:0;
-    const r=Math.max(13,Math.min(28,.09*(h/s[2])*.55*1.9));const pc=POLE[k];
+    const r=Math.max(15,Math.min(32,.09*(h/s[2])*.55*1.9));const pc=POLE[k];
     const ringAt=rr=>{const o=[];for(let i=0;i<=30;i++){const th=-.2+i/30*(6.28+.35);const q=rr*(1+.06*Math.sin(th*2+MOM[k])+.04*Math.sin(th*3));o.push([s[0]+Math.cos(th)*q,s[1]+Math.sin(th)*q]);}return o;};
     const path=pts=>{ix.beginPath();pts.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));};
-    path(ringAt(r+2.5));ix.fillStyle=under?'rgba(225,238,236,.55)':'rgba(244,243,238,.9)';ix.fill();
-    ix.globalAlpha=under?.8:1;ix.lineWidth=6.5*sc;ix.strokeStyle=shade(pc,0,sink);path(ringAt(r));ix.stroke();
-    ix.lineWidth=1.4*sc;ix.strokeStyle=shade(pc,.55,sink);path(ringAt(r-1.8));ix.stroke();ix.globalAlpha=1;
+    // an open circle drawn in two passes, like a hand going round twice; no fill, the water shows through
+    ix.save();if(under){ix.filter='blur(1.6px) brightness(.62)';}
+    ix.lineCap='round';
+    ix.globalAlpha=.22;ix.strokeStyle='#0d1a1d';ix.lineWidth=9*sc;path(ringAt(r).map(q=>[q[0]+1.6,q[1]+2.2]));ix.stroke();
+    ix.globalAlpha=under?.8:1;ix.strokeStyle=shade(pc,0,0);ix.lineWidth=8.5*sc;path(ringAt(r));ix.stroke();
+    ix.globalAlpha=under?.5:.7;ix.strokeStyle=shade(pc,-.25,0);ix.lineWidth=2.4*sc;path(ringAt(r*.78).slice(4,26));ix.stroke();
+    ix.restore();ix.globalAlpha=1;
     hitList.push({c:{id:'pole-'+k,pole:k},x:s[0],y:s[1],pole:true});});
   const labs=[];
   NODES.forEach(c=>{const p=nodePos(c),s=proj(p);if(!s){c._el.style.display='none';return;}
-    const rad=.026*(h/s[2])*.55;const px=Math.max(6,Math.min(10,rad));
+    const rad=.036*(h/s[2])*.55;const px=Math.max(8,Math.min(14,rad));
     const sel=c.id===selId,under=p[1]<cy-.01,sink=under?.3:0;
     const ringAt=r=>{const o=[];for(let i=0;i<=26;i++){const th=-.3+i/26*(6.28+.5);const rr=r*(1+.14*Math.sin(th*2+c.angle)+.07*Math.sin(th*3+1));o.push([s[0]+Math.cos(th)*rr,s[1]+Math.sin(th)*rr]);}return o;};
     const ring=ringAt(px),ring2=ringAt(px-2.2);
     ix.lineCap='round';ix.lineJoin='round';
-    ix.beginPath();ring.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));
-    ix.fillStyle=under?'rgba(225,238,236,.7)':'rgba(244,243,238,.92)';ix.fill();
-    ix.beginPath();ring2.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));
-    ix.fillStyle=shade(POLE[c.moment]||'#111111',0,sink);ix.globalAlpha=under?.8:1;ix.fill();
-    ix.beginPath();for(let i=0;i<=10;i++){const th=Math.PI*.75+i/10*Math.PI*.9;const q=[s[0]+Math.cos(th)*(px-3.4),s[1]+Math.sin(th)*(px-3.4)];i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]);}
-    ix.strokeStyle=shade(POLE[c.moment]||'#111111',.6,sink);ix.lineWidth=1.6*sc;ix.stroke();
-    ix.globalAlpha=1;ix.strokeStyle=under?shade('#0a0a0a',0,.3):'#0a0a0a';ix.lineWidth=(sel?2.6:2.1)*sc;
-    ix.beginPath();ring.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));ix.stroke();
+    const col=POLE[c.moment]||'#111111';
+    ix.save();if(under)ix.filter='blur(1.4px) brightness(.62)';
+    ix.globalAlpha=.22;ix.fillStyle='#0d1a1d';ix.beginPath();ring.forEach((q,i)=>i?ix.lineTo(q[0]+1.4,q[1]+2):ix.moveTo(q[0]+1.4,q[1]+2));ix.fill();
+    ix.globalAlpha=under?.82:1;ix.fillStyle=shade(col,0,0);ix.beginPath();ring.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));ix.fill();
+    ix.globalAlpha=under?.6:.9;ix.strokeStyle=shade(col,-.45,0);ix.lineWidth=(sel?2.4:1.4)*sc;ix.stroke();
+    ix.restore();ix.globalAlpha=1;
     hitList.push({c,x:s[0],y:s[1]});
     const cs=proj([0,cy,0])||s;let dx=s[0]-cs[0],dy=s[1]-cs[1];const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
     labs.push({c,el:c._el,x:s[0]+dx*(px+9),y:s[1]+dy*(px+9),dx,dy,px,under});});
@@ -1252,7 +1257,7 @@ function draw(now,camv){
     if(Math.abs(o.dx)<.55){side++;x=o.x+(side%2?42:-42);tx=side%2?'0':'-100%';ty='-50%';}
     const el=o.el;el.style.display='block';el.style.left=x+'px';el.style.top=o.y+'px';el.style.transform=`translate(${tx},${ty})`;
     if(w<600){const bx=el.getBoundingClientRect(),lx=bx.left;if(lx<6)el.style.left=(parseFloat(el.style.left)+6-lx)+'px';else if(lx+bx.width>w-6)el.style.left=(parseFloat(el.style.left)-(lx+bx.width-w+6))+'px';}
-    el.classList.toggle('sel',o.c.id===selId);el.style.opacity=o.under?.78:1;});
+    el.classList.toggle('sel',o.c.id===selId);el.style.opacity=o.under?.6:1;el.style.filter=o.under?'blur(.35px)':'';});
   for(const k in MOM){const th=MOM[k]*Math.PI/180,s=proj([Math.cos(th)*R*1.5,cy+Math.sin(th)*R*1.5,0]);
     const el=momEls[k];if(!s){el.style.display='none';continue;}
     el.style.display='block';el.style.left=Math.max(34,Math.min(w-34,s[0]))+'px';el.style.top=Math.max(14,Math.min(h-14,s[1]-(k==='KALA'||k==='LUVEMBA'?26:0)))+'px';}
