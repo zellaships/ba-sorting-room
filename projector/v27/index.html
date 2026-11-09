@@ -10,6 +10,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.35 ui-monospace,Menlo,Consolas,monospace;overscroll-behavior:none}
 #stage{position:fixed;inset:0}
+body.embed{background:linear-gradient(#a6dedd,#4f7f84)}body.embed canvas#gl,body.embed canvas#ink{opacity:0;transition:opacity .9s}body.embed.ready canvas#gl,body.embed.ready canvas#ink{opacity:1}
 canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;outline:none}
 canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
@@ -55,6 +56,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
 </style>
 </head>
 <body>
+<script>if(/[?&]embed/.test(location.search))document.body.classList.add("proj","embed");</script>
 <div id="stage">
  <canvas id="gl" tabindex="0" role="img" aria-label="A whole body of water fills the screen, its surface made of the GO archive photographs carried by the water, never vanishing. The photographs gather along the real ridge lines of the waves and join into one connected body of water-shaped forms with curved, flowing borders, with whitecaps in slow motion. Move the mouse to ease through many images; drag to stir; wheel zooms."></canvas>
  <div class="tag">Under v27</div>
@@ -1122,7 +1124,7 @@ const inkC=$('ink'),ix=inkC.getContext('2d'),labs$=$('cosmoLabs');
 let on=!new URLSearchParams(location.search).has('nocosmo');
 const R=1.0,CY=()=>P.wlvl;
 const MOM={KALA:0,TUKULA:90,LUVEMBA:180,MUSONI:270};
-const POLE={KALA:'#16161a',TUKULA:'#c03028',LUVEMBA:'#9a5428',MUSONI:'#f0b81c'};
+const POLE={KALA:'#211c18',TUKULA:'#b0342a',LUVEMBA:'#9a5428',MUSONI:'#e2a824'};
 const LABCOL={KALA:'#16161a',TUKULA:'#c03028',LUVEMBA:'#8a4a22',MUSONI:'#9a7200'};
 const SEA=[64,104,108];
 const NODES=CON.filter(c=>c.status!=='removed'&&c.angle!==undefined);
@@ -1139,54 +1141,77 @@ function proj(p){const c=CV;const v=[p[0]-c.ro[0],p[1]-c.ro[1],p[2]-c.ro[2]];
   const z=v[0]*c.fw[0]+v[1]*c.fw[1]+v[2]*c.fw[2];if(z<.15)return null;
   const x=(v[0]*c.rt[0]+v[1]*c.rt[1]+v[2]*c.rt[2])/z*1.55,y=(v[0]*c.up[0]+v[1]*c.up[1]+v[2]*c.up[2])/z*1.55;
   const w=inkC.clientWidth,h=inkC.clientHeight;return [w/2+x*h,h/2-y*h,z];}
-function ripple(p,t,y0){const d=Math.max(0,CY()-y0-.004);if(d<=0)return p;const a=Math.min(1,d*1.6)*.045;
+// which side of the surface the viewer is on: whatever lies across the water from you wavers, darkens and blurs
+let camUnder=false;
+const farSide=y=>(y<CY()-.001)!==camUnder;
+function ripple(p,t,y0){const d=Math.max(0,(camUnder?y0-CY():CY()-y0)-.004);if(d<=0)return p;const a=Math.min(1,d*1.6)*.045;
   return [p[0]+a*(Math.sin(p[1]*7.3+t*.9+p[2]*3)+.6*Math.sin(p[1]*13.1-t*.6)),p[1]+a*.35*Math.sin(p[0]*6+t*.7),p[2]+a*.5*Math.sin(p[1]*9+t*.5)];}
 const SEGS=[];
 function stroke(pts,seed,w,t,o){o=o||{};const jit=o.jit===undefined?.006:o.jit;const P2=[];
-  for(let i=0;i<pts.length;i++){const q=pts[i];
+  for(let i=0;i<pts.length;i++){let q=pts[i];
+    // the reflection: only what stands above the water, mirrored in the surface
+    if(o.mirror){if(q[1]<CY()-.001){P2.push(null);continue;}q=[q[0],2*CY()-q[1],q[2]];}
     let p=[q[0]+vn(i*.55,seed)*jit,q[1]+vn(i*.55,seed+9)*jit,q[2]+vn(i*.55,seed+19)*jit];
     if(o.flat)p[1]=q[1];p=ripple(p,t,q[1]);const s=proj(p);
     P2.push(s?{s,y:q[1],i,col:(o.color?o.color(q):'#0a0a0a')}:null);}
   let cur=null;
   for(let i=1;i<P2.length;i++){const a=P2[i-1],b=P2[i];
-    const ok=a&&b;const under=ok&&(a.y+b.y)/2<CY()-.001;
-    const gap=ok&&under&&(i%7===3)&&!o.solid;
-    if(!ok||gap||(cur&&(cur.pts.length>6||cur.under!==under))){cur=null;}
-    if(!ok||gap)continue;
-    const wob=.65+.7*(vn(i*.4,seed+33)*.5+.5);
-    if(!cur){cur={pts:[a.s],col:a.col,zs:0,ws:0,n:0,under};SEGS.push(cur);}
-    cur.pts.push(b.s);cur.zs+=(a.s[2]+b.s[2])/2;cur.ws+=w*wob*(under?.85:1);cur.n++;}}
-// each stroke is laid down as matte shards fitted end to end, like a mended ceramic:
-// small seams between pieces, each piece a slightly different firing, a soft shadow on the water.
-// Below the kalunga line the shards go to a separate layer that is darkened and blurred.
-const uC=document.createElement('canvas'),ux=uC.getContext('2d');
-function shard(ctx,pts,ww,col,seed,alpha){
+    const ok=a&&b;const far=ok&&!o.mirror&&farSide((a.y+b.y)/2);
+    // a new shard at every few points, and always where the colour of the circle changes, so colours never jump
+    if(!ok||(cur&&(cur.pts.length>7||cur.far!==far||cur.col!==b.col))){cur=null;}
+    if(!ok)continue;
+    const wob=.8+.4*(vn(i*.4,seed+33)*.5+.5);
+    if(!cur){cur={pts:[a.s],col:b.col,zs:0,ws:0,n:0,far,refl:!!o.mirror};SEGS.push(cur);}
+    cur.pts.push(b.s);cur.zs+=(a.s[2]+b.s[2])/2;cur.ws+=w*wob;cur.n++;}}
+
+// ---- fired clay: a slip-cast body, each shard its own firing, dark joins where pieces meet,
+// then a glaze texture (mottling, crackle, speckle) and chipped wear laid over the ink only ----
+const nC=document.createElement('canvas'),nx=nC.getContext('2d');     // this side of the water
+const uC=document.createElement('canvas'),ux=uC.getContext('2d');     // across the water
+const rC=document.createElement('canvas'),rx=rC.getContext('2d');     // mirrored in the surface
+function mkTex(){const T=384,c=document.createElement('canvas');c.width=c.height=T;const g=c.getContext('2d');
+  let sd=7;const rnd=()=>{sd=(sd*16807)%2147483647;return sd/2147483647;};
+  for(let i=0;i<190;i++){const x=rnd()*T,y=rnd()*T,r=6+rnd()*38,lt=rnd()<.5;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,lt?'rgba(255,236,206,.16)':'rgba(28,14,6,.18)');gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr;for(const ox of [-T,0,T])for(const oy of [-T,0,T]){g.save();g.translate(ox,oy);g.fillRect(x-r,y-r,2*r,2*r);g.restore();}}
+  g.lineCap='round';g.lineJoin='round';
+  for(let i=0;i<80;i++){let x=rnd()*T,y=rnd()*T,a=rnd()*6.28;const n=3+(rnd()*7|0);
+    g.strokeStyle=`rgba(22,10,4,${.35+rnd()*.35})`;g.lineWidth=.6+rnd()*.7;g.beginPath();g.moveTo(x,y);
+    for(let k=0;k<n;k++){a+=(rnd()-.5)*1.4;x+=Math.cos(a)*(5+rnd()*13);y+=Math.sin(a)*(5+rnd()*13);g.lineTo(x,y);}g.stroke();}
+  for(let i=0;i<1300;i++){const lt=rnd()<.45;g.fillStyle=lt?`rgba(255,246,228,${.25+rnd()*.35})`:`rgba(18,8,3,${.3+rnd()*.4})`;
+    g.beginPath();g.arc(rnd()*T,rnd()*T,.35+rnd()*1.05,0,6.28);g.fill();}
+  const ch=document.createElement('canvas');ch.width=ch.height=T;const h2=ch.getContext('2d');h2.fillStyle='#000';
+  for(let i=0;i<110;i++){const x=rnd()*T,y=rnd()*T,r=.8+rnd()*2.2;h2.beginPath();
+    for(let k=0;k<7;k++){const a=k/7*6.28,rr=r*(.6+rnd()*.7);k?h2.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr):h2.moveTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}h2.fill();}
+  return {glaze:c,chip:ch};}
+const TEX=mkTex();
+let glazeN,glazeU,chipN,chipU;
+function shard(ctx,pts,ww,col,seed){
   if(pts.length<2)return;
-  // trim each end a little so neighbouring shards leave a hairline seam
-  const trim=(a,b,d)=>{const L=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return [a[0]+(b[0]-a[0])*Math.min(d/L,.45),a[1]+(b[1]-a[1])*Math.min(d/L,.45)];};
-  const P2=pts.slice();P2[0]=trim(P2[0],P2[1],1.1);P2[P2.length-1]=trim(P2[P2.length-1],P2[P2.length-2],1.1);
-  const fire=(hsh(seed*3.1)-.5)*.16, w=ww*1.5*(.9+.2*hsh(seed*7.7));
-  const path=(ox,oy)=>{ctx.beginPath();P2.forEach((q,i)=>i?ctx.lineTo(q[0]+ox,q[1]+oy):ctx.moveTo(q[0]+ox,q[1]+oy));};
-  ctx.lineJoin='round';ctx.lineCap='butt';
-  ctx.globalAlpha=alpha*.22;ctx.strokeStyle='#0d1a1d';ctx.lineWidth=w+1.2;path(1.6,2.2);ctx.stroke();   // shadow on the water
-  ctx.globalAlpha=alpha;ctx.strokeStyle=shade(col,fire,0);ctx.lineWidth=w;path(0,0);ctx.stroke();      // the fired body
-  ctx.globalAlpha=alpha*.28;ctx.strokeStyle=shade(col,-.35,0);ctx.lineWidth=Math.max(1,w*.32);path(.5,w*.18);ctx.stroke(); // a darker glaze pooled on one side
+  const fire=(hsh(seed*3.1)-.5)*.2,w=ww*1.9*(.92+.16*hsh(seed*7.7));
+  ctx.lineJoin='round';ctx.lineCap='round';ctx.globalAlpha=1;
+  ctx.strokeStyle=shade(col,fire,0);ctx.lineWidth=w;
+  ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke();
+  // the join with the previous piece: a dark mended seam straight across the body
+  const a=pts[0],b=pts[1];let dx=b[0]-a[0],dy=b[1]-a[1];const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
+  const tilt=(hsh(seed*5.3)-.5)*.5,nx2=-dy+dx*tilt,ny2=dx+dy*tilt;
+  ctx.strokeStyle='rgba(20,10,5,.62)';ctx.lineWidth=1.1;ctx.lineCap='butt';
+  ctx.beginPath();ctx.moveTo(a[0]+nx2*w*.52,a[1]+ny2*w*.52);ctx.lineTo(a[0]-nx2*w*.52,a[1]-ny2*w*.52);ctx.stroke();ctx.lineCap='round';
 }
 function flushSegs(){
   for(const g of SEGS){g.z=g.zs/g.n;g.ww=g.ws/g.n;}
   SEGS.sort((p,q)=>q.z-p.z);
-  if(uC.width!==inkC.width||uC.height!==inkC.height){uC.width=inkC.width;uC.height=inkC.height;}
-  ux.setTransform(ix.getTransform());ux.clearRect(0,0,uC.width,uC.height);
-  let k=0,anyUnder=false;
-  for(const g of SEGS){k++;
-    if(g.under){anyUnder=true;shard(ux,g.pts,g.ww,g.col,k,1);}
-    else shard(ix,g.pts,g.ww,g.col,k,1);}
-  if(anyUnder){
-    // what lies beneath: darker, softer, held by the water
-    ix.save();ix.setTransform(1,0,0,1,0,0);
-    ix.filter='blur(2.2px) brightness(.62) saturate(.8)';ix.globalAlpha=.78;ix.drawImage(uC,0,0);
-    ix.restore();}
-  ix.globalAlpha=1;SEGS.length=0;}
+  let k=0;for(const g of SEGS){k++;shard(g.refl?rx:g.far?ux:nx,g.pts,g.refl?g.ww*.85:g.ww,g.col,k);}
+  SEGS.length=0;}
+function fireLayer(L,C,anchor,dpr){
+  // glaze and wear go only where there is clay
+  L.save();L.setTransform(1,0,0,1,0,0);
+  const pat=L.createPattern(TEX.glaze,'repeat'),chp=L.createPattern(TEX.chip,'repeat');
+  const m=new DOMMatrix().translate(anchor[0]*dpr,anchor[1]*dpr).scale(dpr*.85);
+  pat.setTransform(m);chp.setTransform(m.translate(91,57));
+  L.globalCompositeOperation='source-atop';L.fillStyle=pat;L.fillRect(0,0,C.width,C.height);
+  L.globalCompositeOperation='destination-out';L.globalAlpha=.9;L.fillStyle=chp;L.fillRect(0,0,C.width,C.height);
+  L.restore();}
 function quadColor(a){a=((a%360)+360)%360;return a<45||a>=315?POLE.KALA:a<135?POLE.TUKULA:a<225?POLE.LUVEMBA:POLE.MUSONI;}
 const colXY=q=>quadColor(Math.atan2(q[1]-CY(),q[0])*180/Math.PI);
 const colXZ=q=>quadColor(Math.atan2(q[2],q[0])*180/Math.PI);
@@ -1194,7 +1219,7 @@ const colKal=q=>q[0]>=0?POLE.KALA:POLE.LUVEMBA;
 const colAxis=q=>q[1]>=CY()?POLE.TUKULA:POLE.MUSONI;
 function circlePts(cx,cy,cz,r,plane,seed,a0,a1,n){const out=[];
   for(let i=0;i<=n;i++){const u=i/n,th=a0+(a1-a0)*u;
-    const rr=r*(1+.016*Math.sin(2*th+seed)+.011*Math.sin(5*th+seed*2.1)+.02*(u-.5)*(a1-a0>6.3?1:0));
+    const rr=r*(1+.012*Math.sin(2*th+seed)+.008*Math.sin(5*th+seed*2.1));
     const c=Math.cos(th)*rr,s=Math.sin(th)*rr;out.push(plane==='xy'?[cx+c,cy+s,cz]:[cx+c,cy,cz+s]);}return out;}
 function linePts(a,b,n){const o=[];for(let i=0;i<=n;i++){const u=i/n;o.push([a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u,a[2]+(b[2]-a[2])*u]);}return o;}
 function nodePos(c){const th=c.angle*Math.PI/180;return [Math.cos(th)*R,CY()+Math.sin(th)*R,0];}
@@ -1202,54 +1227,67 @@ function mkLabel(txt,cls){const d=document.createElement('div');d.className='lab
 const momEls={};for(const k in MOM){momEls[k]=mkLabel(k,'mom');momEls[k].style.color=LABCOL[k];}
 NODES.forEach(c=>{c._el=mkLabel(c.name,'nd');c._el.setAttribute('role','button');c._el.tabIndex=0;c._el.onclick=()=>openC(c.id);c._el.onkeydown=e=>{if(e.key==='Enter')openC(c.id);};});
 let hitList=[];
+function wob(s,rr,n,k,ph){const o=[];for(let i=0;i<=n;i++){const th=i/n*6.2832;const q=rr*(1+.05*Math.sin(th*2+ph)+.03*Math.sin(th*3+k));o.push([s[0]+Math.cos(th)*q,s[1]+Math.sin(th)*q]);}return o;}
+function poly(L,pts){L.beginPath();pts.forEach((q,i)=>i?L.lineTo(q[0],q[1]):L.moveTo(q[0],q[1]));L.closePath();}
 function draw(now,camv){
-  CV=camv;const t=now/1000,dpr=Math.min(devicePixelRatio||1,2),w=inkC.clientWidth,h=inkC.clientHeight;
-  if(inkC.width!==Math.round(w*dpr)||inkC.height!==Math.round(h*dpr)){inkC.width=Math.round(w*dpr);inkC.height=Math.round(h*dpr);}
-  ix.setTransform(dpr,0,0,dpr,0,0);ix.clearRect(0,0,w,h);
+  CV=camv;camUnder=CV.ro[1]<CY();
+  const t=now/1000,dpr=Math.min(devicePixelRatio||1,2),w=inkC.clientWidth,h=inkC.clientHeight;
+  const W2=Math.round(w*dpr),H2=Math.round(h*dpr);
+  for(const C of [inkC,nC,uC,rC])if(C.width!==W2||C.height!==H2){C.width=W2;C.height=H2;}
+  for(const L of [ix,nx,ux,rx]){L.setTransform(dpr,0,0,dpr,0,0);L.clearRect(0,0,w,h);L.globalAlpha=1;L.globalCompositeOperation='source-over';}
   labs$.style.display=on?'block':'none';if(!on){hitList=[];return;}
   const cy=CY(),sc=Math.min(1.25,Math.max(.8,Math.min(w,h)/700));
   const spin=t*.07,spin2=-t*.05;
-  stroke(circlePts(0,cy,0,R,'xy',1.3,-.55+spin,-.55+spin+6.28+.26,150),1,8.6*sc,t,{color:colXY});
-  stroke(circlePts(0,cy,0,R*1.006,'xy',4.1,1.9+spin*1.7,1.9+spin*1.7+3.1,70),2,3.0*sc,t,{jit:.01,color:colXY});
-  stroke(circlePts(0,cy,0,R*.46,'xy',2.2,.4,.4+6.28+.2,90),3,4.6*sc,t,{color:colXY});
-  stroke(circlePts(0,cy,0,R,'xz',5.7,.2+spin2,.2+spin2+6.28+.22,120),4,4.2*sc,t,{jit:.007,flat:true,color:colXZ});
-  stroke(linePts([-R*1.55,cy,0],[R*1.55,cy,0],40),5,6.4*sc,t,{flat:true,jit:.004,color:colKal});
-  stroke(linePts([0,cy+R*1.2,0],[0,cy-R*1.2,0],60),6,6.4*sc,t,{solid:false,color:colAxis});
-  [[0,1],[Math.PI/2,2],[Math.PI,3],[Math.PI*1.5,4]].forEach(([th,k])=>{
-    const q=[Math.cos(th)*R*1.09,cy+Math.sin(th)*R*1.09,0],r0=[Math.cos(th)*R*.93,cy+Math.sin(th)*R*.93,0];
-    stroke(linePts(r0,q,6),20+k,4.4*sc,t,{color:()=>quadColor(th*180/Math.PI)});});
+  stroke(circlePts(0,cy,0,R,'xy',1.3,-.55+spin,-.55+spin+6.2832,150),1,8.8*sc,t,{color:colXY});
+  stroke(circlePts(0,cy,0,R*.46,'xy',2.2,.4,.4+6.2832,90),3,6.8*sc,t,{color:colXY});
+  stroke(circlePts(0,cy,0,R,'xz',5.7,.2+spin2,.2+spin2+6.2832,120),4,6.0*sc,t,{jit:.005,flat:true,color:colXZ});
+  stroke(linePts([-R*1.2,cy,0],[R*1.2,cy,0],40),5,7.4*sc,t,{flat:true,jit:.004,color:colKal});
+  stroke(linePts([0,cy+R*1.2,0],[0,cy-R*1.2,0],60),6,7.8*sc,t,{color:colAxis});
+  if(!camUnder){
+    stroke(circlePts(0,cy,0,R,'xy',1.3,-.55+spin,-.55+spin+6.2832,150),11,8.8*sc,t,{color:colXY,mirror:true});
+    stroke(circlePts(0,cy,0,R*.46,'xy',2.2,.4,.4+6.2832,90),13,6.8*sc,t,{color:colXY,mirror:true});
+    stroke(linePts([0,cy+R*1.2,0],[0,cy,0],30),16,7.8*sc,t,{color:colAxis,mirror:true});}
   flushSegs();
   hitList=[];
-  // the four poles at the ends of the cross: large open circles, like the drawn cosmogram
+  // the four poles: open circles where the arms of the cross end. The clay inside each is cleared,
+  // so each arm meets its circle cleanly at the rim.
   [['TUKULA',[0,cy+R*1.2,0]],['KALA',[R*1.2,cy,0]],['LUVEMBA',[-R*1.2,cy,0]],['MUSONI',[0,cy-R*1.2,0]]].forEach(([k,p])=>{
-    const s=proj(ripple(p,t,p[1]));if(!s)return;const under=p[1]<cy-.01,sink=under?.32:0;
-    const r=Math.max(15,Math.min(32,.09*(h/s[2])*.55*1.9));const pc=POLE[k];
-    const ringAt=rr=>{const o=[];for(let i=0;i<=30;i++){const th=-.2+i/30*(6.28+.35);const q=rr*(1+.06*Math.sin(th*2+MOM[k])+.04*Math.sin(th*3));o.push([s[0]+Math.cos(th)*q,s[1]+Math.sin(th)*q]);}return o;};
-    const path=pts=>{ix.beginPath();pts.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));};
-    // an open circle drawn in two passes, like a hand going round twice; no fill, the water shows through
-    ix.save();if(under){ix.filter='blur(1.6px) brightness(.62)';}
-    ix.lineCap='round';
-    ix.globalAlpha=.22;ix.strokeStyle='#0d1a1d';ix.lineWidth=9*sc;path(ringAt(r).map(q=>[q[0]+1.6,q[1]+2.2]));ix.stroke();
-    ix.globalAlpha=under?.8:1;ix.strokeStyle=shade(pc,0,0);ix.lineWidth=8.5*sc;path(ringAt(r));ix.stroke();
-    ix.globalAlpha=under?.5:.7;ix.strokeStyle=shade(pc,-.25,0);ix.lineWidth=2.4*sc;path(ringAt(r*.78).slice(4,26));ix.stroke();
-    ix.restore();ix.globalAlpha=1;
+    const s=proj(ripple(p,t,p[1]));if(!s)return;const L=farSide(p[1])?ux:nx;
+    const r=Math.max(16,Math.min(34,.1*(h/s[2])*.55*1.9)),rw=11*sc;
+    L.globalCompositeOperation='destination-out';poly(L,wob(s,r-rw*.1,40,1,MOM[k]));L.fill();
+    L.globalCompositeOperation='source-over';
+    L.strokeStyle=shade(POLE[k],(hsh(MOM[k]+1)-.5)*.12,0);L.lineWidth=rw;poly(L,wob(s,r,40,1,MOM[k]));L.stroke();
+    L.strokeStyle='rgba(20,10,5,.5)';L.lineWidth=1.1;L.beginPath();const sa=wob(s,r,40,1,MOM[k]);
+    const j=(hsh(MOM[k]*3)*40)|0;const q=sa[j],q2=sa[(j+1)%41];let dx=q2[0]-q[0],dy=q2[1]-q[1];const LL=Math.hypot(dx,dy)||1;
+    L.moveTo(q[0]-dy/LL*rw*.52,q[1]+dx/LL*rw*.52);L.lineTo(q[0]+dy/LL*rw*.52,q[1]-dx/LL*rw*.52);L.stroke();
     hitList.push({c:{id:'pole-'+k,pole:k},x:s[0],y:s[1],pole:true});});
+  if(!camUnder){const p=[0,cy-R*1.2,0],s=proj(ripple(p,t,p[1]));
+    if(s){const r=Math.max(16,Math.min(34,.1*(h/s[2])*.55*1.9));rx.strokeStyle=shade(POLE.TUKULA,0,0);rx.lineWidth=9*sc;poly(rx,wob(s,r,40,1,90));rx.stroke();}}
+  // concept beads ride the ring, solid clay in the colour of their part of the circle
   const labs=[];
-  NODES.forEach(c=>{const p=nodePos(c),s=proj(p);if(!s){c._el.style.display='none';return;}
-    const rad=.036*(h/s[2])*.55;const px=Math.max(8,Math.min(14,rad));
-    const sel=c.id===selId,under=p[1]<cy-.01,sink=under?.3:0;
-    const ringAt=r=>{const o=[];for(let i=0;i<=26;i++){const th=-.3+i/26*(6.28+.5);const rr=r*(1+.14*Math.sin(th*2+c.angle)+.07*Math.sin(th*3+1));o.push([s[0]+Math.cos(th)*rr,s[1]+Math.sin(th)*rr]);}return o;};
-    const ring=ringAt(px),ring2=ringAt(px-2.2);
-    ix.lineCap='round';ix.lineJoin='round';
+  NODES.forEach(c=>{const p=nodePos(c),s=proj(ripple(p,t,p[1]));if(!s){c._el.style.display='none';return;}
+    const far=farSide(p[1]),L=far?ux:nx;
+    const px=Math.max(9,Math.min(16,.04*(h/s[2])*.55));const sel=c.id===selId;
     const col=POLE[c.moment]||'#111111';
-    ix.save();if(under)ix.filter='blur(1.4px) brightness(.62)';
-    ix.globalAlpha=.22;ix.fillStyle='#0d1a1d';ix.beginPath();ring.forEach((q,i)=>i?ix.lineTo(q[0]+1.4,q[1]+2):ix.moveTo(q[0]+1.4,q[1]+2));ix.fill();
-    ix.globalAlpha=under?.82:1;ix.fillStyle=shade(col,0,0);ix.beginPath();ring.forEach((q,i)=>i?ix.lineTo(q[0],q[1]):ix.moveTo(q[0],q[1]));ix.fill();
-    ix.globalAlpha=under?.6:.9;ix.strokeStyle=shade(col,-.45,0);ix.lineWidth=(sel?2.4:1.4)*sc;ix.stroke();
-    ix.restore();ix.globalAlpha=1;
+    L.fillStyle=shade(col,(hsh(c.angle)-.5)*.14,0);poly(L,wob(s,px,26,2,c.angle));L.fill();
+    L.strokeStyle='rgba(20,10,5,.55)';L.lineWidth=sel?2.6:1.3;L.stroke();
     hitList.push({c,x:s[0],y:s[1]});
-    const cs=proj([0,cy,0])||s;let dx=s[0]-cs[0],dy=s[1]-cs[1];const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
-    labs.push({c,el:c._el,x:s[0]+dx*(px+9),y:s[1]+dy*(px+9),dx,dy,px,under});});
+    const cs=proj([0,cy,0])||s;let dx=s[0]-cs[0],dy=s[1]-cs[1];const Ln=Math.hypot(dx,dy)||1;dx/=Ln;dy/=Ln;
+    labs.push({c,el:c._el,x:s[0]+dx*(px+10),y:s[1]+dy*(px+10),dx,dy,px,under:far});});
+  // fire both layers, then set them into the scene
+  const anc=proj([0,cy,0])||[w/2,h/2];
+  fireLayer(nx,nC,anc,dpr);fireLayer(ux,uC,anc,dpr);
+  if(!camUnder){
+    rx.save();rx.setTransform(dpr,0,0,dpr,0,0);rx.globalCompositeOperation='destination-out';rx.strokeStyle='#000';
+    for(let y=0;y<h;y+=4.5){const k=y*.11+t*.9;rx.globalAlpha=.35+.35*Math.sin(k*1.7);rx.lineWidth=1.2+1.4*(.5+.5*Math.sin(k*.6+t*.4));
+      rx.beginPath();rx.moveTo(0,y+Math.sin(k)*1.2);rx.lineTo(w,y+Math.sin(k+2.1)*1.2);rx.stroke();}
+    rx.restore();
+    ix.save();ix.setTransform(1,0,0,1,0,0);ix.filter='blur(1.8px) saturate(.85)';ix.globalAlpha=.42;ix.drawImage(rC,0,0);ix.restore();}
+  ix.save();ix.setTransform(1,0,0,1,0,0);
+  ix.filter='blur(2.6px) brightness(.56) saturate(.75)';ix.globalAlpha=.8;ix.drawImage(uC,0,0);
+  ix.filter='none';ix.globalAlpha=1;
+  ix.shadowColor='rgba(8,20,24,.38)';ix.shadowBlur=5*dpr;ix.shadowOffsetX=2*dpr;ix.shadowOffsetY=3*dpr;ix.drawImage(nC,0,0);
+  ix.restore();
   labs.sort((a,b)=>a.y-b.y);
   for(let k=0;k<2;k++)for(let i=1;i<labs.length;i++){if(labs[i].y-labs[i-1].y<15)labs[i].y=labs[i-1].y+15;}
   let side=0;
@@ -1257,10 +1295,11 @@ function draw(now,camv){
     if(Math.abs(o.dx)<.55){side++;x=o.x+(side%2?42:-42);tx=side%2?'0':'-100%';ty='-50%';}
     const el=o.el;el.style.display='block';el.style.left=x+'px';el.style.top=o.y+'px';el.style.transform=`translate(${tx},${ty})`;
     if(w<600){const bx=el.getBoundingClientRect(),lx=bx.left;if(lx<6)el.style.left=(parseFloat(el.style.left)+6-lx)+'px';else if(lx+bx.width>w-6)el.style.left=(parseFloat(el.style.left)-(lx+bx.width-w+6))+'px';}
-    el.classList.toggle('sel',o.c.id===selId);el.style.opacity=o.under?.6:1;el.style.filter=o.under?'blur(.35px)':'';});
-  for(const k in MOM){const th=MOM[k]*Math.PI/180,s=proj([Math.cos(th)*R*1.5,cy+Math.sin(th)*R*1.5,0]);
+    el.classList.toggle('sel',o.c.id===selId);el.style.opacity=o.under?.55:1;el.style.filter=o.under?'blur(.6px)':'';});
+  for(const k in MOM){const th=MOM[k]*Math.PI/180,p=[Math.cos(th)*R*1.52,cy+Math.sin(th)*R*1.52,0],s=proj(p);
     const el=momEls[k];if(!s){el.style.display='none';continue;}
-    el.style.display='block';el.style.left=Math.max(34,Math.min(w-34,s[0]))+'px';el.style.top=Math.max(14,Math.min(h-14,s[1]-(k==='KALA'||k==='LUVEMBA'?26:0)))+'px';}
+    el.style.display='block';el.style.opacity=farSide(p[1])?.6:1;el.style.filter=farSide(p[1])?'blur(.6px)':'';
+    el.style.left=Math.max(34,Math.min(w-34,s[0]))+'px';el.style.top=Math.max(14,Math.min(h-14,s[1]-(k==='KALA'||k==='LUVEMBA'?30:0)))+'px';}
 }
 const cpEl=$('cp');
 const esc=x=>String(x==null?'':x).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
@@ -1348,6 +1387,7 @@ function frame(now){
   else if(showThumb&&!hoverOn){tx.drawImage(cap,0,0,th.width,th.height);}
   if((++tick%20)===0||tick<3)$('stat').textContent=`${W}x${H}  ${fpsS.toFixed(0)} fps  ${N} frames  ${mode==='arch'?'GO':'folder'} ${SHEETS?slotItem.filter(Boolean).length+' on the water of '+SHEETS.items.length:(lib.length||bakedTiles.length)+' of '+(GO.length||'?')} imgs  res ${Math.round(dyn*100)}%  water ${simOK?'on':'off'}  swells ${P.nsw} up ${B.filter(b=>b.rise>.35).length}  slowmo ${P.slow}${paused?'  paused':''}`;
   COSMO.draw(now,c);
+  if(!document.body.classList.contains('ready')&&tick>2)document.body.classList.add('ready');
   requestAnimationFrame(frame);}
 requestAnimationFrame(frame);
 // test hook: ?t=SECONDS pre-rolls clock, swells, water and frames before the first paint
