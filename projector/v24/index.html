@@ -770,7 +770,16 @@ async function sheetBlob(i){
     const b=await r.blob();try{pcache&&await pcache.put(key,new Response(b,{headers:{'content-type':'image/webp'}}));}catch(e){}
     return b;})();
 }
+async function tilesFromUrl(items){
+  // GO images that live on museum sites and are not in a sheet yet: fetched one by one
+  const out=[];for(const it of items){try{const r=await fetch(it.url,{mode:'cors'});if(!r.ok)continue;
+    const bm=await createImageBitmap(await r.blob());const c=document.createElement('canvas');const T=SHEETS.tile;c.width=c.height=T;
+    const sc=Math.max(T/bm.width,T/bm.height);c.getContext('2d').drawImage(bm,(T-bm.width*sc)/2,(T-bm.height*sc)/2,bm.width*sc,bm.height*sc);bm.close&&bm.close();
+    out.push({it,c:toTile(c),thumb:thumbOf(c)});}catch(e){it.bad=true;}}
+  return out;
+}
 async function tilesFromSheet(i,items){
+  if(i<0)return tilesFromUrl(items);
   // decode a sheet once (off the main thread), cut out the photos we need, let it go
   const b=await sheetBlob(i);if(!b)return [];
   const bm=await createImageBitmap(b);const T=SHEETS.tile,C=SHEETS.cols;const out=[];
@@ -786,13 +795,16 @@ async function loadSheets(){
   try{pcache='caches' in window?await caches.open('ba-projector'):null;
     if(pcache){const keep=new Set(SHEETS.sheets.map(sh=>`https://ba-projector.cache/${sh.path}?v=${sh.sha}`));
       for(const req of await pcache.keys())if(!keep.has(req.url))pcache.delete(req);}}catch(e){pcache=null;}
+  // add GO images not packed yet (outside-hosted ones, or published since the last pack)
+  try{const lr=await gh('v4/library/index.json');if(lr.ok){const inS=new Set(SHEETS.items.map(i=>i.id));
+    for(const i of (JSON.parse(await lr.text()).items||[]))if(i.preview&&!inS.has(i.id)&&/^https?:/.test(i.preview))SHEETS.items.push({id:i.id,title:i.title||i.id,sheet:-1,cell:0,url:i.preview});}}catch(e){}
   GO=SHEETS.items;frozen=true;
   await fillWater();
   return true;
 }
 async function fillWater(){
   const my=++drawN;queue2=shuffle(SHEETS.items.slice());qi=0;slotItem.fill(null);
-  const first=queue2.slice(0,N);qi=first.length;
+  const first=queue2.filter(i=>i.sheet>=0).slice(0,N);qi=0;
   const bySheet={};first.forEach((it,k)=>{(bySheet[it.sheet]=bySheet[it.sheet]||[]).push(Object.assign({slot:k},it));});
   let done=0;const sheetIds=Object.keys(bySheet);let next=0;
   await Promise.all(Array.from({length:4},async()=>{while(next<sheetIds.length&&my===drawN){const id=+sheetIds[next++];
@@ -801,12 +813,12 @@ async function fillWater(){
 }
 // every few seconds one photo sinks and the next one in the set surfaces in its place
 function nextItem(){const on=new Set(slotItem.filter(Boolean).map(x=>x.id));
-  for(let k=0;k<queue2.length;k++){const it=queue2[qi%queue2.length];qi++;if(qi>=queue2.length){qi=0;shuffle(queue2);}if(!on.has(it.id))return it;}return null;}
+  for(let k=0;k<queue2.length;k++){const it=queue2[qi%queue2.length];qi++;if(qi>=queue2.length){qi=0;shuffle(queue2);}if(!on.has(it.id)&&!it.bad)return it;}return null;}
 function stepSwap(dt){
   if(!SHEETS||mode!=='arch'||queue2.length<=N)return;
   const S=swap;
   if(S.phase===0){S.t+=dt;if(S.t>=P.turn&&!S.busy){S.t=0;const it=nextItem();if(!it)return;S.busy=true;
-      tilesFromSheet(it.sheet,[it]).then(r=>{S.busy=false;if(!r.length)return;S.next=r[0];S.slot=Math.floor(Math.random()*N);S.phase=1;S.fade=0;});}}
+      tilesFromSheet(it.sheet,[it]).then(r=>{S.busy=false;if(!r.length){it.bad=true;S.t=P.turn;return;}S.next=r[0];S.slot=Math.floor(Math.random()*N);S.phase=1;S.fade=0;});}}
   else if(S.phase===1){S.fade=Math.min(1,S.fade+dt/1.2);if(S.fade>=1){const t=S.next;writeSlot(S.slot,t.c);slotItem[S.slot]=t.it;slotObj[S.slot]={c:t.thumb,name:t.it.title};if(hoverSlot===S.slot)hoverSlot=-1;S.phase=2;}}
   else if(S.phase===2){S.fade=Math.max(0,S.fade-dt/1.2);if(S.fade<=0){S.phase=0;S.slot=-1;}}
 }
