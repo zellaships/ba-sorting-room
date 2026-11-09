@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Reads the GO images live from the Black Aquatics v4 library (v4/library in zellaships/black-aquatics-research), using the key saved by the Sorting Room on this site. -->
+<title>VES - Strange Projector, water body study v24</title>
+<style>
+:root{--bg:#b9b9b6;--ink:#111;--panel:#d9d9d5;--line:#111}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.35 ui-monospace,Menlo,Consolas,monospace;overscroll-behavior:none}
+#stage{position:fixed;inset:0}
+canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;outline:none}
+canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
+.tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
+#stat{position:absolute;left:0;top:25px;background:var(--panel);border:2px solid var(--line);border-left:0;padding:3px 8px;font-size:11px;z-index:2;max-width:70vw}
+#thumbs{position:absolute;right:8px;top:8px;width:112px;height:112px;border:2px solid #000;background:#222;z-index:2}
+body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
+#ver{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:3;display:flex;gap:0;font:12px/1 ui-monospace,Menlo,monospace}
+#ver a,#ver b{display:block;padding:6px 12px;border:2px solid #000;background:#ddd;color:#000;text-decoration:none}#ver b{background:#000;color:#fff}#ver a:hover{background:#fff}
+#cap{position:absolute;right:8px;top:124px;width:112px;background:#000;color:#fff;font-size:10px;line-height:1.2;padding:2px 3px;word-break:break-word;max-height:6.5em;overflow:hidden;z-index:2}
+#panel{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--panel);border-top:2px solid var(--line);display:flex;flex-direction:column;max-height:64vh}
+#phead{margin:0}
+#ptoggle{width:100%;font:inherit;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:left;background:#000;color:#fff;border:0;padding:10px 12px;cursor:pointer;min-height:44px}
+#ptoggle:focus-visible{outline:3px solid #fff;outline-offset:-3px}
+#pbody{padding:8px 10px 12px;overflow:auto}
+#panel.min #pbody{display:none}
+#pbody p{margin:0 0 8px;max-width:78ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px}
+label{display:flex;flex-direction:column;gap:2px}
+label span{display:flex;justify-content:space-between;gap:8px}
+input[type=range]{width:100%;min-height:32px}
+select,button{font:inherit;background:#fff;border:2px solid var(--line);padding:6px 8px;min-height:40px}
+button{cursor:pointer}
+button[aria-pressed=true]{background:#000;color:#fff}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+#folderWrap{display:none;flex-direction:column;gap:4px}
+#fallback{display:none;position:fixed;inset:0;padding:2em;background:var(--bg);z-index:9}
+</style>
+</head>
+<body>
+<div id="stage">
+ <canvas id="gl" tabindex="0" role="img" aria-label="A whole body of water fills the screen, its surface made of the GO archive photographs carried by the water, never vanishing. The photographs gather along the real ridge lines of the waves and join into one connected body of water-shaped forms with curved, flowing borders, with whitecaps in slow motion. Move the mouse to ease through many images; drag to stir; wheel zooms."></canvas>
+ <div class="tag">Under v24</div>
+ <div id="ver"><a href="../">v21</a><a href="../v23/">v23</a><b>v24</b></div>
+ <canvas id="thumbs" width="192" height="192" aria-label="Current source frame"></canvas>
+ <div id="cap" aria-live="off"></div>
+ <div id="stat" role="status" aria-live="polite">starting</div>
+</div>
+<div id="panel" class="min">
+ <h1 id="phead"><button id="ptoggle" aria-expanded="false" aria-controls="pbody">VES / Strange Projector water body study v24 - controls +</button></h1>
+ <div id="pbody">
+  <p><b>v24:</b> every GO image now passes through the water. About 100 ride it at a time; every few seconds one sinks under the foam and a new one surfaces in its place, so the whole set cycles through. Photos arrive packed in sheets and are kept in this browser, so the second visit opens at once. The picture sharpness adjusts itself to hold a smooth frame rate.</p>
+  <p><b>v23:</b> the water now has real height (crests hide what is behind them), waves travel at their natural speeds (long swells faster than chop) with sharp crests and wide troughs, the surface reflects the sky the way water does, and the haze is lighter. Photos stay part of the water, but calm glassy patches drift across the surface and let a photo come through for a moment before the chop takes it back. The corner shows whatever photo the mouse is touching.</p>
+  <p>The water is the archive now, ninety-six photographs deep: contemporary water photography next to historic prints, paintings and expedition pictures, every one of them held in the water for good, carried and bent by the current. The images take shape from the lines the water already makes: the live wave ridges divide the surface into long connected bands, and every band runs our waterfall code - slit-scan image offsets, stretch, smear and soft borders - so the photographs gather and connect along the ridge lines in different water-shaped forms.</p>
+  <p>What is ours: the image cells are bands of the live wave-height field, so their borders are the water's own ridge lines; every slice edge now curves with the band, no straight cuts anywhere, and the lines stay lake-like - long parallel wind-wave trains with a natural wobble. The baked set is a private research sample of the flat master archive, weighted toward contemporary water photographs. No faces or portraits, no drawn lines, just water made of images. v8 turned the legibility up: longer calmer slices, brighter bodies, thinner fog and foam, so each photograph reads in clear glimmers through the water. v9 rebaked the sample without the face-dominant tiles, keeping the no-faces rule. v10 pushed visibility and feathered hard edges. v11 let each photo ride the water nearly whole, no mirroring, feathered alpha blends only. v12 breaks the last grid our way: cells ride a domain-warped flow field so no straight runs survive, each photo slowly swirls while staying readable (in the spirit of Eversole's #580 whirlpool remap, not a copy), frame-age stripes run inside the still photos like his #541 slit-scan planes, and atlas tiles carry edge-replicated gutters so distant speckle is gone. v13 goes under: the camera sinks beneath the surface, the gray ground and the stone mounds are gone, and the archive becomes a volume - photo layers stacked at depths, each drifting on its own current with parallax, light shafts and depth haze around them, the living photo surface as a bright ceiling overhead (the shafts and suspended layers nod to Eversole's #577 ocean block, in our own flow). The mouse no longer drives the scene: only a faint local touch where the cursor passes. v14 is the legibility pass: cells are taller and longer so each photograph gets a bigger coherent patch, tiles sample the photo in the cell's own wide aspect so the stretch is gone, internal wobble and slit-scan banding are calmer, and the column is brighter with more contrast and thinner haze. v15 keeps every photograph for good: no more flipping or fading, no photo ever leaves - each one is pinned to its parcel of water and travels wherever the wave carries it, stretching and bending into new shapes as the surface moves. Above, the sky is Caribbean aqua and the surface stays restless - fine chop trains, crests and foam carrying the photographs; v16 removes the dashed edges at the root: cell rims no longer sample each photo's extreme edge column (scan margins painted a white or dark pin-stripe on every rim, which aliased into Morse dashes) - the sample window now stays 5% inside the photo; the atlas mip level also comes from the per-tile uv instead of implicit derivatives that explode across borders; the border feather sits ON the border toward the correct neighbor, wide enough that seams dissolve into the colors touching them; cells meander harder so no rectangular silhouettes survive up close; and cells that shrink toward pixel size melt into one sea tone so the far field comes close and dissipates instead of ruling lines, with foam and haze fading with distance. And it rains: sparse juicy drops splash softly and push expanding rings through the same field the photos ride, so the image-water ripples outward from every drop - subtle, never stormy. v17 polishes the last seam artifact: the photo window now eases in with a smooth tanh squash instead of a hard clamp, so no stretched rim column survives, and the border feather is now centred on the seam at exactly half strength, so both sides meet at the same 50/50 blend - continuous by construction, zero one-pixel steps at any zoom. And the long straight diagonal trains are gone: the whole ridge field now rides a slow large-scale warp, so crests bend, merge and fork like waves working toward a shore, and the cell spacing itself breathes along every band so no uniform grid survives. The rain comes down from the sky now: visible drops streak through the frame and strike the surface with bright little splashes and rings that carry through the photos.</p>
+  <div class="grid">
+   <label>Source
+    <select id="src" aria-label="Source">
+     <option value="arch" selected>GO images (v4 live)</option>
+     <option value="folder">My archive folder (live rescan)</option>
+    </select>
+   </label>
+   <div id="folderWrap">
+    <div class="row" style="margin:0"><button id="pick" type="button">Choose archive folder</button><button id="rescan" type="button">Rescan now</button><button id="liveBtn" type="button" aria-pressed="true">Live rescan</button></div>
+    <span id="folderMsg" role="status" aria-live="polite">Pick the downloaded flat master folder, or drop a folder or images on the page.</span>
+   </div>
+   <label><span>Shell spacing <output id="o_iso"></output></span><input type="range" id="iso" min="0.04" max="0.2" step="0.005" value="0.13"></label>
+   <label><span>Frames per shell <output id="o_layer"></output></span><input type="range" id="layer" min="0" max="10" step="0.25" value="0.75"></label>
+   <label><span>Depth span (frames) <output id="o_span"></output></span><input type="range" id="span" min="0" max="48" step="1" value="7"></label>
+   <label><span>Time warp / streaks <output id="o_smear"></output></span><input type="range" id="smear" min="0" max="1.5" step="0.05" value="0.12"></label>
+   <label><span>Rainbow edge <output id="o_chroma"></output></span><input type="range" id="chroma" min="0" max="6" step="0.1" value="0.25"></label>
+   <label><span>Water warp <output id="o_adv"></output></span><input type="range" id="adv" min="0" max="0.6" step="0.02" value="0.1"></label>
+   <label><span>Swells <output id="o_nsw"></output></span><input type="range" id="nsw" min="0" max="12" step="1" value="0"></label>
+   <label><span>Slow motion <output id="o_slow"></output></span><input type="range" id="slow" min="0.15" max="1" step="0.05" value="0.5"></label>
+   <label><span>Water is images <output id="o_wmix"></output></span><input type="range" id="wmix" min="0" max="1" step="0.05" value="1"></label>
+   <label><span>Drift (images/s) <output id="o_fps"></output></span><input type="range" id="fps" min="0" max="40" step="1" value="6"></label>
+   <label><span>Touch scrub <output id="o_scrub"></output></span><input type="range" id="scrub" min="0" max="3" step="0.05" value="1"></label>
+   <label><span>Whitecaps / foam <output id="o_foam"></output></span><input type="range" id="foam" min="0" max="2.5" step="0.05" value="0.45"></label>
+   <label><span>Rain <output id="o_rain"></output></span><input type="range" id="rain" min="0" max="2" step="0.05" value="0.7"></label>
+   <label><span>Rise / crash pace <output id="o_rise"></output></span><input type="range" id="rise" min="0" max="3" step="0.05" value="1"></label>
+   <label><span>New photo every (seconds) <output id="o_turn"></output></span><input type="range" id="turn" min="1" max="30" step="1" value="4"></label>
+   <label><span>Glimpses (calm patches) <output id="o_glimpse"></output></span><input type="range" id="glimpse" min="0" max="1" step="0.05" value="0.5"></label>
+   <label><span>Wave height <output id="o_disp"></output></span><input type="range" id="disp" min="0" max="0.8" step="0.02" value="0.3"></label>
+   <label><span>Sky reflection <output id="o_refl"></output></span><input type="range" id="refl" min="0" max="1.5" step="0.05" value="1"></label>
+   <label><span>Water level <output id="o_wlvl"></output></span><input type="range" id="wlvl" min="-0.55" max="0.25" step="0.01" value="-0.15"></label>
+   <label>Quality
+    <select id="q" aria-label="Quality"><option value="0">Low</option><option value="1" selected>Medium</option><option value="2">High</option></select>
+   </label>
+  </div>
+  <div class="row">
+   <button id="pause" aria-pressed="false">Pause</button>
+   <button id="thumbBtn" aria-pressed="true">Source inset</button>
+   <button id="reset">Reset view</button>
+   <button id="push">Stir the water</button>
+   <button id="redraw">Shuffle the water</button>
+   <button id="proj">Projection mode (P)</button>
+  </div>
+ </div>
+</div>
+<div id="fallback" role="alert">This browser has no WebGL 2. Open the file in a current Chrome, Safari or Firefox.</div>
+<script>
+(async()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const cv=$('gl'), gl=cv.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
+if(!gl){$('stage').style.display='none';$('panel').style.display='none';$('fallback').style.display='block';return;}
+
+const N=100, COLS=10, TILE=(gl&&gl.getParameter(gl.MAX_TEXTURE_SIZE)>=5120)?512:384, ATLAS=COLS*TILE, NB=12;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sprScale=Math.min(1,(innerWidth/Math.max(innerHeight,1))*1.15);
+const coarse=matchMedia('(pointer:coarse)').matches;
+
+const vs=`#version 300 es
+in vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
+const fs=`#version 300 es
+precision highp float;
+uniform vec2 u_res;uniform float u_glimpse,u_disp,u_refl,u_pickOn;uniform vec2 u_pickXY;
+float g_pick=-1.;float g_far=0.;uniform vec2 u_swap;
+uniform float u_t,u_wt,u_head,u_iso,u_layer,u_span,u_smear,u_chroma,u_adv,u_simOK,u_steps,u_wy,u_foam,u_wmix,u_under,u_rain,u_pt;
+uniform int u_bn;
+uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec4 u_b[12];uniform vec4 u_cr[4];
+uniform sampler2D u_atlas,u_sim;
+out vec4 o;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
+float smin(float a,float b,float k){float h=max(k-abs(a-b),0.)/k;return min(a,b)-h*h*k*.25;}
+// the swells: flattened image mounds, each with its own position, size and rise phase
+float field(vec3 p){
+  float d=1e3;
+  for(int i=0;i<12;i++){
+    if(i>=u_bn)break;
+    vec3 q=p-u_b[i].xyz;q.y*=2.0;
+    d=smin(d,length(q)-u_b[i].w,.12);
+  }
+  d+=.03*sin(p.z*5.+u_wt*1.6+p.x*2.);
+  return d;
+}
+vec3 grad(vec3 p){vec2 e=vec2(.012,0.);
+  return normalize(vec3(field(p+e.xyy)-field(p-e.xyy),field(p+e.yxy)-field(p-e.yxy),field(p+e.yyx)-field(p-e.yyx)));}
+vec2 wat(vec3 p){
+  if(u_simOK>.5)return clamp(texture(u_sim,(p.xy/2.4)+.5).xy,vec2(-1.1),vec2(1.1));
+  return vec2(sin(p.y*4.1+u_t*.9)+.4*sin(p.y*9.7-u_t*1.7),cos(p.x*3.7-u_t*.8)+.4*cos(p.x*8.3+u_t*1.4))*.3;
+}
+vec3 tileAt(vec2 uv,float i,float lod){
+  float s=mod(i,100.);vec2 c=vec2(mod(s,10.),floor(s/10.));
+  vec3 col=textureLod(u_atlas,(c+clamp(uv,.03,.97))/10.,lod).rgb;
+  // a photo being replaced sinks into sea tone, then the new one surfaces
+  if(abs(s-u_swap.x)<.5)col=mix(col,vec3(.36,.48,.50),u_swap.y);
+  return col;}
+vec3 frameAt(vec2 uv,float age,float pool,float lod){
+  float idx=u_head-age;float i0=floor(idx);float f=(idx-i0)*(1.-pool*.9);
+  return mix(tileAt(uv,i0,lod),tileAt(uv,i0+1.,lod),f);}
+// band spacing breathes along the band: cells pinch and widen, no even rows
+float bandK(float R,float H){float bq=H/0.105*(.75+.5*vnoise(vec2(R*.13,4.4)));return bq+(vnoise(vec2(R*.9+H*.35,7.7))-.5)*.34+(vnoise(vec2(R*2.3-H*.6,2.2))-.5)*.16;}
+// mip level from the per-tile uv only: the tile index jumps across cell borders,
+// so implicit derivatives explode there and pull the whole-atlas average (pale dash)
+float atlasLod(vec2 iuv){
+  return max(0.,log2(max(max(fwidth(iuv.x),fwidth(iuv.y)),1e-6)*${TILE}.)-.8);}
+// one wave train: phase speed from deep-water dispersion (w = sqrt(g k)), so long swells
+// outrun short chop; second-order Stokes term gives sharp crests and wide flat troughs
+float wv(vec2 p,vec2 d,float m,float a,float t,float ph){
+  float k=length(d)*m;float th=dot(p,d)*m-sqrt(9.8*k)*t*.36+ph;
+  return a*(cos(th)+min(.9*k*a,.55)*cos(2.*th));}
+vec2 mir2(vec2 y){y=fract(y);return mix(y,1.-y,step(.5,y))*2.;}
+// one waterfall-code flow cell: a chopped slice with slit-scan image age, stretch and smear.
+// cells are bands of the live wave height, so their borders ARE the water's own ridge lines
+vec2 cwarp(float hc,float ridge){
+  // curved flow coordinates: every cell border follows the flow, no straight runs
+  vec2 q=vec2(ridge,hc);
+  q.x+=(vnoise(q.yx*2.2+vec2(u_wt*.06,3.))-.5)*.85+(vnoise(q.yx*5.1+vec2(7.,-u_wt*.04))-.5)*.34;
+  q.y+=(vnoise(q*2.6+vec2(11.,u_wt*.05))-.5)*.11+(vnoise(q*6.3+vec2(-u_wt*.03,5.))-.5)*.05;
+  return q;}
+float ridgeH(vec2 p){
+  // shore-like bend: the whole train swings and forks on a slow warp, no ruled runs
+  vec2 pp=p;
+  pp+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*2.2;
+  pp+=(vec2(vnoise(p*.31+vec2(5.1,8.3)),vnoise(p*.31+vec2(2.7,6.9)))-.5)*.7;
+  return wv(pp,vec2(.38,.20),.55,.26,u_wt,0.)
+        +wv(pp,vec2(.55,.28),.9,.20,u_wt,1.3)
+        +wv(pp,vec2(.45,.26),2.2,.12,u_wt,2.9)
+        +wv(pp,vec2(.41,.23),3.6,.08,u_wt,1.1)
+        +wv(pp,vec2(.43,.245),6.2,.07,u_wt,.7);
+}
+vec3 flowCell(float hc,float ridge,vec2 vv,vec3 n,float pool){
+  // one photo per cell on curved flow lines: domain-warped cell coords, a slow
+  // per-cell swirl that keeps the photo readable (Eversole #580 whirlpool remap),
+  // frame-age stripes running inside the still photo (#541 slit-scan planes),
+  // real ripple only at feathered edges
+  vec2 cq=cwarp(hc,ridge);
+  float R=cq.x, H=cq.y;
+  float bq=bandK(R,H);
+  float bi=floor(bq);
+  float bf2=bq-bi;
+  float slen=.26+.52*hash(vec2(bi,bi*1.31));
+  float n2=vnoise(vec2(bi*3.11+17.7,R*.55-u_wt*.18));
+  float slc=R/slen+((n2-.5)*.38+(vnoise(vec2(H*8.0,bi*7.7))-.5)*.18)*(1.-pool*.8)+bi*.37+(vnoise(vec2(H*3.4,bi*5.1+R*.4))-.5)*.42;
+  float si=floor(slc);
+  float sx=slc-si;
+  float cr1=hash(vec2(bi,si));
+  float cr2=hash(vec2(si,bi)+3.7);
+  float ex=max(smoothstep(.22,.0,sx),smoothstep(.78,1.,sx));
+  float ey=max(smoothstep(.22,.0,bf2),smoothstep(.78,1.,bf2));
+  float edge=max(ex,ey);
+  // slow swirl per cell
+  // no spin: a small fixed tilt per photo, so it reads as carried, not rotated
+  float ang=(cr1-.5)*.16;
+  float ca=cos(ang),sa=sin(ang);
+  vec2 pc=vec2(sx,bf2)-.5;
+  pc=vec2(pc.x*ca-pc.y*sa,pc.x*sa+pc.y*ca);
+  // calm patches open the window wider so more of the photo shows
+  vec2 zoom=vec2((.56+.22*cr1)*1.35,.56+.22*cr1)*(1.+.28*pool);
+  vec2 sub=vec2(.5)+(vec2(cr2,cr1)-.5)*(1.-zoom)*1.6;
+  vec2 iuv=sub+pc*zoom+vec2(-u_wt*.02,0.);
+  // slit-scan stripes of frame age only toward the cell rims
+  float stripe=smoothstep(.2,.8,sin((sx*2.5+cr2*5.)*6.2832+bf2*3.))*edge;
+  // gentle drift everywhere, real ripple only at the rim
+  vec2 rip=(vv*.06+n.xz*.04+(vnoise(vec2(R*3.+u_wt*.4,H*9.))-.5)*.028)*edge*mix(1.,.3,pool)
+          +(vnoise(vec2(R*1.2-u_wt*.2,H*3.))-.5)*.008;
+  iuv=.5+.45*tanh((iuv+rip-.5)*2.2);
+  float warp=u_smear*(vv.x*9.-vv.y*9.)*edge*mix(1.,.3,pool);
+  float iage=cr1*61.+cr2*23.+stripe*.06+100.*6.;
+  if(g_pick<0.)g_pick=mod(floor(u_head-iage),100.);
+  float alod=atlasLod(iuv);
+  vec3 img=vec3(0.);
+  // chop smears four copies together; a calm patch shows one clean copy
+  int taps=pool>.55?1:4;
+  for(int k=0;k<4;k++){
+    if(k>=taps)break;
+    float off=taps==1?0.:(float(k)-1.5)*.006*(.3+u_smear);
+    img+=frameAt(iuv+vec2(off*.04,off*.010),iage+off*.5,pool,alod);
+  }
+  vec3 g4=img/float(taps);
+  g4=clamp((g4-.5)*1.20+.52,0.,1.);
+  return g4;
+}
+// ---- open water: sum-of-sines waves dragged by the same simulated velocity field ----
+vec2 simAt(vec2 xz){
+  if(u_simOK>.5)return texture(u_sim,xz/6.4+vec2(.5)).xy;
+  return vec2(0.);
+}
+float wbase(vec2 p,float t){
+  p+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*.9;
+  float h=0.;
+  h+=wv(p,vec2(.38,.20),.55,.26,t,0.);
+  h+=wv(p,vec2(.55,.28),.9,.20,t,1.3);
+  h+=wv(p,vec2(-.38,.66),.62,.06,t,1.7);
+  h+=wv(p,vec2(.45,.26),2.2,.12,t,2.9);
+  // the fine chop only up close: far water cannot show it anyway
+  if(g_far>.98)return h;
+  float nf=1.-g_far;
+  h+=wv(p,vec2(1.1,-.9),1.6,.04,t,.5)*nf;
+  h+=wv(p,vec2(.41,.23),3.6,.08,t,1.1)*nf;
+  h+=wv(p,vec2(.43,.245),6.2,.07,t,.7)*nf;
+  h+=((vnoise(p*1.4+vec2(t*.22,-t*.13))-.5)*.04
+    +(vnoise(p*3.1+vec2(-t*.31,t*.17))-.5)*.018
+    +wv(p,vec2(1.7,-1.3),3.1,.050,t,.4)
+    +wv(p,vec2(-2.3,.9),4.7,.035,t,2.1)
+    +wv(p,vec2(.8,2.1),6.3,.022,t,4.4))*nf;
+  return h;
+}
+// rain: sparse juicy drops - each impact flashes a small splash and pushes an
+// expanding ring through the same field the photos ride (Cyrus's rain steer)
+vec2 rainFX(vec2 p,float t,vec2 vv){
+  float h=0.,sp=0.;
+  vec2 gp=p*2.2;
+  vec2 g=floor(gp),f=fract(gp);
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+    vec2 o=vec2(float(i),float(j));
+    vec2 id=g+o;
+    float rn=hash(id);
+    if(rn<.30)continue;
+    float life=.30+.45*hash(id+11.3);
+    float ph=fract(t*life+rn*9.);
+    // the drop lands, then the current takes it: anchor drifts with the local
+    // flow for the ring's whole age, spreading and thinning as it travels
+    vec2 dp=(vec2(hash(id+3.1),hash(id+7.7))-.5)*.55+vv*(ph/life)*1.1;
+    float r=length(f-o-dp)/2.2;
+    h+=exp(-(55.-30.*ph)*abs(r-ph*.38))*(1.-ph)*.030;
+    sp+=exp(-r*22.)*smoothstep(.09,.0,ph);
+  }
+  return vec2(h,sp);
+}
+// slider response: .7 default unchanged, 1.0 stays gentle, 2.0 max drama
+float rainAmt(){return u_rain*(2./(1.+u_rain))*.85;}
+// drops falling from the sky: two layers of short vertical streaks
+float rainFall(vec2 fc,float t,float sceneT){
+  vec2 uv=fc/u_res;uv.x*=u_res.x/u_res.y;
+  float cp=cos(u_pt);
+  float acc=0.;
+  for(int L=0;L<3;L++){
+    float sc=L==0?26.:(L==1?17.:10.);
+    float sp=L==0?3.2:(L==1?2.4:1.7);
+    vec2 gp=vec2(uv.x*sc,uv.y*sc*.45-t*sp);
+    vec2 id=floor(gp),f=fract(gp);
+    float rn=hash(id+float(L)*17.31);
+    if(rn<.38)continue;
+    float dep=.4+7.6*hash(id+3.31+float(L)*5.7);
+    float occ=smoothstep(0.,.6,sceneT-dep);
+    float dx=abs(f.x-.5-(rn-.5)*.5);
+    float ln=(.13+.19*hash(id+7.17))*(.30+.70*cp);
+    acc+=smoothstep(.055,.006,dx)*smoothstep(ln,ln*.25,abs(f.y-.5))*(.35+.65*hash(id+9.71))*exp(-dep*.20)*occ;
+  }
+  return acc*(.35+.65*cp);
+}
+float wH(vec2 p,float t){
+  vec2 v=simAt(p);
+  vec2 pp=p+v*.9;
+  float h=wbase(pp,t)+.16*length(v)*sin(t*2.6+pp.x*3.+pp.y*2.);
+  float fd=field(vec3(p.x,u_wy,p.y));
+  float ring=smoothstep(1.1,.15,abs(fd));
+  h+=ring*.06*sin(t*3.4+fd*5.);
+  h+=rainFX(pp,t,v).x*rainAmt();
+  return h;
+}
+vec3 skyCol(vec3 rd){
+  float y=clamp(rd.y,0.,1.);
+  vec3 c=mix(vec3(.78,.97,.94),vec3(.13,.68,.75),pow(y,.55));
+  float sun=pow(max(dot(rd,normalize(vec3(.35,.45,.45))),0.),18.);
+  return c+vec3(.95,.93,.85)*sun*.30;
+}
+float hMarch(vec2 p){p+=simAt(p)*.9;p+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*.9;
+  return (wv(p,vec2(.38,.20),.55,.26,u_wt,0.)+wv(p,vec2(.55,.28),.9,.20,u_wt,1.3)+wv(p,vec2(.45,.26),2.2,.12,u_wt,2.9))*u_disp;}
+vec4 water(vec3 ro,vec3 rd){
+  float tw=(u_wy-ro.y)/rd.y;
+  if(tw<=0.&&u_disp<.001)return vec4(skyCol(rd),1e6);
+  if(u_disp>.001){
+    // march the real wave heights: crests stand up and hide what is behind them
+    float top=u_wy+1.1*u_disp,bot=u_wy-1.1*u_disp;
+    if(rd.y>=0.&&ro.y>top)return vec4(skyCol(rd),1e6);
+    float ta=max((top-ro.y)/rd.y,0.),tb=(bot-ro.y)/rd.y;
+    if(rd.y>=0.)tb=ta+40.;
+    float lo=ta,hi=ta;bool hit=false;
+    for(int i=1;i<=28;i++){
+      float t=ta+(tb-ta)*float(i)/28.;vec3 q=ro+rd*t;
+      if(q.y<u_wy+hMarch(q.xz)){hi=t;hit=true;break;}lo=t;}
+    if(!hit)return vec4(skyCol(rd),1e6);
+    for(int i=0;i<6;i++){float m=.5*(lo+hi);vec3 q=ro+rd*m;if(q.y<u_wy+hMarch(q.xz))hi=m;else lo=m;}
+    tw=hi;
+  }
+  vec3 g=ro+rd*tw;
+  g_far=smoothstep(5.,16.,tw);
+  float e=.05;
+  float h=wH(g.xz,u_wt);
+  float hx=wH(g.xz+vec2(e,0.),u_wt)-h;
+  float hz=wH(g.xz+vec2(0.,e),u_wt)-h;
+  vec3 n=normalize(vec3(-hx/e*.8,1.,-hz/e*.8));
+  float fd=field(vec3(g.x,u_wy,g.z));
+  float ring=smoothstep(.7,.05,abs(fd));
+  float sl=length(vec2(hx,hz))/e;
+  float crest=smoothstep(.10,.34,h)*smoothstep(1.2,6.5,sl);
+  vec2 sd2=normalize(vec2(.38,.20));
+  vec2 sp2=vec2(-sd2.y,sd2.x);
+  float streak=vnoise(vec2(dot(g.xz,sd2)*1.4-u_wt*.7,dot(g.xz,sp2)*2.6+h*2.));
+  float n1=vnoise(g.xz*1.3+u_wt*.25),n2=vnoise(g.xz*4.1-u_wt*.4);
+  float brk=smoothstep(.30,.95,n1*.45+n2*.3+streak*.35);
+  float ptch=smoothstep(.20,.88,vnoise(g.xz*.55+u_wt*.05));
+  float stirf=smoothstep(.10,.45,length(simAt(g.xz)));
+  float foam=clamp(crest*brk*ptch*1.1+ring*.3*brk+stirf*brk*.45,0.,1.);
+  // expanding foam rings where a swell crashed back down
+  float cr=0.;
+  for(int i=0;i<4;i++){vec4 c=u_cr[i];float age=u_wt-c.z;
+    if(c.w>0.&&age>0.&&age<7.){
+      float r=length(g.xz-c.xy);
+      cr+=exp(-pow((r-age*.5)*5.,2.))*c.w*exp(-age*.5);
+    }}
+  foam=clamp(foam+cr*1.25,0.,1.)*u_foam*exp(-tw*.012);
+  // the surface is the archive: waterfall-code flow cells banded by the live wave
+  // ridges, so the images take shape from the lines the water already makes
+  vec2 vv=simAt(g.xz);
+  // the wave carries the photographs: sample the cell field where this water
+  // parcel came from, so each photo travels and reshapes with the surface
+  vec2 gr0=vec2(ridgeH(g.xz+vec2(.06,0.))-ridgeH(g.xz-vec2(.06,0.)),ridgeH(g.xz+vec2(0.,.06))-ridgeH(g.xz-vec2(0.,.06)))/.12;
+  vec2 mx=g.xz-gr0*.05;
+  float ridge=dot(mx,sp2);
+  // ridge field: just the long parallel wind-wave trains, so the lines stay lake-like
+  float rh=ridgeH(mx);
+  float wob2=(vnoise(mx*1.1+vec2(u_wt*.06,-u_wt*.04))-.5)*.11+(vnoise(mx*2.3+vec2(3.3+u_wt*.03,7.7))-.5)*.05;
+  vec2 rfx=rainFX(mx,u_wt,simAt(g.xz));
+  float rhw=rh+wob2+rfx.x*1.6*rainAmt();
+  vec2 cq0=cwarp(rhw,ridge);
+  float bnd=bandK(cq0.x,cq0.y);
+  float bf=bnd-floor(bnd);
+  float pool=smoothstep(.62-.3*u_glimpse,.74-.3*u_glimpse,vnoise(g.xz*.27+vec2(u_wt*.025,-u_wt*.018)));
+  vec3 img=flowCell(rhw,ridge,vv,n,pool);
+  float bd=min(bf,1.-bf);
+  float bw=clamp(fwidth(bnd)*4.,mix(.36,.12,pool),mix(.66,.30,pool));
+  float wb=.5*(1.-smoothstep(.0,bw,bd));
+  if(wb>.001)img=mix(img,flowCell(rhw+(bf<.5?-.105:.105),ridge,vv,n,pool),wb);
+  float bi0=floor(cq0.y/0.105);
+  float slen0=.26+.52*hash(vec2(bi0,bi0*1.31));
+  float n2c=vnoise(vec2(bi0*3.11+17.7,cq0.x*.55-u_wt*.18));
+  float slc0=cq0.x/slen0+((n2c-.5)*.38+(vnoise(vec2(cq0.y*8.0,bi0*7.7))-.5)*.18)*(1.-pool*.8)+bi0*.37;
+  float sf=slc0-floor(slc0);
+  float sd=min(sf,1.-sf);
+  float sw=clamp(fwidth(slc0)*4.,mix(.36,.12,pool),mix(.66,.30,pool));
+  float ws=.5*(1.-smoothstep(.0,sw,sd));
+  if(ws>.001)img=mix(img,flowCell(rhw,ridge+(sf<.5?-slen0:slen0),vv,n,pool),ws);
+  img=mix(vec3(dot(img,vec3(.333))),img,1.25)*1.06;
+  vec3 deep=vec3(.13,.19,.21);
+  vec3 shal=vec3(.34,.42,.43);
+  vec3 tint=mix(deep,shal,clamp(h*1.6+.5,0.,1.));
+  // dissipate instead of ruling lines: as cells shrink toward pixel size the
+  // photos melt into one sea tone, keeping only a faint organic modulation
+  float melt=smoothstep(.22,.55,fwidth(bnd)+fwidth(slc0)*.5);
+  img=mix(img,vec3(.52,.58,.57),melt*.65);
+  vec3 body=img*(tint*1.3+.62)*(1.+pool*.25);
+  body=mix(body,img*1.04,pool*.45);
+  float fres=.02+.98*pow(1.-max(dot(n,-rd),0.),5.);
+  vec3 col=mix(tint*2.,body,clamp(u_wmix,0.,1.));
+  col=mix(col,skyCol(reflect(rd,n)),clamp(fres*u_refl*(1.-.5*pool),0.,.85));
+  col*=1.-.16*smoothstep(1.7,.2,abs(fd));
+  vec3 ld=normalize(vec3(.35,.6,.45));
+  float sp=pow(max(dot(reflect(rd,n),ld),0.),220.);
+  col+=vec3(1.,.98,.9)*sp*.6;
+  col=mix(col,vec3(.965,.965,.94),foam*.82);
+  col+=vec3(.93,.96,.95)*rfx.y*.34*rainAmt()*exp(-tw*.012);
+  col+=vec3(.95,.97,1.)*max(rfx.x,0.)*2.1*rainAmt()*exp(-tw*.008);
+  col=mix(col,vec3(.66,.90,.87),1.-exp(-tw*.006));
+  return vec4(col,tw);
+}
+vec3 flowLite(float hc,float ridge,float pool){
+  // single-tap flow cell for the underwater volume layers: same curved cells,
+  // same swirl and slit-scan age, one fetch so the column stays fluid
+  vec2 cq=cwarp(hc,ridge);
+  float R=cq.x, H=cq.y;
+  float bq=bandK(R,H);
+  float bi=floor(bq);
+  float bf2=bq-bi;
+  float slen=.26+.52*hash(vec2(bi,bi*1.31));
+  float n2=vnoise(vec2(bi*3.11+17.7,R*.55-u_wt*.18));
+  float slc=R/slen+((n2-.5)*.38+(vnoise(vec2(H*8.0,bi*7.7))-.5)*.18)*(1.-pool*.8)+bi*.37+(vnoise(vec2(H*3.4,bi*5.1+R*.4))-.5)*.42;
+  float si=floor(slc);
+  float sx=slc-si;
+  float cr1=hash(vec2(bi,si));
+  float cr2=hash(vec2(si,bi)+3.7);
+  float ex=max(smoothstep(.22,.0,sx),smoothstep(.78,1.,sx));
+  float ey=max(smoothstep(.22,.0,bf2),smoothstep(.78,1.,bf2));
+  float edge=max(ex,ey);
+  float ang=(cr1-.5)*.16;
+  float ca=cos(ang),sa=sin(ang);
+  vec2 pc=vec2(sx,bf2)-.5;
+  pc=vec2(pc.x*ca-pc.y*sa,pc.x*sa+pc.y*ca);
+  vec2 zoom=vec2((.56+.22*cr1)*1.35,.56+.22*cr1);
+  vec2 sub=vec2(.5)+(vec2(cr2,cr1)-.5)*(1.-zoom)*1.6;
+  vec2 iuv=sub+pc*zoom+vec2(-u_wt*.02,0.);
+  float stripe=smoothstep(.2,.8,sin((sx*2.5+cr2*5.)*6.2832+bf2*3.))*edge;
+  vec2 rip=vec2((vnoise(vec2(R*3.+u_wt*.4,H*9.))-.5)*.028*edge*mix(1.,.3,pool)
+          +(vnoise(vec2(R*1.2-u_wt*.2,H*3.))-.5)*.008);
+  iuv=.5+.45*tanh((iuv+rip-.5)*2.2);
+  float iage=cr1*61.+cr2*23.+stripe*.06+100.*6.;
+  if(g_pick<0.)g_pick=mod(floor(u_head-iage),100.);
+  vec3 img=frameAt(iuv,iage,pool,atlasLod(iuv));
+  img=clamp((img-.5)*1.14+.52,0.,1.);
+  return mix(vec3(dot(img,vec3(.333))),img,1.25)*1.06;
+}
+vec3 underCol(vec3 ro,vec3 rd){
+  vec3 ld=normalize(vec3(.30,.85,.35));
+  vec2 sd2=normalize(vec2(.38,.20));
+  vec2 sp2=vec2(-sd2.y,sd2.x);
+  float ang=atan(rd.z,rd.x);
+  // the water body itself: a deep gradient, darker looking down, never gray, no floor
+  vec3 col=mix(vec3(.13,.31,.34),vec3(.030,.105,.15),clamp(.55-rd.y*.85,0.,1.));
+  // light shafts falling from the surface
+  float sh=vnoise(vec2(ang*2.3+u_wt*.06,rd.y*3.5-u_wt*.10));
+  float sh2=vnoise(vec2(ang*6.1-u_wt*.045,rd.y*8.+u_wt*.07));
+  float beam=pow(max(dot(rd,ld),0.),3.5);
+  col+=vec3(.55,.82,.76)*beam*(.30+.70*(sh*.6+sh2*.4));
+  // slow particulate drift
+  float mot=vnoise(rd.xz*18./(abs(rd.y)+.35)+vec2(u_wt*.12,-u_wt*.09));
+  col+=vec3(.10,.16,.15)*smoothstep(.86,.99,mot)*(.3+.7*beam);
+  // the surface overhead seen from below: the photo water-skin as a bright
+  // ceiling, pooled light toward the sun window, dimming toward the horizon
+  if(rd.y>.015){
+    float t0=(u_wy-ro.y)/rd.y;
+    vec3 g=ro+rd*t0;
+    g_far=smoothstep(5.,16.,t0);
+    vec2 vv=simAt(g.xz);
+    vec2 gr0=vec2(ridgeH(g.xz+vec2(.06,0.))-ridgeH(g.xz-vec2(.06,0.)),ridgeH(g.xz+vec2(0.,.06))-ridgeH(g.xz-vec2(0.,.06)))/.12;
+    vec2 mx=g.xz-gr0*.05;
+    // looking up through moving water: the real wave slope bends the photos above
+    float e=.06,h0=wbase(g.xz,u_wt);
+    vec2 slope=vec2(wbase(g.xz+vec2(e,0.),u_wt)-h0,wbase(g.xz+vec2(0.,e),u_wt)-h0)/e;
+    float pool=smoothstep(.62-.3*u_glimpse,.74-.3*u_glimpse,vnoise(g.xz*.27+vec2(u_wt*.025,-u_wt*.018)));
+    mx+=slope*u_disp*.22*(1.-.6*pool);
+    float ridge=dot(mx,sp2);
+    float rh=ridgeH(mx);
+    float wob2=(vnoise(mx*1.1+vec2(u_wt*.06,-u_wt*.04))-.5)*.11+(vnoise(mx*2.3+vec2(3.3+u_wt*.03,7.7))-.5)*.05;
+    vec3 img=flowCell(rh+wob2,ridge,vv,vec3(0.,1.,0.),pool);
+    vec2 cqx=cwarp(rh+wob2,ridge);
+    float bnd2=bandK(cqx.x,cqx.y);float bf2b=bnd2-floor(bnd2);float bd2=min(bf2b,1.-bf2b);
+    float bw=clamp(fwidth(bnd2)*4.,.36,.66);
+    float wbx=.5*(1.-smoothstep(.0,bw,bd2));
+    if(wbx>.001)img=mix(img,flowCell(rh+wob2+(bf2b<.5?-.105:.105),ridge,vv,vec3(0.,1.,0.),pool),wbx);
+    img=mix(vec3(dot(img,vec3(.333))),img,1.25)*1.06;
+    float win=pow(clamp(rd.y,0.,1.),1.4);
+    float haze=exp(-t0*.07);
+    vec3 scol=img*(.60+1.35*win)*vec3(.85,1.0,.95);
+    scol*=.72+.50*clamp((rh+wob2)*2.2+.55,0.,1.);
+    // Snell's window: past about 49 degrees from straight up, water mirrors the depths below
+    float snell=smoothstep(.56,.70,rd.y+length(slope)*u_disp*.08);
+    vec3 below=mix(vec3(.05,.15,.19),vec3(.10,.24,.27),sh)*(.8+.4*(1.-win));
+    scol=mix(scol,mix(below,scol,.25),(1.-snell)*clamp(u_refl,0.,1.)*.85);
+    // glints where the wave faces catch the sun from below
+    scol+=vec3(.9,1.,.95)*pow(max(1.-length(slope)*1.6,0.),6.)*snell*.10;
+    col=mix(col,scol,clamp(haze,0.,1.)*.94*smoothstep(.015,.06,rd.y));
+  }
+  // the archive as a volume: photo layers at stacked depths, each drifting on
+  // its own current, nearest sharpest, far ones dissolving into haze
+  for(int k=3;k>=0;k--){
+    float fk=float(k);
+    float ly=u_wy-(.50+fk*.80);
+    if(abs(rd.y)<.02)continue;
+    float t=(ly-ro.y)/rd.y;
+    if(t<=0.)continue;
+    vec3 g=ro+rd*t;
+    vec2 drift=vec2(u_wt*(.06+.025*fk),-u_wt*(.04+.018*fk));
+    vec2 xz=(g.xz+drift+simAt(g.xz)*.5)/(1.+fk*.45);
+    vec2 gr0=vec2(ridgeH(xz+vec2(.06,0.))-ridgeH(xz-vec2(.06,0.)),ridgeH(xz+vec2(0.,.06))-ridgeH(xz-vec2(0.,.06)))/.12;
+    xz-=gr0*.05;
+    float ridge=dot(xz,sp2);
+    float rh=ridgeH(xz);
+    float wob2=(vnoise(xz*1.1+vec2(u_wt*.06,-u_wt*.04))-.5)*.11;
+    float pool=smoothstep(.62-.3*u_glimpse,.74-.3*u_glimpse,vnoise(xz*.27+vec2(u_wt*.025,-u_wt*.018)));
+    vec3 img=flowLite(rh+wob2,ridge,pool);
+    vec2 cql=cwarp(rh+wob2,ridge);
+    float bndl=bandK(cql.x,cql.y);float bfl=bndl-floor(bndl);float bdl=min(bfl,1.-bfl);
+    float bwl=clamp(fwidth(bndl)*4.,.36,.66);
+    float wl=.5*(1.-smoothstep(.0,bwl,bdl));
+    if(wl>.001)img=mix(img,flowLite(rh+wob2+(bfl<.5?-.105:.105),ridge,pool),wl);
+    float haze=exp(-t*.11);
+    float fade=exp(-fk*.45);
+    vec3 lcol=img*vec3(.72,.92,.88)*(fade+.35)*(.55+.75*beam+.30);
+    col=mix(col,lcol,clamp(haze,0.,1.)*.62*smoothstep(.02,.10,abs(rd.y)));
+  }
+  // water-column shimmer: keeps every frame alive even before the archive lands
+  col*=.88+.12*vnoise(vec2(u_wt*.9+rd.x*3.,rd.y*5.-u_wt*.7));
+  return col;
+}
+void main(){
+  vec2 fc=u_pickOn>.5?u_pickXY:gl_FragCoord.xy;
+  vec2 s=(fc-.5*u_res)/u_res.y;
+  vec3 rd=normalize(u_fw*1.55+u_rt*s.x+u_up*s.y);
+  vec3 ro=u_ro;
+  if(u_under>.5){o=vec4(underCol(ro,rd),1.);if(u_pickOn>.5)o=vec4((g_pick+1.)/255.,0.,0.,1.);return;}
+  vec4 wat4=water(ro,rd);
+  vec3 col=wat4.rgb;
+  float waterT=wat4.a;
+  vec3 inv=1./rd;vec3 t0=(-1.3-ro)*inv,t1=(1.3-ro)*inv;
+  vec3 tmn=min(t0,t1),tmx=max(t0,t1);
+  float ta=max(max(tmn.x,tmn.y),tmn.z),tb=min(min(tmx.x,tmx.y),tmx.z);
+  if(tb>max(ta,0.)){
+    ta=max(ta,0.);float dt=(tb-ta)/u_steps;
+    vec3 p0=ro+rd*ta;float fp=field(p0+vec3(wat(p0)*u_adv,0.));float cap=u_iso*3.5;
+    for(float i=1.;i<=128.;i++){
+      if(i>u_steps)break;
+      float tcur=ta+dt*i;
+      if(tcur>waterT)break;
+      vec3 p=ro+rd*tcur;
+      vec2 w=wat(p);vec3 pd=p+vec3(w*u_adv,0.);
+      float f=field(pd);
+      if(f<cap){
+        float m0=floor(fp/u_iso),m1=floor(f/u_iso);
+        if(m0!=m1){
+          float m=max(m0,m1);float lv=m*u_iso;
+          float k=clamp((fp-lv)/max(fp-f,1e-5),0.,1.);
+          vec3 h=mix(p-rd*dt,p,k);
+          vec2 hw=wat(h);vec3 hd=h+vec3(hw*u_adv,0.);
+          vec3 n=grad(hd);
+          vec2 uv=vec2(hd.x*.5+.5,.5-hd.y*.5);
+          float warp=u_smear*(hw.x*10.-hw.y*10.);
+          float age=mod(m*u_layer+(hd.z*.5+.5)*u_span+warp+100.*4.,98.);
+          float edge=(1.-abs(dot(n,rd)))*u_chroma;
+          vec3 c=frameAt(uv,age,0.,atlasLod(uv));
+          vec3 tint=.6+.4*cos(6.2832*(edge*.9+vec3(0.,.33,.67)));
+          c*=mix(vec3(1.),tint*1.2,clamp(edge,0.,1.)*.35);
+          float l=.84+.16*dot(n,normalize(vec3(.4,.8,.5)));
+          col=mix(col,c*l,smoothstep(.03,.30,abs(dot(n,rd))));
+          // wet band and breaking foam rim right at the waterline
+          float above=h.y-u_wy;
+          if(above<.16){
+            float wet=1.-clamp(above/.16,0.,1.);
+            col*=1.-.08*wet;
+            float fn=vnoise(h.xz*7.+u_wt*1.1);
+            float rim=smoothstep(.10,.02,above)*smoothstep(.28,.85,fn);
+            col=mix(col,vec3(.965,.965,.94),clamp(rim*.5,0.,1.)*u_foam*.5);
+          }
+          break;
+        }
+      }
+      fp=f;
+    }
+  }
+  col+=vec3(.88,.93,1.)*rainFall(gl_FragCoord.xy,u_wt,waterT)*.13*rainAmt();
+  o=vec4(col,1.);
+  if(u_pickOn>.5)o=vec4((g_pick+1.)/255.,0.,0.,1.);
+}`;
+
+function shChecked(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);
+  if(!gl.getShaderParameter(x,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(x));$('stat').textContent='shader error';}return x;}
+function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);return x;}
+function prog(fsrc){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,vs));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fsrc));gl.linkProgram(p);return p;}
+const pr=prog(fs);
+// the water shader compiles in the background: the page stays responsive while it warms up
+const pex=gl.getExtension('KHR_parallel_shader_compile');
+if(pex){$('stat').textContent='warming the water';await new Promise(res=>{const chk=()=>gl.getProgramParameter(pr,pex.COMPLETION_STATUS_KHR)?res():setTimeout(chk,30);chk();});}
+if(!gl.getProgramParameter(pr,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(pr));$('stat').textContent='shader error';}
+gl.useProgram(pr);
+const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const al=gl.getAttribLocation(pr,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+const U={};['u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
+const tex=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,ATLAS,ATLAS,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.uniform1i(U.u_atlas,0);
+let atlasDirty=false;gl.uniform1i(U.u_sim,1);
+
+// ---------- fluid sim: stable fluids (advect, stir, vorticity, pressure projection) ----------
+const SIM=coarse?128:192, JAC=coarse?12:20;
+const hasF=!!(gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float'));
+let simOK=false;
+const simFS={
+adv:`#version 300 es
+precision highp float;uniform sampler2D u_v;uniform vec2 u_inv;uniform float u_dt,u_diss,u_t,u_amb;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;
+ vec2 v=texture(u_v,uv).xy;
+ vec2 nv=texture(u_v,uv-u_dt*v/2.4).xy*u_diss;
+ nv+=u_amb*u_dt*vec2(sin(uv.y*9.2+u_t*.6)+.6*sin(uv.y*3.1-u_t*.4),cos(uv.x*8.1-u_t*.5)+.6*cos(uv.x*2.9+u_t*.34));
+ float sp=length(nv);if(sp>1.2)nv*=1.2/sp;
+ o=vec4(nv,0.,1.);}`,
+spl:`#version 300 es
+precision highp float;uniform sampler2D u_v;uniform vec2 u_inv,u_p,u_f;uniform float u_r;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;vec2 d=uv-u_p;
+ o=vec4(texture(u_v,uv).xy+u_f*exp(-dot(d,d)/u_r),0.,1.);}`,
+crl:`#version 300 es
+precision highp float;uniform sampler2D u_v;uniform vec2 u_inv;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;
+ float L=texture(u_v,uv-vec2(u_inv.x,0.)).y,R=texture(u_v,uv+vec2(u_inv.x,0.)).y;
+ float B=texture(u_v,uv-vec2(0.,u_inv.y)).x,T=texture(u_v,uv+vec2(0.,u_inv.y)).x;
+ o=vec4(.5*((R-L)-(T-B)),0.,0.,1.);}`,
+vort:`#version 300 es
+precision highp float;uniform sampler2D u_v,u_c;uniform vec2 u_inv;uniform float u_eps,u_dt;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;
+ float L=texture(u_c,uv-vec2(u_inv.x,0.)).x,R=texture(u_c,uv+vec2(u_inv.x,0.)).x;
+ float B=texture(u_c,uv-vec2(0.,u_inv.y)).x,T=texture(u_c,uv+vec2(0.,u_inv.y)).x;
+ float c=texture(u_c,uv).x;
+ vec2 f=.5*vec2(abs(T)-abs(B),abs(L)-abs(R));f/=length(f)+1e-5;
+ o=vec4(texture(u_v,uv).xy+u_eps*u_dt*c*f,0.,1.);}`,
+div:`#version 300 es
+precision highp float;uniform sampler2D u_v;uniform vec2 u_inv;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;
+ float L=texture(u_v,uv-vec2(u_inv.x,0.)).x,R=texture(u_v,uv+vec2(u_inv.x,0.)).x;
+ float B=texture(u_v,uv-vec2(0.,u_inv.y)).y,T=texture(u_v,uv+vec2(0.,u_inv.y)).y;
+ o=vec4(.5*((R-L)+(T-B)),0.,0.,1.);}`,
+jac:`#version 300 es
+precision highp float;uniform sampler2D u_p,u_d;uniform vec2 u_inv;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;
+ float L=texture(u_p,uv-vec2(u_inv.x,0.)).x,R=texture(u_p,uv+vec2(u_inv.x,0.)).x;
+ float B=texture(u_p,uv-vec2(0.,u_inv.y)).x,T=texture(u_p,uv+vec2(0.,u_inv.y)).x;
+ float d=texture(u_d,uv).x;
+ o=vec4((L+R+B+T-d)*.25,0.,0.,1.);}`,
+sub:`#version 300 es
+precision highp float;uniform sampler2D u_v,u_p;uniform vec2 u_inv;out vec4 o;
+void main(){vec2 uv=gl_FragCoord.xy*u_inv;
+ float L=texture(u_p,uv-vec2(u_inv.x,0.)).x,R=texture(u_p,uv+vec2(u_inv.x,0.)).x;
+ float B=texture(u_p,uv-vec2(0.,u_inv.y)).y,T=texture(u_p,uv+vec2(0.,u_inv.y)).y;
+ o=vec4(texture(u_v,uv).xy-.5*vec2(R-L,T-B),0.,1.);}`};
+function mkT(s){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,s,s,0,gl.RGBA,gl.HALF_FLOAT,null);
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+ const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+ gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+ const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);return {t,f,ok};}
+function mkPP(s){const a=mkT(s),b=mkT(s);return {a,b,ok:a.ok&&b.ok,swap(){const t=this.a;this.a=this.b;this.b=t;}};}
+const dummy=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,dummy);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
+let vel,prs,divT,curlT;const SP={};const splats=[];
+function blit(P,target,setup){
+ gl.bindFramebuffer(gl.FRAMEBUFFER,target.f);gl.viewport(0,0,SIM,SIM);
+ gl.useProgram(P);
+ const a=gl.getAttribLocation(P,'a');
+ gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
+ if(setup)setup(P);
+ gl.drawArrays(gl.TRIANGLES,0,3);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
+function bt(unit,t){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);}
+function u1(P,n,v){const l=P.u[n];if(l)gl.uniform1f(l,v);}
+function u2(P,n,x,y){const l=P.u[n];if(l)gl.uniform2f(l,x,y);}
+function ui(P,n,v){const l=P.u[n];if(l)gl.uniform1i(l,v);}
+if(hasF){
+ try{
+  vel=mkPP(SIM);prs=mkPP(SIM);divT=mkT(SIM);curlT=mkT(SIM);
+  simOK=vel.ok&&prs.ok&&divT.ok&&curlT.ok;
+  if(simOK)for(const k of Object.keys(simFS)){SP[k]=prog(simFS[k]);SP[k].u={};
+    for(const nm of['u_v','u_c','u_p','u_d','u_inv','u_dt','u_diss','u_t','u_amb','u_f','u_r','u_eps'])
+      SP[k].u[nm]=gl.getUniformLocation(SP[k],nm);}
+ }catch(e){simOK=false;}
+}
+function simStep(dt){
+ if(!simOK)return;
+ const inv=[1/SIM,1/SIM];
+ blit(SP.adv,vel.b,P=>{bt(0,vel.a.t);ui(P,'u_v',0);u2(P,'u_inv',...inv);u1(P,'u_dt',dt);u1(P,'u_diss',.986);u1(P,'u_t',clock);u1(P,'u_amb',.12);});vel.swap();
+ while(splats.length){const s=splats.shift();
+  blit(SP.spl,vel.b,P=>{bt(0,vel.a.t);ui(P,'u_v',0);u2(P,'u_inv',...inv);u2(P,'u_p',...s.p);u2(P,'u_f',...s.f);u1(P,'u_r',s.r);});vel.swap();}
+ blit(SP.crl,curlT,P=>{bt(0,vel.a.t);ui(P,'u_v',0);u2(P,'u_inv',...inv);});
+ blit(SP.vort,vel.b,P=>{bt(0,vel.a.t);bt(1,curlT.t);ui(P,'u_v',0);ui(P,'u_c',1);u2(P,'u_inv',...inv);u1(P,'u_eps',1.1);u1(P,'u_dt',dt);});vel.swap();
+ blit(SP.div,divT,P=>{bt(0,vel.a.t);ui(P,'u_v',0);u2(P,'u_inv',...inv);});
+ gl.bindFramebuffer(gl.FRAMEBUFFER,prs.a.f);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+ for(let k=0;k<JAC;k++){
+  blit(SP.jac,prs.b,P=>{bt(0,prs.a.t);bt(1,divT.t);ui(P,'u_p',0);ui(P,'u_d',1);u2(P,'u_inv',...inv);});prs.swap();}
+ blit(SP.sub,vel.b,P=>{bt(0,vel.a.t);bt(1,prs.a.t);ui(P,'u_v',0);ui(P,'u_p',1);u2(P,'u_inv',...inv);});vel.swap();
+}
+
+// ---------- sources ----------
+const cap=document.createElement('canvas');cap.width=cap.height=TILE;const cx=cap.getContext('2d');
+const th=$('thumbs'),tx=th.getContext('2d');
+function drawCover(ctx,el,w){
+  const iw=el.videoWidth||el.naturalWidth||el.width,ih=el.videoHeight||el.naturalHeight||el.height;
+  if(!iw||!ih)return false;const s=Math.max(w/iw,w/ih);
+  ctx.fillStyle='#000';ctx.fillRect(0,0,w,w);
+  ctx.drawImage(el,(w-iw*s)/2,(w-ih*s)/2,iw*s,ih*s);return true;}
+const lib=[];let queue=[],ring=[],ri=0,curName='',curObj=null;const slotObj=new Array(100).fill(null);
+function addLib(c,name,fresh){const o={c,name};lib.push(o);if(fresh)queue.push(o);else ring.push(o);}
+function nextLib(){
+  if(queue.length)return queue.shift();
+  if(!ring.length)return null;
+  if(ri>=ring.length){ri=0;for(let i=ring.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ring[i],ring[j]]=[ring[j],ring[i]];}}
+  return ring[ri++];}
+function toTile(src){const c=document.createElement('canvas');c.width=c.height=TILE;const g=c.getContext('2d');
+  const iw=src.videoWidth||src.naturalWidth||src.width,ih=src.videoHeight||src.naturalHeight||src.height;
+  const G=4,S=TILE-2*G,sc=Math.max(S/iw,S/ih);
+  g.drawImage(src,G+(S-iw*sc)/2,G+(S-ih*sc)/2,iw*sc,ih*sc);
+  g.drawImage(c,G,G,1,S,0,G,G,S);g.drawImage(c,G+S-1,G,1,S,G+S,G,G,S);
+  g.drawImage(c,G,G,S,1,G,0,S,G);g.drawImage(c,G,G+S-1,S,1,G,G+S,S,G);
+  g.drawImage(c,G,G,1,1,0,0,G,G);g.drawImage(c,G+S-1,G,1,1,G+S,0,G,G);
+  g.drawImage(c,G,G+S-1,1,1,0,G+S,G,G);g.drawImage(c,G+S-1,G+S-1,1,1,G+S,G+S,G,G);
+  return c;}
+function resetLib(){lib.length=0;queue=[];ring=[];ri=0;}
+// ---- GO images: the published v4 library, read with the Sorting Room's saved key ----
+const REPO='zellaships/black-aquatics-research';
+let token='';try{token=JSON.parse(localStorage.getItem('ba.token')||'""');}catch(e){}
+const gh=(path,accept)=>fetch(`https://api.github.com/repos/${REPO}/contents/${encodeURI(path)}?ref=main`,{headers:{Authorization:`Bearer ${token}`,Accept:accept||'application/vnd.github.raw+json'}});
+let GO=[];   // [{title, preview}]
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+async function tileFrom(it){try{const r=/^https?:/.test(it.preview)?await fetch(it.preview,{mode:'cors'}):await gh(it.preview);if(!r.ok)return null;const bm=await createImageBitmap(await r.blob());const c=toTile(bm);bm.close&&bm.close();return {c,name:it.title||it.id};}catch(e){return null;}}
+// ---- v24: all GO images, packed in sheets, streamed through the 100 slots ----
+let SHEETS=null,mipsBuilt=false;const slotItem=new Array(100).fill(null);let queue2=[],qi=0,swap={slot:-1,fade:0,phase:0,t:0,next:null,busy:false};
+const mipC=document.createElement('canvas'),mipX=mipC.getContext('2d');
+function writeSlot(s,tile){
+  gl.bindTexture(gl.TEXTURE_2D,tex);
+  const x=(s%COLS)*TILE,y=Math.floor(s/COLS)*TILE;
+  gl.texSubImage2D(gl.TEXTURE_2D,0,x,y,gl.RGBA,gl.UNSIGNED_BYTE,tile);
+  if(!mipsBuilt){atlasDirty=true;return;}
+  // rebuild only this photo's mip levels, never the whole atlas
+  for(let L=1;(TILE>>L)>=2;L++){const z=TILE>>L;mipC.width=mipC.height=z;mipX.drawImage(tile,0,0,z,z);
+    gl.texSubImage2D(gl.TEXTURE_2D,L,x>>L,y>>L,gl.RGBA,gl.UNSIGNED_BYTE,mipC);}
+}
+function thumbOf(src){const c=document.createElement('canvas');c.width=c.height=192;c.getContext('2d').drawImage(src,0,0,192,192);return c;}
+const sheetMemo={};let pcache=null;
+async function sheetBlob(i){
+  if(sheetMemo[i])return sheetMemo[i];
+  return sheetMemo[i]=(async()=>{const sh=SHEETS.sheets[i];const key=`https://ba-projector.cache/${sh.path}?v=${sh.sha}`;
+    try{if(pcache){const hit=await pcache.match(key);if(hit)return await hit.blob();}}catch(e){}
+    const r=await gh(sh.path);if(!r.ok){delete sheetMemo[i];return null;}
+    const b=await r.blob();try{pcache&&await pcache.put(key,new Response(b,{headers:{'content-type':'image/webp'}}));}catch(e){}
+    return b;})();
+}
+async function tilesFromSheet(i,items){
+  // decode a sheet once (off the main thread), cut out the photos we need, let it go
+  const b=await sheetBlob(i);if(!b)return [];
+  const bm=await createImageBitmap(b);const T=SHEETS.tile,C=SHEETS.cols;const out=[];
+  for(const it of items){const c=document.createElement('canvas');c.width=c.height=T;
+    c.getContext('2d').drawImage(bm,(it.cell%C)*T,Math.floor(it.cell/C)*T,T,T,0,0,T,T);
+    out.push({it,c:toTile(c),thumb:thumbOf(c)});}
+  bm.close&&bm.close();return out;
+}
+async function loadSheets(){
+  if(!token)return false;
+  const r=await gh('v4/projector/index.json');if(!r.ok)return false;
+  SHEETS=JSON.parse(await r.text());if(!SHEETS.items||!SHEETS.items.length)return false;
+  try{pcache='caches' in window?await caches.open('ba-projector'):null;
+    if(pcache){const keep=new Set(SHEETS.sheets.map(sh=>`https://ba-projector.cache/${sh.path}?v=${sh.sha}`));
+      for(const req of await pcache.keys())if(!keep.has(req.url))pcache.delete(req);}}catch(e){pcache=null;}
+  GO=SHEETS.items;frozen=true;
+  await fillWater();
+  return true;
+}
+async function fillWater(){
+  const my=++drawN;queue2=shuffle(SHEETS.items.slice());qi=0;slotItem.fill(null);
+  const first=queue2.slice(0,N);qi=first.length;
+  const bySheet={};first.forEach((it,k)=>{(bySheet[it.sheet]=bySheet[it.sheet]||[]).push(Object.assign({slot:k},it));});
+  let done=0;const sheetIds=Object.keys(bySheet);let next=0;
+  await Promise.all(Array.from({length:4},async()=>{while(next<sheetIds.length&&my===drawN){const id=+sheetIds[next++];
+    for(const t of await tilesFromSheet(id,bySheet[id])){if(my!==drawN)return;writeSlot(t.it.slot,t.c);slotItem[t.it.slot]=t.it;slotObj[t.it.slot]={c:t.thumb,name:t.it.title};done++;}
+    $('stat').textContent=`GO images: ${done} of ${first.length} on the water (${SHEETS.items.length} in the set)`;}}));
+}
+// every few seconds one photo sinks and the next one in the set surfaces in its place
+function nextItem(){const on=new Set(slotItem.filter(Boolean).map(x=>x.id));
+  for(let k=0;k<queue2.length;k++){const it=queue2[qi%queue2.length];qi++;if(qi>=queue2.length){qi=0;shuffle(queue2);}if(!on.has(it.id))return it;}return null;}
+function stepSwap(dt){
+  if(!SHEETS||mode!=='arch'||queue2.length<=N)return;
+  const S=swap;
+  if(S.phase===0){S.t+=dt;if(S.t>=P.turn&&!S.busy){S.t=0;const it=nextItem();if(!it)return;S.busy=true;
+      tilesFromSheet(it.sheet,[it]).then(r=>{S.busy=false;if(!r.length)return;S.next=r[0];S.slot=Math.floor(Math.random()*N);S.phase=1;S.fade=0;});}}
+  else if(S.phase===1){S.fade=Math.min(1,S.fade+dt/1.2);if(S.fade>=1){const t=S.next;writeSlot(S.slot,t.c);slotItem[S.slot]=t.it;slotObj[S.slot]={c:t.thumb,name:t.it.title};if(hoverSlot===S.slot)hoverSlot=-1;S.phase=2;}}
+  else if(S.phase===2){S.fade=Math.max(0,S.fade-dt/1.2);if(S.fade<=0){S.phase=0;S.slot=-1;}}
+}
+
+window.__projector={swap,slotItem,px:()=>[pickPx[0],hoverX,hoverY,hoverOn,!!pickFence]};
+let drawN=0;
+async function drawGO(){
+  const my=++drawN;
+  if(!token){$('stat').textContent='Open the Sorting Room on this site once to connect, then reload';$('cap').textContent='not connected';return;}
+  if(!GO.length){
+    $('stat').textContent='loading GO images';
+    const r=await gh('v4/library/index.json');if(!r.ok){$('stat').textContent='could not read the v4 library ('+r.status+')';return;}
+    GO=(JSON.parse(await r.text()).items||[]).filter(i=>i.preview);
+  }
+  // pictures stored in the repo first; outside links only fill the remaining slots
+  const all=shuffle(GO.slice());const pick=all.filter(i=>!/^https?:/.test(i.preview)).slice(0,N);
+  if(pick.length<N)pick.push(...all.filter(i=>/^https?:/.test(i.preview)).slice(0,N-pick.length));
+  const got=[];let next=0,shown=0;
+  const show=()=>{if(my!==drawN)return;bakedTiles=got.slice();if(mode==='arch'){useBaked();prefill();frozen=true;}shown=got.length;
+    $('stat').textContent=`GO images ${got.length} / ${pick.length} loaded (of ${GO.length} published)`;};
+  await Promise.all(Array.from({length:10},async()=>{
+    while(next<pick.length&&my===drawN){const t=await tileFrom(pick[next++]);if(t)got.push(t);
+      if(got.length-shown>=(shown<20?4:12))show();}
+  }));
+  show();
+}
+let bakedTiles=[];
+function useBaked(){resetLib();bakedTiles.forEach(o=>addLib(o.c,o.name,false));ri=ring.length;}
+const IMG_RE=/\.(jpe?g|png|webp|gif|avif|bmp)$/i;const seenKeys=new Set();let dirHandle=null,scanning=false,liveScan=true,scanTimer=0,folderFiles=0;
+const fm=$('folderMsg');
+async function* walk(dh,path){for await(const [n,h] of dh.entries()){
+  if(h.kind==='file'&&IMG_RE.test(n))yield {h,path:path+n};
+  else if(h.kind==='directory')yield* walk(h,path+n+'/');}}
+async function ingestFile(f,key){
+  if(seenKeys.has(key))return false;seenKeys.add(key);
+  try{const bm=await createImageBitmap(f);const c=toTile(bm);bm.close&&bm.close();addLib(c,f.name,true);folderFiles++;return true;}
+  catch(e){return false;}}
+async function scanDir(){
+  if(!dirHandle||scanning)return;scanning=true;let added=0;
+  try{for await(const {h,path} of walk(dirHandle,'')){const f=await h.getFile();
+      if(await ingestFile(f,path+'|'+f.lastModified+'|'+f.size)){added++;fm.textContent=`Reading ${path} (${folderFiles} loaded)`;}}
+    fm.textContent=`${folderFiles} images from "${dirHandle.name}". Last scan ${new Date().toLocaleTimeString()}, ${added} new.`;}
+  catch(e){fm.textContent='Folder scan stopped: '+e.message;}
+  scanning=false;}
+function startLive(){clearInterval(scanTimer);if(liveScan&&dirHandle)scanTimer=setInterval(scanDir,15000);}
+async function ingestList(files){
+  let n=0;for(const f of files){if(!IMG_RE.test(f.name)&&!(f.type||'').startsWith('image/'))continue;
+    const key=(f.webkitRelativePath||f.name)+'|'+f.lastModified+'|'+f.size;
+    if(await ingestFile(f,key)){n++;fm.textContent=`${folderFiles} images loaded`;}}
+  fm.textContent=`${folderFiles} images loaded (${n} new). This browser cannot rescan a folder by itself; choose it again to refresh.`;}
+let mode='arch';
+$('pick').onclick=async()=>{
+  if(window.showDirectoryPicker){
+    try{dirHandle=await showDirectoryPicker({mode:'read'});}catch(e){return;}
+    if(mode!=='folder'||!folderFiles){resetLib();seenKeys.clear();folderFiles=0;}
+    setMode('folder');await scanDir();startLive();
+  }else{const inp=document.createElement('input');inp.type='file';inp.multiple=true;inp.setAttribute('webkitdirectory','');inp.accept='image/*';
+    inp.onchange=async()=>{resetLib();seenKeys.clear();folderFiles=0;setMode('folder');await ingestList([...inp.files]);};inp.click();}};
+$('rescan').onclick=()=>{if(dirHandle)scanDir();else fm.textContent='Choose a folder first. Auto-rescan needs desktop Chrome or Edge.';};
+$('liveBtn').onclick=e=>{liveScan=!liveScan;e.currentTarget.setAttribute('aria-pressed',liveScan);startLive();};
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',async e=>{e.preventDefault();const items=[...(e.dataTransfer.items||[])];
+  const handles=[];for(const it of items){if(it.getAsFileSystemHandle){try{const h=await it.getAsFileSystemHandle();if(h)handles.push(h);}catch(_){}}}
+  const dir=handles.find(h=>h.kind==='directory');
+  if(dir){dirHandle=dir;resetLib();seenKeys.clear();folderFiles=0;setMode('folder');await scanDir();startLive();return;}
+  resetLib();seenKeys.clear();folderFiles=0;setMode('folder');await ingestList([...e.dataTransfer.files]);});
+function setMode(m){mode=m;$('src').value=m;$('folderWrap').style.display=(m==='folder')?'flex':'none';
+  if(m==='arch'){if(SHEETS){fillWater();return;}useBaked();}
+  prefill();}
+function grab(){
+  const o=nextLib();curObj=o;if(o){cx.drawImage(o.c,0,0);curName=o.name;if(!hoverOn)$('cap').textContent=o.name;return;}
+  cx.fillStyle='#555';cx.fillRect(0,0,TILE,TILE);}
+let count=0,frozen=false;
+function pushFrame(){
+  grab();
+  const s=count%N;
+  slotObj[s]=curObj;
+  gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.texSubImage2D(gl.TEXTURE_2D,0,(s%COLS)*TILE,Math.floor(s/COLS)*TILE,gl.RGBA,gl.UNSIGNED_BYTE,cap);
+  atlasDirty=true;
+  count++;
+}
+function prefill(){for(let i=0;i<N;i++)pushFrame();}
+frozen=true;
+loadSheets().then(ok=>{if(!ok)drawGO();});   // sheets first; one-by-one loading only if there are none yet
+$('redraw').onclick=()=>{setMode('arch');if(SHEETS)fillWater();else drawGO();};
+
+// ---------- swells: many image mounds, each rising and crashing on its own slow cycle ----------
+function sstep(a,b,x){x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x);}
+const B=[];for(let i=0;i<NB;i++)B.push({
+  p:[0,-1.6,0],v:[0,0,0],
+  br:.13+.06*((i*.53)%1),
+  ph:(i*.618)%1,
+  rate:.030+.014*((i*.37)%1),
+  ang:i*2.399, rad:.5+.65*((i*.41)%1),
+  w1:.05+.03*((i*.29)%1), w2:.07+.02*((i*.17)%1),
+  pr:0, rise:0, r:.2});
+let surfFrac=0;
+function cycOf(b,t){const c=(t*b.rate*P.rise+b.ph)%1;return {rise:sstep(.03,.18,c)-sstep(.30,.40,c),cyc:c};}
+const crashes=[{x:0,z:0,t:-99,a:0},{x:0,z:0,t:-99,a:0},{x:0,z:0,t:-99,a:0},{x:0,z:0,t:-99,a:0}];let crI=0;
+function crashAt(x,z,amp){
+  crashes[crI]={x,z,t:wt,a:amp};crI=(crI+1)%4;
+  const sx=x*.375,sz=z*.375;
+  for(let k=0;k<8;k++){const an=k*.785;
+    stir(sx+Math.cos(an)*.12,sz+Math.sin(an)*.12,Math.cos(an)*7*amp,Math.sin(an)*7*amp,.02);}
+}
+function physics(dt,t){
+  let sf=0,na=0;
+  for(let i=0;i<B.length;i++){const b=B[i];
+    const active=i<P.nsw;
+    if(active){
+      const {rise}=cycOf(b,t);
+      if(b.pr>=.6&&rise<.6)crashAt(b.p[0],b.p[2],.5+.6*b.br);
+      b.pr=rise;b.rise=rise;sf+=rise;na++;
+      const wx=Math.cos(b.ang+t*b.w1)*b.rad*sprScale, wz=Math.sin(b.ang+t*b.w2)*b.rad*.85*sprScale;
+      const yt=P.wlvl-1.0+0.6*rise;
+      for(const k of [0,2]){
+        let f=(k===0?wx:wz)-b.p[k];f=f*6-b.v[k]*2.2;
+        for(let j=0;j<B.length;j++){if(j===i)continue;const dk=b.p[k]-B[j].p[k];
+          const d=Math.hypot(b.p[0]-B[j].p[0],b.p[2]-B[j].p[2])+.05;
+          if(d<.5)f+=dk/d*(.5-d)*10;}
+        b.v[k]+=f*dt;}
+      b.p[0]=Math.max(-1.1,Math.min(1.1,b.p[0]+b.v[0]*dt));
+      b.p[2]=Math.max(-1.1,Math.min(1.1,b.p[2]+b.v[2]*dt));
+      b.p[1]+=(yt-b.p[1])*Math.min(1,dt*3.2);
+      b.r=b.br*(.5+.9*rise)*(1+.12*Math.sin(t*1.1+i*1.7));
+    }else{b.rise=0;b.pr=0;b.p[1]+=(-1.7-b.p[1])*Math.min(1,dt*2);b.r=.1;}
+  }
+  surfFrac=na?sf/na:0;
+}
+function impulse(x,y,strength){
+  for(const b of B){const dx=b.p[0]-x,dy=b.p[2]-y,d=Math.hypot(dx,dy)+.08;
+    b.v[0]+=dx/d*strength/(d+.3);b.v[2]+=dy/d*strength/(d+.3);}}
+function stir(x,y,fx,fy,r){
+  if(!simOK)return;
+  if(splats.length>24)splats.splice(0,splats.length-24);
+  splats.push({p:[(x/2.4)+.5,(y/2.4)+.5],f:[fx,fy],r:r||.006});}
+
+// ---------- camera ----------
+const DEF={yaw:.55,pitch:-.34,dist:(innerWidth<innerHeight?4.5:2.8)};let cam={...DEF},camT={...DEF};
+try{const h=location.hash.match(/cam=([-\d.]+),([-\d.]+),([-\d.]+)/);if(h){cam={yaw:+h[1],pitch:+h[2],dist:+h[3]};camT={...cam};}}catch(e){}
+function camVecs(){
+  const cp=Math.cos(cam.pitch);
+  const ro=[Math.sin(cam.yaw)*cp*cam.dist,Math.sin(cam.pitch)*cam.dist,Math.cos(cam.yaw)*cp*cam.dist];
+  const l=Math.hypot(...ro);const fw=ro.map(v=>-v/l);
+  const up0=[0,1,0];
+  let rt=[fw[1]*up0[2]-fw[2]*up0[1],fw[2]*up0[0]-fw[0]*up0[2],fw[0]*up0[1]-fw[1]*up0[0]];
+  const rl=Math.hypot(...rt);rt=rt.map(v=>v/rl);
+  const up=[rt[1]*fw[2]-rt[2]*fw[1],rt[2]*fw[0]-rt[0]*fw[2],rt[0]*fw[1]-rt[1]*fw[0]];
+  return {ro,fw,rt,up};}
+const ptrs=new Map();let pinch0=0,downAt=0,moved=0,lastTouch=0;
+function sceneXY(e){const r=cv.getBoundingClientRect();
+  return [((e.clientX-r.left)/r.width*2-1)*(r.width/r.height)*1.05,-((e.clientY-r.top)/r.height*2-1)*1.05];}
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);lastTouch=performance.now();
+  if(ptrs.size===1){downAt=performance.now();moved=0;}
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]);}
+  cv.style.cursor='grabbing';});
+cv.addEventListener('pointermove',e=>{
+  const now=performance.now();lastTouch=now;
+  if(lastPX!==null){const dx=e.clientX-lastPX,dy=e.clientY-lastPY,dtm=Math.max(now-lastPT,4);
+    const [sx,sy]=sceneXY(e);
+    stir(sx,sy,dx*.0012*P.scrub,-dy*.0012*P.scrub,.0028);}
+  lastPX=e.clientX;lastPY=e.clientY;lastPT=now;
+  if(!ptrs.has(e.pointerId))return;const o=ptrs.get(e.pointerId);
+  const dx=e.clientX-o[0],dy=e.clientY-o[1];ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size===1){moved+=Math.abs(dx)+Math.abs(dy);camT.yaw-=dx*.006;camT.pitch=Math.max(-1.2,Math.min(.5,camT.pitch+dy*.006));}
+  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);
+    camT.dist=Math.max(2.2,Math.min(9,camT.dist*pinch0/Math.max(d,1)));pinch0=d;}
+});
+function up(e){
+  if(ptrs.size===1&&moved<8&&performance.now()-downAt<350){
+    const [x,y]=sceneXY(e);impulse(x,y,2.2);stir(x,y,3.5,2.5,.012);}
+  ptrs.delete(e.pointerId);if(!ptrs.size)cv.style.cursor='grab';}
+cv.addEventListener('pointerleave',()=>{lastPX=null;});
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+cv.addEventListener('wheel',e=>{e.preventDefault();camT.dist=Math.max(2.2,Math.min(9,camT.dist*Math.exp(e.deltaY*.001)));},{passive:false});
+cv.addEventListener('keydown',e=>{const k=e.key;let h=true;
+  kick=Math.min(kick+30*P.scrub,140);lastTouch=performance.now();
+  if(k==='ArrowLeft')camT.yaw-=.12;else if(k==='ArrowRight')camT.yaw+=.12;
+  else if(k==='ArrowUp')camT.pitch=Math.min(.5,camT.pitch+.08);else if(k==='ArrowDown')camT.pitch=Math.max(-1.2,camT.pitch-.08);
+  else if(k==='+'||k==='=')camT.dist=Math.max(2.2,camT.dist*.9);else if(k==='-')camT.dist=Math.min(7,camT.dist*1.1);
+  else if(k===' ')togglePause();else if(k==='Enter'){impulse(0,0,2.4);stir(0,0,4,3,.015);kick=Math.min(kick+40,140);}else h=false;
+  if(h)e.preventDefault();});
+
+// ---------- controls ----------
+const P={turn:4,glimpse:.5,disp:.3,refl:1,iso:.13,layer:.75,span:7,smear:.12,chroma:.25,adv:.1,nsw:0,slow:.5,wmix:1,fps:6,scrub:1,foam:.55,rise:1,wlvl:-.15,rain:.7};
+['turn','glimpse','disp','refl','iso','layer','span','smear','chroma','adv','nsw','slow','wmix','fps','scrub','foam','rise','wlvl','rain'].forEach(k=>{
+  const el=$(k),out=$('o_'+k);const set=()=>{P[k]=+el.value;out.textContent=(+el.value).toFixed(k==='iso'?3:(k==='span'||k==='fps'||k==='nsw'?0:2));};
+  el.addEventListener('input',set);set();});
+let paused=false,showThumb=true;
+function togglePause(){paused=!paused;$('pause').setAttribute('aria-pressed',paused);$('pause').textContent=paused?'Play':'Pause';}
+$('pause').onclick=togglePause;
+$('thumbBtn').onclick=e=>{showThumb=!showThumb;th.style.display=showThumb?'block':'none';$('cap').style.display=showThumb?'block':'none';e.currentTarget.setAttribute('aria-pressed',showThumb);};
+$('reset').onclick=()=>{camT={...DEF};};
+$('push').onclick=()=>{impulse(0,0,3);for(let i=0;i<4;i++)stir(Math.random()*1.6-.8,Math.random()*1.4-.7,(Math.random()-.5)*8,(Math.random()-.5)*8,.01);};
+// projection: full screen, high quality, no interface; P or Esc to leave
+let idleT=0;
+function setProj(on){document.body.classList.toggle('proj',on);
+  if(on){$('q').value='2';W=0;if(document.documentElement.requestFullscreen&&!document.fullscreenElement)document.documentElement.requestFullscreen().catch(()=>{});}
+  else if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});}
+$('proj').onclick=()=>setProj(true);
+addEventListener('keydown',e=>{if(e.key==='p'||e.key==='P'){if(e.target.closest&&e.target.closest('input,select'))return;setProj(!document.body.classList.contains('proj'));}});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('proj');});
+addEventListener('pointermove',()=>{document.body.classList.remove('idle');clearTimeout(idleT);idleT=setTimeout(()=>document.body.classList.add('idle'),2500);});
+const panel=$('panel'),pt=$('ptoggle');
+function setPanel(open){panel.classList.toggle('min',!open);pt.setAttribute('aria-expanded',open);
+  pt.textContent='VES / Strange Projector water body study v24 - controls '+(open?'-':'+');}
+pt.onclick=()=>setPanel(panel.classList.contains('min'));
+$('src').onchange=e=>{const v=e.target.value;setMode(v);
+  if(v==='folder'&&!lib.length)fm.textContent='Pick the downloaded flat master folder, or drop a folder or images on the page.';};
+const qual=[{steps:40,scale:.5},{steps:64,scale:.75},{steps:96,scale:1}];
+$('q').value='1';
+$('q').onchange=()=>{W=0;};
+
+// ---------- the photo under the mouse ----------
+const pickT=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,pickT);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+const pickF=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,pickF);
+gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,pickT,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+const pickPx=new Uint8Array(4);let hoverOn=false,hoverX=0,hoverY=0,hoverSlot=-1;
+cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();hoverOn=true;hoverX=(e.clientX-r.left)/r.width;hoverY=1-(e.clientY-r.top)/r.height;});
+cv.addEventListener('pointerleave',()=>{hoverOn=false;hoverSlot=-1;});
+const pbo=gl.createBuffer();gl.bindBuffer(gl.PIXEL_PACK_BUFFER,pbo);gl.bufferData(gl.PIXEL_PACK_BUFFER,4,gl.STREAM_READ);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+let pickFence=null,pickAt=0,lastPickT=0,lastPX2=-9,lastPY2=-9;
+function showPick(){const sl=pickPx[0]-1;
+  if(sl>=0&&sl!==hoverSlot&&slotObj[sl]){hoverSlot=sl;const o=slotObj[sl];tx.drawImage(o.c,0,0,th.width,th.height);$('cap').textContent=o.name;}}
+function pickNow(){
+  // read the answer from the last request if the GPU has it ready; never wait for it
+  if(pickFence){const st=gl.clientWaitSync(pickFence,0,0);
+    if(st===gl.TIMEOUT_EXPIRED&&performance.now()-pickAt<600)return;
+    gl.deleteSync(pickFence);pickFence=null;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER,pbo);gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,pickPx);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);showPick();}
+  const now=performance.now(),px=hoverX*W,py=hoverY*H;
+  const movedEnough=Math.hypot(px-lastPX2,py-lastPY2)>=3;
+  if(now-lastPickT<50||(!movedEnough&&now-lastPickT<350))return;
+  lastPickT=now;lastPX2=px;lastPY2=py;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,pickF);gl.viewport(0,0,1,1);
+  gl.uniform1f(U.u_pickOn,1);gl.uniform2f(U.u_pickXY,px,py);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,pbo);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,0);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  pickFence=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0);gl.flush();pickAt=now;
+  gl.uniform1f(U.u_pickOn,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);
+}
+
+// ---------- loop ----------
+let kick=0,vel2=0,lastPX=null,lastPY=0,lastPT=0,tick=0,last=performance.now(),acc=0,frameAcc=0,fpsS=60,W=0,H=0,wt=0,spinN=0,spinAcc=0;
+let dyn=1,lastAdapt=0,lastMip=0;
+function resize(){
+  const q=qual[+$('q').value];const dpr=Math.min(devicePixelRatio||1,2)*q.scale*dyn;
+  const w=Math.max(2,Math.floor(cv.clientWidth*dpr)),h=Math.max(2,Math.floor(cv.clientHeight*dpr));
+  if(w!==W||h!==H){W=w;H=h;cv.width=w;cv.height=h;}}
+addEventListener('resize',resize);
+prefill();
+if(reduce){togglePause();}
+let clock=0,simAcc=0;
+function frame(now){
+  const dtr=Math.min((now-last)/1000,.1);last=now;
+  fpsS+=(1/Math.max(dtr,1e-3)-fpsS)*.05;
+  // hold a smooth frame rate: soften the render a little only when it starts to drop
+  if(now-lastAdapt>1200&&!document.hidden){lastAdapt=now;
+    if(fpsS<48&&dyn>.55)dyn=Math.max(.55,dyn*.9);else if(fpsS>57.5&&dyn<1)dyn=Math.min(1,dyn*1.05);}
+  if(spinN>0)for(let z=0;z<spinN;z++)spinAcc+=Math.random(); // capture hook: hold wall time so the archive can decode and frames keep flowing
+  resize();
+  if(!paused){
+    clock+=dtr;wt+=dtr*P.slow;acc+=dtr;
+    const h=1/120;while(acc>=h){physics(h,clock);acc-=h;}
+    // the fluid moves slowly, so it updates 30 times a second instead of every frame
+    simAcc+=dtr;
+    if(simOK&&simAcc>=1/30){
+      B.forEach(b=>{if(b.rise>.03)stir(b.p[0]*.375,b.p[2]*.375,b.v[0]*.9,b.v[2]*.9,.004);});
+      simStep(Math.min(simAcc,.05));simAcc=0;
+    }
+    stepSwap(dtr);
+    kick*=Math.exp(-dtr*1.8);
+    const surge=1+.45*Math.sin(clock*.37)*Math.sin(clock*.91+1.3);
+    const memory=.4+.6*surfFrac; // the more the water holds, the faster the archive flows
+    const vt=(P.fps*surge+kick)*memory;
+    vel2+=(vt-vel2)*(1-Math.exp(-dtr*5));
+    if(!frozen){frameAcc+=vel2*dtr;let np=0;while(frameAcc>=1&&np<10){frameAcc-=1;pushFrame();np++;}if(frameAcc>=1)frameAcc%=1;}
+  }
+  if(performance.now()-lastTouch>6000)camT.yaw+=dtr*.03; // idle drift
+  const k=1-Math.exp(-dtr*10);
+  cam.yaw+=(camT.yaw-cam.yaw)*k;cam.pitch+=(camT.pitch-cam.pitch)*k;cam.dist+=(camT.dist-cam.dist)*k;
+  const c=camVecs();
+  gl.viewport(0,0,W,H);
+  gl.useProgram(pr);
+  gl.uniform2f(U.u_res,W,H);gl.uniform1f(U.u_t,clock);gl.uniform1f(U.u_wt,wt);
+  gl.uniform1f(U.u_head,count-1+frameAcc);
+  gl.uniform1f(U.u_iso,P.iso);gl.uniform1f(U.u_layer,P.layer);gl.uniform1f(U.u_span,P.span);
+  gl.uniform1f(U.u_smear,P.smear);gl.uniform1f(U.u_chroma,P.chroma);gl.uniform1f(U.u_adv,P.adv);
+  gl.uniform1f(U.u_simOK,simOK?1:0);gl.uniform1i(U.u_bn,Math.min(P.nsw,NB));
+  gl.uniform1f(U.u_steps,qual[+$('q').value].steps);
+  gl.uniform1f(U.u_wy,P.wlvl);gl.uniform1f(U.u_foam,P.foam);gl.uniform1f(U.u_wmix,P.wmix);gl.uniform1f(U.u_rain,P.rain);gl.uniform1f(U.u_pt,cam.pitch);
+  gl.uniform3fv(U.u_ro,c.ro);gl.uniform3fv(U.u_fw,c.fw);gl.uniform3fv(U.u_rt,c.rt);gl.uniform3fv(U.u_up,c.up);
+  gl.uniform1f(U.u_under,c.ro[1]<P.wlvl?1:0);
+  const bb=new Float32Array(NB*4);B.forEach((b,i)=>{bb.set([b.p[0],b.p[1],b.p[2],b.r],i*4);});
+  gl.uniform4fv(U.u_b,bb);
+  const cr4=new Float32Array(16);crashes.forEach((c2,i)=>{cr4.set([c2.x,c2.z,c2.t,c2.a],i*4);});
+  gl.uniform4fv(U.u_cr,cr4);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,simOK?vel.a.t:dummy);
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+  if(atlasDirty&&(!SHEETS||performance.now()-lastMip>250)){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.generateMipmap(gl.TEXTURE_2D);atlasDirty=false;lastMip=performance.now();if(SHEETS&&slotItem.every(Boolean))mipsBuilt=true;}
+  gl.uniform2f(U.u_swap,swap.slot,swap.fade);gl.uniform1f(U.u_glimpse,P.glimpse);gl.uniform1f(U.u_disp,P.disp);gl.uniform1f(U.u_refl,P.refl);gl.uniform1f(U.u_pickOn,0);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  if(showThumb&&hoverOn)pickNow();
+  else if(showThumb&&!hoverOn){tx.drawImage(cap,0,0,th.width,th.height);}
+  if((++tick%20)===0||tick<3)$('stat').textContent=`${W}x${H}  ${fpsS.toFixed(0)} fps  ${N} frames  ${mode==='arch'?'GO':'folder'} ${SHEETS?slotItem.filter(Boolean).length+' on the water of '+SHEETS.items.length:(lib.length||bakedTiles.length)+' of '+(GO.length||'?')} imgs  res ${Math.round(dyn*100)}%  water ${simOK?'on':'off'}  swells ${P.nsw} up ${B.filter(b=>b.rise>.35).length}  slowmo ${P.slow}${paused?'  paused':''}`;
+  requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+// test hook: ?t=SECONDS pre-rolls clock, swells, water and frames before the first paint
+const qs=new URLSearchParams(location.search);
+if(qs.has('t')){const T=+qs.get('t');
+  for(let s=0;s<T*30;s++){clock+=1/30;wt+=P.slow/30;
+    physics(1/30,clock);
+    if(simOK){B.forEach(b=>{if(b.rise>.03)stir(b.p[0]*.375,b.p[2]*.375,b.v[0]*.9,b.v[2]*.9,.004);});simStep(1/30);}
+    if(s%6===0)pushFrame();}
+  if(qs.has('yaw'))camT.yaw=cam.yaw=+qs.get('yaw');
+  if(qs.has('pitch'))camT.pitch=cam.pitch=+qs.get('pitch');
+  if(qs.has('dist'))camT.dist=cam.dist=+qs.get('dist');}
+if(qs.has('spin'))spinN=+qs.get('spin');
+})();
+</script>
+</body>
+</html>
