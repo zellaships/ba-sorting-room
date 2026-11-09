@@ -648,17 +648,20 @@ vec3 cShade(vec3 pw,vec3 rdw,float id,float sub){
     vec3 c=id<6.5?vec3(0.,1.2,0.):id<7.5?vec3(1.2,0.,0.):id<8.5?vec3(-1.2,0.,0.):vec3(0.,-1.2,0.);vec3 q=p-c;uv=vec2(atan(q.y,q.x)*PR,atan(q.z,length(q.xy)-PR)*PT);}
   else{int bi=int(id-10.);base=idxC(u_beads[bi].w);uv=p.xy*3.+p.z;}
   // fired glaze: each piece its own firing, mottled, crazed with fine cracks, speckled, chipped back to bare clay
+  vec3 pt=p;
+  if(id<1.5){float c=cos(u_spinA),s2=sin(u_spinA);pt.xy=mat2(c,s2,-s2,c)*pt.xy;}
+  else if(id>2.5&&id<3.5){float c=cos(-u_spinA*.7),s2=sin(-u_spinA*.7);pt.xz=mat2(c,s2,-s2,c)*pt.xz;}
   float piece=floor(uv.x/.2+.5*h31(vec3(floor(uv.x/.2),id,3.)));
   base*=.88+.24*h31(vec3(piece,id,1.));
-  float mott=vn3(p*9.)*.6+vn3(p*23.)*.4;
+  float mott=vn3(pt*9.)*.6+vn3(pt*23.)*.4;
   base*=.82+.32*mott;
   float cr=crack2(uv*vec2(26.,26.)+piece*3.1);
   base*=mix(.55,1.,smoothstep(.0,.06,cr));
   float seam=abs(fract(uv.x/.2+.5*h31(vec3(floor(uv.x/.2),id,3.)))-.5)*2.;
   base*=mix(1.,.38,smoothstep(.93,.99,seam));
-  float chip=smoothstep(.70,.78,vn3(p*14.+3.7));
+  float chip=smoothstep(.70,.78,vn3(pt*14.+3.7));
   base=mix(base,vec3(.70,.55,.42)*(.85+.3*mott),chip*.55);
-  float sp=h31(floor(p*190.));base*=sp>.985?.45:sp<.012?1.35:1.;
+  float sp=h31(floor(pt*190.));base*=sp>.985?.45:sp<.012?1.35:1.;
   // light: matte diffuse, soft sky fill, a broad low glaze sheen, the wet line at the water
   vec3 L=normalize(vec3(.35,.6,.45));
   float dif=max(dot(n,L),0.),wrap=max(dot(n,L)*.5+.5,0.);
