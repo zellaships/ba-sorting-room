@@ -306,14 +306,14 @@
   let snapT = null;
   function saveSnap() {
     clearTimeout(snapT);
-    snapT = setTimeout(() => idb.set("snap:" + repo, { v: 1, at: Date.now(), CARDS: { sha: CARDS.sha, list: CARDS.list }, sort, sortSha, EDITS, reflections,
+    snapT = setTimeout(() => idb.set("snap:" + repo, { v: 2, at: Date.now(), CARDS: { sha: CARDS.sha, list: CARDS.list }, sort, sortSha, EDITS, reflections,
       SIM: { sha: SIM.sha, by: SIM.by }, CV: { sha: CV.sha, by: CV.by, styleSha: CV.styleSha, style: CV.style },
       PUB: { sha: PUB.sha, ids: [...PUB.ids] }, SNAP: { ...SNAP }, keptFolders: [...keptFolders] }), 400);
   }
   async function warm() {
     if (!token) return false;
     const d = await idb.get("snap:" + repo);
-    if (!d || d.v !== 1 || Object.keys(records).length) return false;
+    if (!d || d.v !== 2 || Object.keys(records).length || !Object.values(d.sort || {}).some(v => v && v.status)) return false;
     Object.assign(CARDS, d.CARDS); sort = Object.assign(d.sort || {}, pending); sortSha = d.sortSha; EDITS = Object.assign(d.EDITS || {}, editsPending); reflections = d.reflections || "";
     Object.assign(SIM, d.SIM); Object.assign(CV, d.CV); PUB.sha = d.PUB.sha; PUB.ids = new Set(d.PUB.ids || []); Object.assign(SNAP, d.SNAP); keptFolders = new Set(d.keptFolders || []);
     buildRecords(SNAP.recPaths || []); applyEdits();
@@ -1187,7 +1187,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108214237";
+  const BUILD = "20261108214325";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
