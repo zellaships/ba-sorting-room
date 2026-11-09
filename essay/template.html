@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+:root{--paper:#f9f9f8;--ink:#2a2a2a;--soft:#6b6b6b;--line:#cfcfcc;--bar:64px;--strip:58px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0b1a20;color:var(--ink);font:400 17px/1.75 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;overflow:hidden}
+#ocean{position:fixed;inset:0;width:100%;height:100%;border:0;display:block}
+
+/* the drawer: closed, only its bar and the black strip show at the bottom; open, it fills the screen */
+#drawer{position:fixed;left:0;right:0;top:0;height:100%;display:flex;flex-direction:column;background:var(--paper);
+  transform:translateY(calc(100% - var(--bar) - var(--strip)));transition:transform .75s cubic-bezier(.2,.75,.15,1);z-index:2;
+  box-shadow:0 -1px 0 var(--line)}
+#drawer.open{transform:translateY(0)}
+#bar{flex:none;height:var(--bar);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 28px;
+  background:var(--paper);border-top:1px solid var(--line);cursor:pointer;user-select:none}
+#bar .label{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+#bar .handle{width:60px;height:24px;display:flex;flex-direction:column;justify-content:space-between;padding:4px 0}
+#bar .handle i{display:block;height:1.5px;background:#333}
+#bar:hover .label,#bar:focus-visible .label{color:#000}
+#bar:focus-visible{outline:2px solid #000;outline-offset:-4px}
+#strip{flex:none;height:var(--strip);background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;letter-spacing:.02em}
+#strip img{height:22px;width:auto;display:block}
+#strip img.esbi{height:34px}
+
+#read:focus{outline:none}
+#read{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;position:relative}
+#wb{position:sticky;top:18px;float:right;margin:18px 24px 0 0;z-index:3;display:inline-block;padding:8px 16px;background:#fff;border:1px solid #ddd;border-radius:3px;
+  color:#333;text-decoration:none;font-size:15px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+#wb:hover,#wb:focus-visible{border-color:#999;color:#000}
+.layout{display:grid;grid-template-columns:minmax(200px,clamp(220px,20vw,320px)) minmax(0,46rem);gap:0 clamp(32px,6vw,120px);padding:clamp(28px,4vw,64px) clamp(20px,5vw,96px) 30vh clamp(20px,7vw,140px)}
+nav#sections{position:sticky;top:46px;align-self:start;border-top:1.5px solid #222;border-bottom:1px solid #999;padding:22px 0 26px}
+nav#sections a{display:block;padding:9px clamp(16px,2vw,30px);color:#444;text-decoration:none;font-size:clamp(15px,.4vw + 13px,18px);line-height:1.35;border-left:2px solid transparent;transition:color .2s,border-color .2s}
+nav#sections a:hover{color:#000}
+nav#sections a.on{color:#000;border-left-color:#000}
+article h1{font-weight:400;font-size:clamp(34px,2.6vw + 14px,56px);line-height:1.08;margin:0 0 clamp(32px,4vw,64px);letter-spacing:-.015em}
+article section{scroll-margin-top:40px}
+article h2{font-weight:400;font-size:clamp(23px,1.2vw + 16px,32px);line-height:1.25;margin:clamp(56px,6vw,96px) 0 clamp(18px,2vw,28px)}
+article section:first-of-type h2{margin-top:0}
+article h3{font-weight:400;font-size:clamp(14px,.3vw + 12px,16px);letter-spacing:.06em;text-transform:uppercase;color:#555;margin:46px 0 16px}
+article p{margin:0 0 1.35em;font-size:clamp(17px,.45vw + 14px,21px);line-height:1.8;max-width:42em;hanging-punctuation:first}
+article p.labeled b{font-weight:600}
+#menu{display:none}
+
+@media (max-width:820px){
+  :root{--bar:58px;--strip:46px}
+  #bar{padding:0 16px}#bar .label{font-size:13px}
+  #strip img{height:16px}#strip img.esbi{height:28px}
+  .layout{display:block}
+  nav#sections{display:none}
+  #menu{display:block;position:sticky;top:0;z-index:2;background:var(--paper);padding:10px 0 12px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  #menu select{font:inherit;font-size:16px;width:100%;padding:8px;border:1px solid #bbb;background:#fff;border-radius:3px}
+  #wb{position:static;float:none;display:block;margin:14px 22px 0;text-align:center}
+}
+@media (prefers-reduced-motion:reduce){#drawer{transition:none}}
+</style>
+</head>
+<body>
+<iframe id="ocean" src="../projector/v27/?embed=1" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
+
+<div id="drawer" aria-label="Essay drawer">
+  <div id="bar" role="button" tabindex="0" aria-expanded="false" aria-controls="read">
+    <span class="label" id="barLabel">Open the drawer</span>
+    <span class="handle" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span></span>
+  </div>
+  <div id="strip">
+    <img class="esbi" src="esbi.png" alt="Experimental School for Black Imagination">
+    <img src="logo.png" alt="Black Aquatics">
+  </div>
+  <div id="read" tabindex="-1">
+    <a id="wb" href="../workbench/">Workbench &rsaquo;</a>
+    <div class="layout">
+      <nav id="sections" aria-label="Essay sections">
+{{NAV}}
+      </nav>
+      <article>
+        <div id="menu"><label class="sr" for="jump" style="position:absolute;left:-9999px">Go to section</label><select id="jump"></select></div>
+        <h1>{{TITLE}}</h1>
+{{BODY}}
+      </article>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+const drawer=$('#drawer'),bar=$('#bar'),read=$('#read'),ocean=$('#ocean');
+const secs=[...document.querySelectorAll('article section')];
+const links=[...document.querySelectorAll('nav#sections a')];
+const jump=$('#jump');
+secs.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.dataset.title;jump.appendChild(o);});
+
+function setOpen(open,{fromHash=false}={}){
+  drawer.classList.toggle('open',open);
+  bar.setAttribute('aria-expanded',open);
+  $('#barLabel').textContent=open?'Close the drawer':'Open the drawer';
+  // the ocean rests while the essay covers it
+  clearTimeout(setOpen.t);
+  if(open){setOpen.t=setTimeout(()=>{ocean.style.visibility='hidden';},800);}else{ocean.style.visibility='visible';}
+  if(!open&&!fromHash&&location.hash)history.pushState(null,'',location.pathname+location.search);
+  if(open)setTimeout(()=>read.focus({preventScroll:true}),50);
+}
+bar.addEventListener('click',()=>setOpen(!drawer.classList.contains('open')));
+bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();bar.click();}});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&drawer.classList.contains('open'))setOpen(false);});
+
+function goTo(id,push=true){
+  const el=document.getElementById(id);if(!el)return;
+  if(!drawer.classList.contains('open'))setOpen(true,{fromHash:true});
+  setTimeout(()=>{read.scrollTo({top:el.offsetTop-30,behavior:drawer.classList.contains('open')?'smooth':'auto'});},drawer.classList.contains('open')?0:60);
+  if(push&&location.hash!=='#'+id)history.pushState(null,'','#'+id);
+}
+links.forEach(a=>a.addEventListener('click',e=>{e.preventDefault();goTo(a.dataset.s);}));
+jump.addEventListener('change',()=>goTo(jump.value));
+
+// highlight the section being read, and keep the address in step with it
+let ticking=false;
+read.addEventListener('scroll',()=>{if(ticking)return;ticking=true;requestAnimationFrame(()=>{ticking=false;
+  const y=read.scrollTop+read.clientHeight*.3;let cur=secs[0];
+  for(const s of secs)if(s.offsetTop<=y)cur=s;
+  links.forEach(a=>a.classList.toggle('on',a.dataset.s===cur.id));jump.value=cur.id;
+  if(drawer.classList.contains('open')&&location.hash!=='#'+cur.id&&read.scrollTop>20)history.replaceState(null,'','#'+cur.id);
+});},{passive:true});
+
+function fromUrl(){const id=location.hash.slice(1);
+  if(id&&document.getElementById(id)){setOpen(true,{fromHash:true});setTimeout(()=>{const el=document.getElementById(id);read.scrollTop=el.offsetTop-30;},30);}
+  else if(!id)setOpen(false,{fromHash:true});}
+addEventListener('popstate',fromUrl);
+fromUrl();
+})();
+</script>
+</body>
+</html>

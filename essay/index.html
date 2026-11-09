@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Black Aquatics</title>
+<style>
+:root{--paper:#f9f9f8;--ink:#2a2a2a;--soft:#6b6b6b;--line:#cfcfcc;--bar:64px;--strip:58px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0b1a20;color:var(--ink);font:400 17px/1.75 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;overflow:hidden}
+#ocean{position:fixed;inset:0;width:100%;height:100%;border:0;display:block}
+
+/* the drawer: closed, only its bar and the black strip show at the bottom; open, it fills the screen */
+#drawer{position:fixed;left:0;right:0;top:0;height:100%;display:flex;flex-direction:column;background:var(--paper);
+  transform:translateY(calc(100% - var(--bar) - var(--strip)));transition:transform .75s cubic-bezier(.2,.75,.15,1);z-index:2;
+  box-shadow:0 -1px 0 var(--line)}
+#drawer.open{transform:translateY(0)}
+#bar{flex:none;height:var(--bar);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 28px;
+  background:var(--paper);border-top:1px solid var(--line);cursor:pointer;user-select:none}
+#bar .label{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+#bar .handle{width:60px;height:24px;display:flex;flex-direction:column;justify-content:space-between;padding:4px 0}
+#bar .handle i{display:block;height:1.5px;background:#333}
+#bar:hover .label,#bar:focus-visible .label{color:#000}
+#bar:focus-visible{outline:2px solid #000;outline-offset:-4px}
+#strip{flex:none;height:var(--strip);background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;letter-spacing:.02em}
+#strip img{height:22px;width:auto;display:block}
+#strip img.esbi{height:34px}
+
+#read:focus{outline:none}
+#read{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;position:relative}
+#wb{position:sticky;top:18px;float:right;margin:18px 24px 0 0;z-index:3;display:inline-block;padding:8px 16px;background:#fff;border:1px solid #ddd;border-radius:3px;
+  color:#333;text-decoration:none;font-size:15px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+#wb:hover,#wb:focus-visible{border-color:#999;color:#000}
+.layout{display:grid;grid-template-columns:minmax(200px,clamp(220px,20vw,320px)) minmax(0,46rem);gap:0 clamp(32px,6vw,120px);padding:clamp(28px,4vw,64px) clamp(20px,5vw,96px) 30vh clamp(20px,7vw,140px)}
+nav#sections{position:sticky;top:46px;align-self:start;border-top:1.5px solid #222;border-bottom:1px solid #999;padding:22px 0 26px}
+nav#sections a{display:block;padding:9px clamp(16px,2vw,30px);color:#444;text-decoration:none;font-size:clamp(15px,.4vw + 13px,18px);line-height:1.35;border-left:2px solid transparent;transition:color .2s,border-color .2s}
+nav#sections a:hover{color:#000}
+nav#sections a.on{color:#000;border-left-color:#000}
+article h1{font-weight:400;font-size:clamp(34px,2.6vw + 14px,56px);line-height:1.08;margin:0 0 clamp(32px,4vw,64px);letter-spacing:-.015em}
+article section{scroll-margin-top:40px}
+article h2{font-weight:400;font-size:clamp(23px,1.2vw + 16px,32px);line-height:1.25;margin:clamp(56px,6vw,96px) 0 clamp(18px,2vw,28px)}
+article section:first-of-type h2{margin-top:0}
+article h3{font-weight:400;font-size:clamp(14px,.3vw + 12px,16px);letter-spacing:.06em;text-transform:uppercase;color:#555;margin:46px 0 16px}
+article p{margin:0 0 1.35em;font-size:clamp(17px,.45vw + 14px,21px);line-height:1.8;max-width:42em;hanging-punctuation:first}
+article p.labeled b{font-weight:600}
+#menu{display:none}
+
+@media (max-width:820px){
+  :root{--bar:58px;--strip:46px}
+  #bar{padding:0 16px}#bar .label{font-size:13px}
+  #strip img{height:16px}#strip img.esbi{height:28px}
+  .layout{display:block}
+  nav#sections{display:none}
+  #menu{display:block;position:sticky;top:0;z-index:2;background:var(--paper);padding:10px 0 12px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  #menu select{font:inherit;font-size:16px;width:100%;padding:8px;border:1px solid #bbb;background:#fff;border-radius:3px}
+  #wb{position:static;float:none;display:block;margin:14px 22px 0;text-align:center}
+}
+@media (prefers-reduced-motion:reduce){#drawer{transition:none}}
+</style>
+</head>
+<body>
+<iframe id="ocean" src="../projector/v27/?embed=1" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
+
+<div id="drawer" aria-label="Essay drawer">
+  <div id="bar" role="button" tabindex="0" aria-expanded="false" aria-controls="read">
+    <span class="label" id="barLabel">Open the drawer</span>
+    <span class="handle" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span></span>
+  </div>
+  <div id="strip">
+    <img class="esbi" src="esbi.png" alt="Experimental School for Black Imagination">
+    <img src="logo.png" alt="Black Aquatics">
+  </div>
+  <div id="read" tabindex="-1">
+    <a id="wb" href="../workbench/">Workbench &rsaquo;</a>
+    <div class="layout">
+      <nav id="sections" aria-label="Essay sections">
+<a href="#what-water-gives" data-s="what-water-gives">What water gives</a>
+<a href="#what-we-make-of-it" data-s="what-we-make-of-it">What we make of it</a>
+<a href="#what-water-keeps" data-s="what-water-keeps">What water keeps</a>
+<a href="#black-aquatics-the-summer" data-s="black-aquatics-the-summer">Black Aquatics: the summer</a>
+      </nav>
+      <article>
+        <div id="menu"><label class="sr" for="jump" style="position:absolute;left:-9999px">Go to section</label><select id="jump"></select></div>
+        <h1>Black Aquatics</h1>
+<section id="what-water-gives" data-title="What water gives"><h2>What water gives</h2>
+<p>Before the crossing, we were the source of the Nile. We carved boats from trees and read the wind off the coast. Yemọja, mother of the ocean, and Ọṣun of the rivers crossed the Atlantic with our peoples, from Bahia to Brooklyn. Maroons made freedom where the swamps swallowed their tracks. Harriet went up the Combahee River, led more than 750 people out of slavery, and a century later Black lesbian feminists carried that river’s name into their politics. We went down into the water for baptism and rose in the arms of those who loved us. We learned to float, to fish. We waded in whites-only water, and they poured acid into the pool and drained it behind us, so we built our own shorelines. We are water: we begin in the dark of the womb, and every river since runs from us, and where our rivers meet the sea, the water turns brackish and new life begins. What hidden histories move through our veins?</p>
+<p>Water is part of what I am made of. I want to stay with that fact before turning it into an image. I am already sustained by the water I am trying to understand, whether I notice it or not. The water that enters a body has passed through a system people have built and must keep caring for. What it carries and who can reach it are part of the relation, too. Today the faucets still run poison in Flint and Jackson, and a child born in the camps at Standing Rock carries the name Mni Wiconi: water is life.</p>
+<p>In African Religions and Philosophy, John S. Mbiti writes of rain, &quot;it came, it comes and it will come&quot; (p. 237). Water works on a timescale that carves canyons. It does not need us. Right now I find it easier to imagine the earth healing without us. We have separated ourselves from nature and destroyed so much. I am trying to imagine whether humans, as we live now, can be part of that healing, or whether the earth heals because we are gone.</p>
+<p>We already connect with living people across distance, outside the order in which we last saw them. I think of contact with ancestors as reaching into an immaterial space that thought touches but does not contain. A soul can exist in more than one place, with different assignments beyond this life. When an ancestor visits, I meet a version of them, not a whole person pulled back here. They are not stuck.</p>
+<p>Thought is something I make. Contact arrives. It can also answer when I reach out. A knowing begins in the body and moves me toward something specific. I understand it as earth wisdom, more than intuition. It has to do with destiny and becoming, not a judgment about whether I have been good. There are many possible versions of me. When contact materializes, something happens and a version moves forward.</p>
+<p>In the sleeve notes to Drexciya’s 1997 compilation The Quest, a voice signed The Unknown Writer asks whether the children of pregnant enslaved women thrown overboard could have survived underwater. The fiction does not stop at survival. &quot;Have they been spared by God to teach us or terrorise us?&quot;</p>
+<p>I linger over &quot;terrorize.&quot; The Drexciyans can breathe where a human body would drown. They have capacities the world above the water cannot account for, and they make their strange music. I am drawn to the possibility of bringing God into us: sacred power carried in a body becoming capable of another life. In my reading of the sleeve notes, the body itself has become the place from which another future can be attempted. The sleeve still asks whether they have been spared by God. I hear that question inside the possibility I am reaching for.</p>
+<p>I think about the will of Black people to persist through times that have made our continued existence seem impossible. Drexciya gives that desire a changed body and a world to inhabit. What might we become that the present has given us no way to recognise? Black imagination lets us begin futures bigger than our own lives. Our lives reach further than we can see. I think of baptism as birth and rebirth, going into the void and looking into depth. Sovereignty enters here as a question of who gets to make a world, and whose desires can determine a life within it. I want to know how they live once they can breathe there. What do they want of one another? What pleasure do they take in their music? What happens when they disagree? The question of whether they might terrorise us keeps me from making their future answer only to my need for reassurance.</p>
+<p>The world Drexciya invents enters the one I inhabit. I still find myself measuring my own life against what it allows. A story can enter the world I inhabit through what I recognise as possible, what I come to want, and what I attempt. Believing through it can change where I look for an opening. Its impossible bodies give Black life room to appear beyond the scene of its injury, with powers and pleasures that injury cannot account for. The fiction also asks something of the person listening: can I let those lives exceed the use I wanted to make of them? The archives that could not be drowned live in our breath, in dream, in the salt of our tears. We carry pieces of the past in our bodies. Much is lost. Some parts we reach for through feeling, through the histories we excavate, perhaps through ancestry. Others surface without our knowing why. I cry, or something happens in my life, and I wonder what history is moving there, even when I cannot trace it.</p>
+<p>People were thrown into the Atlantic and killed. That cannot be undone. Drexciya imagines an underwater life. In Fu-Kiau&#x27;s account of Kongo thought, water is a door as well as a wall, and the dead cross it. I believe a soul can exist in more than one version, in more than one place. I hold these together. None has to prove the others.</p>
+</section>
+<section id="what-we-make-of-it" data-title="What we make of it"><h2>What we make of it</h2>
+<p>I keep looking to water for a way to loosen my hold. Water draws my attention toward yielding, toward the ease I would like to feel in my own life. Then there is the flood. The water that sustains a life can overwhelm it.</p>
+<p>As a child, I loved the water and was afraid of it. The lines on the bottom of a clear blue pool looked like hammerhead sharks. I would catch a glimpse and start to hyperventilate, even where I could swim. I learned partly through the Boy Scouts, but mostly I taught myself. I went to the pool constantly, starting in the shallow end and playing.</p>
+<p>I have felt that ease alone in black water.I have felt that ease alone in black water. I was in Jordan for a wedding. After dark, I swam out into the Dead Sea, past the marked area where I had spent the day with friends from the wedding party, to where there was nobody. I had been afraid of the dark of the water, of being alone in what I could not see around me. I could imagine something there waiting to get me. Yet there I was, alone, and for the first time I was not afraid. Nothing could get me. It was one of the most peaceful feelings I have ever had, though I still did not want the water in my face. It tasted disgusting.</p>
+<p>I think about this beside the lives Drexciya imagines beneath the water. What happens to the power to imagine another life when I am imagining what might end mine? Fear can keep me alive. It can also fill the water before I enter it. The peace I felt in the Dead Sea does not settle that difference. I want to stay with the fact that I was alone in black water and, for once, I was not afraid.</p>
+<p>I keep coming back to the difference between wanting and insisting on the form an answer must take. I want time with water before I decide what it means to me. I already belong materially to the world I am looking toward. An encounter does not have to transform me. It can affirm something I know. Environmental veneration asks how I live that belonging after I have left the water. I want to make space for flow: to let go of what does not need to stay and let things take their path. To keep moving like water.</p>
+</section>
+<section id="what-water-keeps" data-title="What water keeps"><h2>What water keeps</h2>
+<p>A name reaches me, and I want to meet the wholeness of the person who answered to it. Their authenticity and generosity. That connection makes it feel necessary to keep carrying something forward. Keeping is renewing, keeping a relation alive rather than preserving it unchanged. I may meet an ancestor in ways the archive cannot record. I want to remain answerable to them as I work. The words I find for a silence carry my own voice.</p>
+<p>Returning to the water also means finding what our work could not keep.</p>
+<p>I imagine returning to the Atlantic at the end of the summer with something the water has helped us make. It will meet another tide. I want to stay with that act long enough to discover what it asks of the wish to keep.</p>
+<p>I want to come back to water able to hear more than the answer I first wanted from it.</p>
+</section>
+<section id="black-aquatics-the-summer" data-title="Black Aquatics: the summer"><h2>Black Aquatics: the summer</h2>
+<p>Who has time available for these relations? Time with water has to fit into lives already claimed by paid work and getting through the day. Paying artists and making study free buys back time for relation: to return to water, work with what happened there, and find that someone else has changed what we began. Residents are paid to take part in an interdisciplinary creative lab, thinking and making together. The summer builds toward a collective, interactive water work that an audience can take part in. We shape its form with the cohort. A performance is the possibility we are working toward, not a form decided before we begin.</p>
+<p>Black Aquatics is a free summer studio residency for nine artists in Brooklyn, from late June to early September, a gathering for making together with water as our teacher. Each artist brings their own practice and receives a curriculum zine of readings, reflections, images and open questions to work with throughout the summer. They make visual and performance-based scores in contact with the readings, the water and one another&#x27;s work. Artists bring those practices into conversation and try them together in demonstrations, water sessions and a shared studio. Members will approach the study&#x27;s spiritual possibilities differently.</p>
+<p>What does fluid dynamics reveal about collective creativity? What does buoyancy tell us about the conditions that support imaginative freedom? What might a watershed teach us about the production and circulation of ideas?</p>
+<p>We read alongside what we try in the studio and water. What happens there can change the questions we brought.</p>
+<p>In African Fractals, Ron Eglash describes recursion through a construction whose result becomes the starting point of another round (pp. 8-9).</p>
+<h3>Across the summer:</h3>
+<p class="labeled"><b>Studio day:</b> time for making in a shared studio. Residents bring a water question, a reading or a fragment from an earlier gathering into their own practices, develop visual and performance-based scores, and try out work together. The day ends in a craft circle, where unfinished work can meet another person&#x27;s attention. Unfinished pieces carry into the next week, including through another medium.</p>
+<p class="labeled"><b>Demo:</b> a guest artist or resident teaches a way of working with water, such as cyanotype, underwater sound, filming in water or indigo dyeing. Learning a technique gives artists new choices. A sound that first seemed continuous might open into differences of position, contact and distance; an image might change as its maker learns what exposure and washing do to a surface. Those differences become material to compose with. The work can also reveal what the technique cannot do, sending the artist toward another way of making.</p>
+<p class="labeled"><b>Swim:</b> convenings at the Shirley Chisholm Recreation Center in East Flatbush, alongside neighbors. The residency is for being in the water. Everyone enters, with support for getting there, whether that means learning to swim or beginning in the shallow end. Fear or not yet knowing how to swim does not exclude someone from the open call. We ask what support each person needs and welcomes, and make room to rest and ask for help.</p>
+<p>Drexciya, Morrison and Hartman accompany work with memory, inherited wounds and gifts, and lives whose archives were never kept. A trace can change a story; an absence can leave us wanting to invent one. An artist can build an imagined world around a fragment, or imagine a body that could live there. The fragment may resist the story they want to tell. We study where they follow it and where they invent.</p>
+<p>Water yields, floods, carves and returns to places it was pushed from. What water gives and what it keeps includes their force. We stay with what changes in giving way and what persists. An artist can change a work while holding to a decision someone else has questioned. Fear and refusal belong in this inquiry, including the choice to leave a proposition alone.</p>
+<p>Scores give some of these encounters a form another person can take up. A score can direct an action, frame attention, hold a timing or invite an imagined event. Its maker decides what to specify and what to leave to someone else&#x27;s interpretation. Residents also make paintings, sound recordings, film, textile, cyanotype and performances at the shoreline, working in small groups and as a full circle.</p>
+<p>Across the summer, residents answer one another by making: this is what I made in contact with your work. An August piece returns to a fragment from June after other work and time with water have changed the artist&#x27;s attention. Personal histories can stay private. A response can depart from its source or arrive later; the chain can also end.</p>
+<h3>The shared water work</h3>
+<p>We plan a free public gathering in early September around a collective, interactive water work. The audience takes part. We shape the form with the cohort; a performance is ideal, but not locked. The location is open. Residents bring the work made since June into that shared encounter. Individual work can remain private or unfinished. A score, a question or a way of working can travel with its maker&#x27;s agreement.</p>
+<p>Nobody has to break a work or offer a private loss to finish the summer.</p>
+<p>Residents receive, make, and return. What another gathering receives will include choices made here and things we could not carry forward. The summer ends with a shared water work; the relations take their different courses from there.</p>
+</section>
+      </article>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+const drawer=$('#drawer'),bar=$('#bar'),read=$('#read'),ocean=$('#ocean');
+const secs=[...document.querySelectorAll('article section')];
+const links=[...document.querySelectorAll('nav#sections a')];
+const jump=$('#jump');
+secs.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.dataset.title;jump.appendChild(o);});
+
+function setOpen(open,{fromHash=false}={}){
+  drawer.classList.toggle('open',open);
+  bar.setAttribute('aria-expanded',open);
+  $('#barLabel').textContent=open?'Close the drawer':'Open the drawer';
+  // the ocean rests while the essay covers it
+  clearTimeout(setOpen.t);
+  if(open){setOpen.t=setTimeout(()=>{ocean.style.visibility='hidden';},800);}else{ocean.style.visibility='visible';}
+  if(!open&&!fromHash&&location.hash)history.pushState(null,'',location.pathname+location.search);
+  if(open)setTimeout(()=>read.focus({preventScroll:true}),50);
+}
+bar.addEventListener('click',()=>setOpen(!drawer.classList.contains('open')));
+bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();bar.click();}});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&drawer.classList.contains('open'))setOpen(false);});
+
+function goTo(id,push=true){
+  const el=document.getElementById(id);if(!el)return;
+  if(!drawer.classList.contains('open'))setOpen(true,{fromHash:true});
+  setTimeout(()=>{read.scrollTo({top:el.offsetTop-30,behavior:drawer.classList.contains('open')?'smooth':'auto'});},drawer.classList.contains('open')?0:60);
+  if(push&&location.hash!=='#'+id)history.pushState(null,'','#'+id);
+}
+links.forEach(a=>a.addEventListener('click',e=>{e.preventDefault();goTo(a.dataset.s);}));
+jump.addEventListener('change',()=>goTo(jump.value));
+
+// highlight the section being read, and keep the address in step with it
+let ticking=false;
+read.addEventListener('scroll',()=>{if(ticking)return;ticking=true;requestAnimationFrame(()=>{ticking=false;
+  const y=read.scrollTop+read.clientHeight*.3;let cur=secs[0];
+  for(const s of secs)if(s.offsetTop<=y)cur=s;
+  links.forEach(a=>a.classList.toggle('on',a.dataset.s===cur.id));jump.value=cur.id;
+  if(drawer.classList.contains('open')&&location.hash!=='#'+cur.id&&read.scrollTop>20)history.replaceState(null,'','#'+cur.id);
+});},{passive:true});
+
+function fromUrl(){const id=location.hash.slice(1);
+  if(id&&document.getElementById(id)){setOpen(true,{fromHash:true});setTimeout(()=>{const el=document.getElementById(id);read.scrollTop=el.offsetTop-30;},30);}
+  else if(!id)setOpen(false,{fromHash:true});}
+addEventListener('popstate',fromUrl);
+fromUrl();
+})();
+</script>
+</body>
+</html>

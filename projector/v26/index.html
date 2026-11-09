@@ -15,7 +15,7 @@ canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
 #stat{position:absolute;left:0;top:25px;background:var(--panel);border:2px solid var(--line);border-left:0;padding:3px 8px;font-size:11px;z-index:2;max-width:70vw}
 #thumbs{position:absolute;right:8px;top:8px;width:112px;height:112px;border:2px solid #000;background:#222;z-index:2}
-body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
+body.embed #thumbs,body.embed #cap{display:none}body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
 #ver{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:3;display:flex;gap:0;font:12px/1 ui-monospace,Menlo,monospace}
 #ver a,#ver b{display:block;padding:6px 12px;border:2px solid #000;background:#ddd;color:#000;text-decoration:none}#ver b{background:#000;color:#fff}#ver a:hover{background:#fff}
 #cap{position:absolute;right:8px;top:124px;width:112px;background:#000;color:#fff;font-size:10px;line-height:1.2;padding:2px 3px;word-break:break-word;max-height:6.5em;overflow:hidden;z-index:2}
@@ -42,7 +42,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
 <div id="stage">
  <canvas id="gl" tabindex="0" role="img" aria-label="A whole body of water fills the screen, its surface made of the GO archive photographs carried by the water, never vanishing. The photographs gather along the real ridge lines of the waves and join into one connected body of water-shaped forms with curved, flowing borders, with whitecaps in slow motion. Move the mouse to ease through many images; drag to stir; wheel zooms."></canvas>
  <div class="tag">Under v26</div>
- <div id="ver"><a href="../">v21</a><a href="../v23/">v23</a><a href="../v24/">v24</a><a href="../v25/">v25</a><b>v26</b></div>
+ <div id="ver"><a href="../">v21</a><a href="../v23/">v23</a><a href="../v24/">v24</a><a href="../v25/">v25</a><b>v26</b><a href="../v27/">v27</a></div>
  <canvas id="thumbs" width="192" height="192" aria-label="Current source frame"></canvas>
  <div id="cap" aria-live="off"></div>
  <div id="stat" role="status" aria-live="polite">starting</div>
@@ -1045,6 +1045,8 @@ $('proj').onclick=()=>setProj(true);
 addEventListener('keydown',e=>{if(e.key==='p'||e.key==='P'){if(e.target.closest&&e.target.closest('input,select'))return;setProj(!document.body.classList.contains('proj'));}});
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('proj');});
 addEventListener('pointermove',()=>{document.body.classList.remove('idle');clearTimeout(idleT);idleT=setTimeout(()=>document.body.classList.add('idle'),2500);});
+// embedded under the essay: just the water, no interface
+if(new URLSearchParams(location.search).has('embed')){document.body.classList.add('proj','embed');}
 const panel=$('panel'),pt=$('ptoggle');
 function setPanel(open){panel.classList.toggle('min',!open);pt.setAttribute('aria-expanded',open);
   pt.textContent='VES / Strange Projector water body study v26 - controls '+(open?'-':'+');}
