@@ -1144,10 +1144,14 @@ function stir(x,y,fx,fy,r){
 // ---------- camera ----------
 const DEF={yaw:.55,pitch:-.34,dist:(innerWidth<innerHeight?4.5:2.8)};let cam={...DEF},camT={...DEF};
 try{const h=location.hash.match(/cam=([-\d.]+),([-\d.]+),([-\d.]+)/);if(h){cam={yaw:+h[1],pitch:+h[2],dist:+h[3]};camT={...cam};}}catch(e){}
+// the essay's drawer pulls the camera down under the surface and on into the deep
+let dive=0,diveT=0;
 function camVecs(){
-  const cp=Math.cos(cam.pitch);
-  const ro=[Math.sin(cam.yaw)*cp*cam.dist,Math.sin(cam.pitch)*cam.dist,Math.cos(cam.yaw)*cp*cam.dist];
-  const l=Math.hypot(...ro);const fw=ro.map(v=>-v/l);
+  const dv=dive*dive*(3-2*dive);
+  const pitch=cam.pitch+(-.62-cam.pitch)*dv, dist=cam.dist*(1-.28*dv);
+  const cp=Math.cos(pitch);
+  const ro=[Math.sin(cam.yaw)*cp*dist,Math.sin(pitch)*dist-1.4*dv,Math.cos(cam.yaw)*cp*dist];
+  const tg=[0,-2.2*dv,0];const d0=ro.map((v,i)=>tg[i]-v);const l=Math.hypot(...d0);const fw=d0.map(v=>v/l);
   const up0=[0,1,0];
   let rt=[fw[1]*up0[2]-fw[2]*up0[1],fw[2]*up0[0]-fw[0]*up0[2],fw[0]*up0[1]-fw[1]*up0[0]];
   const rl=Math.hypot(...rt);rt=rt.map(v=>v/rl);
@@ -1356,7 +1360,7 @@ prefill();
 if(reduce){togglePause();}
 let clock=0,simAcc=0,hostState='live',hostSkip=0;
 // the essay page tells the ocean when its drawer is moving (draw every other frame) or covering it (rest)
-addEventListener('message',e=>{const d=e.data;if(d&&d.ba==='ocean'&&/^(live|slow|rest)$/.test(d.state))hostState=d.state;});
+addEventListener('message',e=>{const d=e.data;if(!d)return;if(d.ba==='ocean'&&/^(live|slow|rest)$/.test(d.state))hostState=d.state;if(d.ba==='dive'&&isFinite(d.d))diveT=Math.max(0,Math.min(1,+d.d));});
 function frame(now){
   if(hostState==='rest'||(hostState==='slow'&&(++hostSkip&1))){last=now;requestAnimationFrame(frame);return;}
   const dtr=Math.min((now-last)/1000,.1);last=now;
@@ -1387,6 +1391,7 @@ function frame(now){
   const k=1-Math.exp(-dtr*10);
   cam.yaw+=(camT.yaw-cam.yaw)*k;cam.pitch+=(camT.pitch-cam.pitch)*k;
   if(camMid===null)camMid=cam.dist;const kz=1-Math.exp(-dtr*9);camMid+=(camT.dist-camMid)*kz;cam.dist+=(camMid-cam.dist)*kz;
+  dive+=(diveT-dive)*(1-Math.exp(-dtr*14));if(Math.abs(diveT-dive)<1e-4)dive=diveT;
   const c=camVecs();
   gl.viewport(0,0,W,H);
   gl.useProgram(pr);
