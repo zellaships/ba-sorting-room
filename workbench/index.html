@@ -154,6 +154,47 @@ body.resizing{cursor:col-resize;user-select:none}
 #lb img{max-width:94vw;max-height:94vh}
 .modal{position:fixed;inset:0;background:rgba(20,16,17,.35);z-index:70;display:none;align-items:center;justify-content:center}
 .modal .box{background:#fff;border-radius:12px;padding:20px;width:min(460px,92vw)}
+
+/* selection marquee */
+#marquee{position:fixed;border:1px solid var(--teal);background:rgba(52,104,90,.08);border-radius:3px;pointer-events:none;z-index:18;display:none}
+#board.spacepan{cursor:grab}
+/* free text: no chrome until you need it */
+.card.ftext{background:transparent;border:1px solid transparent;box-shadow:none;overflow:visible;border-radius:4px}
+.card.ftext:hover{border-color:rgba(37,31,33,.12)}
+.card.ftext.sel{outline:2px solid var(--teal);outline-offset:3px;border-color:transparent}
+.card.ftext .grip{display:none}
+.card.ftext .ew{position:absolute;right:-6px;top:0;bottom:0;width:10px;cursor:ew-resize}
+.rt{font:16px/1.55 system-ui,-apple-system,sans-serif;color:var(--ink);outline:none;word-break:break-word;min-height:1.5em;cursor:inherit}
+.rt[contenteditable=true]{cursor:text;user-select:text}
+.rt:empty::before{content:attr(data-ph);color:#b8b2b4}
+.rt h1{font:700 1.75em/1.2 Georgia,serif;margin:.35em 0 .2em}.rt h2{font:700 1.4em/1.25 Georgia,serif;margin:.35em 0 .2em}.rt h3{font:650 1.15em/1.3 system-ui;margin:.3em 0 .15em}
+.rt p,.rt div{margin:0 0 .25em}
+.rt ul,.rt ol{margin:.15em 0 .35em;padding-left:1.4em}.rt li{margin:.12em 0;padding-left:.15em}.rt li::marker{color:var(--muted)}
+.rt blockquote{margin:.3em 0;padding-left:.8em;border-left:3px solid var(--rule);color:#4a4446}
+.rt code{font:.9em ui-monospace,Menlo,monospace;background:var(--wash);border-radius:4px;padding:.05em .3em}
+.rt a{color:var(--teal)}
+.rt hr{border:0;border-top:1px solid var(--rule);margin:.6em 0}
+/* labeled notes */
+.card.note{--nc:#fffbe9;--nl:#a8741a;background:var(--nc);border-color:rgba(0,0,0,.06)}
+.card.note .nlabel{display:flex;align-items:center;gap:6px;padding:9px 12px 0;font:650 11px/1.2 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--nl);min-height:24px}
+.card.note .nlabel::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--nl);flex:none}
+.card.note .nlabel .lt{outline:none;min-width:30px}
+.card.note .nlabel .lt:empty::before{content:"Label";opacity:.45}
+.card.note .rt{padding:6px 12px 12px;height:calc(100% - 26px);overflow:auto;font-size:15px}
+.swatches{display:flex;gap:8px;margin:6px 0 4px}
+.swatches button{width:26px;height:26px;border-radius:50%;padding:0;border:2px solid #fff;box-shadow:0 0 0 1px var(--rule)}
+.swatches button.on{box-shadow:0 0 0 2px var(--ink)}
+/* connections: hover to break */
+.lmid{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:2px;z-index:2}
+.lmid .lbl{position:static;transform:none}
+.lmid .dot{width:9px;height:9px;border-radius:50%;background:#fff;border:1.5px solid #8a8486;cursor:pointer;transition:transform .12s}
+.lmid .brk{display:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);background:#fff;color:#b5432f;font-size:14px;line-height:1;padding:0;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.lmid:hover .brk,.lmid.hot .brk,.lmid.sel .brk{display:flex}
+.lmid:hover .dot,.lmid.hot .dot{transform:scale(1.3);border-color:var(--teal)}
+#links path.hot{stroke:var(--teal);stroke-width:2.6}
+.conn .brk{margin-left:auto;border:0;background:transparent;color:var(--muted);font-size:16px;padding:2px 6px}
+.conn .brk:hover{color:#b5432f}
+.selcount{font:22px/1.2 Georgia,serif;margin:4px 0 12px}
 </style>
 </head>
 <body>
@@ -167,16 +208,17 @@ body.resizing{cursor:col-resize;user-select:none}
 
 <nav id="rail">
   <button data-tool="library" title="Library (L)">▦</button>
+  <button data-tool="text" title="Add text (T)" style="font:600 18px Georgia,serif">T</button>
   <button data-tool="note" title="Add a note (N)">✎</button>
   <button data-tool="embed" title="Add video, GIF or link (E)">▶</button>
   <button data-tool="marker" title="Place a week marker (W)">⚑</button>
-  <button data-tool="link" title="Connect two cards (C)">⤳</button>
   <button data-tool="threads" title="Threads">≋</button>
   <button data-tool="versions" title="Versions">⟲</button>
   <span style="flex:1"></span>
   <button data-tool="fit" title="See everything (F)">⤢</button>
 </nav>
 
+<div id="marquee"></div>
 <div id="board"><div id="world"><svg id="links"></svg></div></div>
 
 <aside id="drawer" class="side"><div class="inner"></div><div class="edge" title="Drag to resize · double-click to switch between your width and wide"><span class="grip"><i></i><i></i><i></i></span></div><span class="wlabel"></span></aside>
@@ -319,22 +361,48 @@ body.resizing{cursor:col-resize;user-select:none}
     if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
     else { view.x -= e.deltaX; view.y -= e.deltaY; applyView(); }
   }, { passive: false });
-  let pan = null;
+  // empty board: drag draws a selection box; Space-drag, middle-drag or two-finger scroll pans
+  let pan = null, mq = null, spaceDown = false;
+  const typing = () => { const a = document.activeElement; return a && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable); };
   board.addEventListener("pointerdown", e => {
-    if (e.target.closest(".card,.lbl,#links .hit")) return;
-    if (tool === "note" || tool === "embed" || tool === "marker") { placeAt(e); return; }
-    if (tool === "link") { linkFrom = null; setTool(null); draw(); }
-    select(null);
-    pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; board.classList.add("panning"); board.setPointerCapture(e.pointerId);
+    if (e.target.closest(".card,.lmid,#links .hit")) return;
+    if (typing()) document.activeElement.blur();
+    if (tool === "note" || tool === "embed" || tool === "marker" || tool === "text") { placeAt(e); return; }
+    board.setPointerCapture(e.pointerId);
+    if (spaceDown || e.button === 1) { pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; board.classList.add("panning"); return; }
+    mq = { x: e.clientX, y: e.clientY, add: e.shiftKey, base: new Set(e.shiftKey ? selIds : []), moved: false };
   });
-  board.addEventListener("pointermove", e => { if (!pan) return; view.x = pan.vx + e.clientX - pan.x; view.y = pan.vy + e.clientY - pan.y; applyView(); });
-  board.addEventListener("pointerup", () => { pan = null; board.classList.remove("panning"); });
+  board.addEventListener("pointermove", e => {
+    if (pan) { view.x = pan.vx + e.clientX - pan.x; view.y = pan.vy + e.clientY - pan.y; applyView(); return; }
+    if (!mq) return;
+    const w = Math.abs(e.clientX - mq.x), h = Math.abs(e.clientY - mq.y);
+    if (!mq.moved && w + h < 4) return;
+    mq.moved = true;
+    const m = $("#marquee"); m.style.display = "block";
+    m.style.left = Math.min(e.clientX, mq.x) + "px"; m.style.top = Math.min(e.clientY, mq.y) + "px"; m.style.width = w + "px"; m.style.height = h + "px";
+    const a = toWorld(Math.min(e.clientX, mq.x), Math.min(e.clientY, mq.y)), b = toWorld(Math.max(e.clientX, mq.x), Math.max(e.clientY, mq.y));
+    const hit = new Set(mq.base);
+    for (const c of B.cards) { const ch = cardH(c); if (c.x < b.x && c.x + c.w > a.x && c.y < b.y && c.y + ch > a.y) hit.add(c.id); }
+    selIds = hit; sel = null; paintSel();
+  });
+  board.addEventListener("pointerup", () => {
+    if (pan) { pan = null; board.classList.remove("panning"); return; }
+    if (!mq) return;
+    $("#marquee").style.display = "none";
+    const moved = mq.moved; mq = null;
+    if (!moved) { selIds = new Set(); sel = null; draw(); return; }
+    afterMultiSelect();
+  });
   $("#zIn").onclick = () => zoomAt(1.25); $("#zOut").onclick = () => zoomAt(0.8); $("#zPct").onclick = () => { view.z = 1; zoomAt(1); };
 
   // ---------- drawing ----------
-  const KINDSIZE = { record: [260, 300], text: [280, 200], note: [240, 160], marker: [220, 60], embed: [420, 280] };
+  const KINDSIZE = { record: [260, 300], text: [280, 200], note: [260, 180], marker: [220, 60], embed: [420, 280], ftext: [340, 40] };
+  const NOTE_COLORS = { sand: ["#fffbe9", "#a8741a"], sea: ["#e8f3ef", "#34685a"], rose: ["#fbecea", "#a2493a"], sky: ["#eaf1fa", "#3d6694"], lilac: ["#f1ecf8", "#6b4f99"], ink: ["#2a2426", "#e8d9a8"] };
+  const noteHTML = c => c.html != null ? c.html : esc(c.text || "").replace(/\n/g, "<br>");
   function cardHTML(c) {
-    if (c.kind === "note") return `<div class="body">${esc(c.text || "")}</div>`;
+    if (c.kind === "ftext") return `<div class="rt" data-ph="Type something" style="font-size:${c.size || 16}px">${c.html || ""}</div><div class="ew"></div>`;
+    if (c.kind === "note") { const [bg, fg] = NOTE_COLORS[c.color || "sand"] || NOTE_COLORS.sand;
+      return `<div class="nlabel" style="--nl:${fg}"><span class="lt">${esc(c.label || "")}</span></div><div class="rt" data-ph="Write…" style="font-size:${c.size || 15}px;${c.color === "ink" ? "color:#f4efe6" : ""}">${noteHTML(c)}</div>`; }
     if (c.kind === "marker") return `<div class="body"><div class="sub">${esc(c.sub || "Starting point")}</div>${esc(c.text || "Week")}</div>`;
     if (c.kind === "embed") {
       const e = embedOf(c.url);
@@ -359,26 +427,30 @@ body.resizing{cursor:col-resize;user-select:none}
   }
   const cardById = id => B.cards.find(c => c.id === id);
   function draw() {
-    world.querySelectorAll(".card,.lbl").forEach(n => { if (!B.cards.some(c => c.id === n.dataset.id) && !n.classList.contains("lbl")) n.remove(); });
-    world.querySelectorAll(".lbl").forEach(n => n.remove());
+    world.querySelectorAll(".card").forEach(n => { if (!B.cards.some(c => c.id === n.dataset.id)) n.remove(); });
+    world.querySelectorAll(".lmid").forEach(n => n.remove());
     for (const c of B.cards) {
       let el = world.querySelector(`.card[data-id="${c.id}"]`);
-      const sig = JSON.stringify([c.kind, c.ref, c.text, c.sub, c.url, c.title, c.h, (LIBBY[c.ref] || {}).preview]);
+      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview]);
+      if (editing && editing.id === c.id && el) { el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px"; continue; }
       if (!el) { el = document.createElement("div"); el.dataset.id = c.id; world.appendChild(el); bindCard(el); }
       if (el.dataset.sig !== sig) {
         el.dataset.sig = sig;
         el.className = "card " + (c.kind === "record" ? ((LIBBY[c.ref] || {}).preview ? "rec" : "text") : c.kind);
-        el.innerHTML = cardHTML(c) + (c.kind === "marker" ? "" : `<div class="grip"></div>`) + `<div class="handle" title="Drag to another card to connect"></div>`;
+        if (c.kind === "note") { const [bg] = NOTE_COLORS[c.color || "sand"] || NOTE_COLORS.sand; el.style.setProperty("--nc", bg); }
+        el.innerHTML = cardHTML(c) + (c.kind === "marker" || c.kind === "ftext" ? "" : `<div class="grip"></div>`) + `<div class="handle" title="Drag to another card to connect"></div>`;
         hydrate(el);
       }
       el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px";
-      if (c.kind !== "marker") el.style.height = c.h + "px";
-      el.classList.toggle("sel", !!(sel && sel.type === "card" && sel.id === c.id));
+      if (c.kind !== "marker" && c.kind !== "ftext") el.style.height = c.h + "px";
+      el.classList.toggle("sel", selIds.has(c.id));
       el.classList.toggle("linksrc", linkFrom === c.id);
     }
     drawLinks();
   }
-  const center = c => { const el = world.querySelector(`.card[data-id="${c.id}"]`); const h = el ? el.offsetHeight : c.h; return { x: c.x + c.w / 2, y: c.y + h / 2, w: c.w, h }; };
+  const cardH = c => { if (c.kind === "ftext" || c.kind === "marker") { const el = world.querySelector(`.card[data-id="${c.id}"]`); return el && el.offsetHeight ? el.offsetHeight : (c.kind === "marker" ? 60 : 40); } return c.h; };
+  const center = c => { const h = cardH(c); return { x: c.x + c.w / 2, y: c.y + h / 2, w: c.w, h }; };
+  function paintSel() { world.querySelectorAll(".card").forEach(el => el.classList.toggle("sel", selIds.has(el.dataset.id))); }
   function edgePoint(a, b) {
     const dx = b.x - a.x, dy = b.y - a.y; if (!dx && !dy) return a;
     const sx = (a.w / 2) / Math.abs(dx || 1e-9), sy = (a.h / 2) / Math.abs(dy || 1e-9), s = Math.min(sx, sy);
@@ -391,51 +463,187 @@ body.resizing{cursor:col-resize;user-select:none}
     for (const l of B.links) {
       const a = cardById(l.from), b = cardById(l.to); if (!a || !b) continue;
       const pa = center(a), pb = center(b), pp = path(pa, pb), on = sel && sel.type === "link" && sel.id === l.id;
-      h += `<path class="${on ? "sel" : ""}" d="${pp.d}" marker-end="url(#arr)"/><path class="hit" data-link="${l.id}" d="${pp.d}"/>`;
-      if (l.label) { const lb = document.createElement("div"); lb.className = "lbl" + (on ? " sel" : ""); lb.dataset.link = l.id; lb.textContent = l.label; lb.style.left = pp.mx + "px"; lb.style.top = pp.my + "px"; lb.onpointerdown = e => { e.stopPropagation(); select({ type: "link", id: l.id }); }; world.appendChild(lb); }
+      h += `<path class="vis ${on ? "sel" : ""}" data-v="${l.id}" d="${pp.d}" marker-end="url(#arr)"/><path class="hit" data-link="${l.id}" d="${pp.d}"/>`;
+      const mid = document.createElement("div"); mid.className = "lmid" + (on ? " sel" : ""); mid.dataset.link = l.id;
+      mid.style.left = pp.mx + "px"; mid.style.top = pp.my + "px";
+      mid.innerHTML = (l.label ? `<span class="lbl ${on ? "sel" : ""}">${esc(l.label)}</span>` : `<span class="dot" title="Name this connection"></span>`) + `<button class="brk" title="Break this connection">×</button>`;
+      mid.onpointerdown = e => { e.stopPropagation(); if (e.target.closest(".brk")) return; selIds = new Set(); select({ type: "link", id: l.id }); };
+      mid.querySelector(".brk").onclick = e => { e.stopPropagation(); breakLink(l.id); };
+      world.appendChild(mid);
     }
     if (thr) for (let i = 0; i + 1 < thr.steps.length; i++) {
       const a = cardById(thr.steps[i]), b = cardById(thr.steps[i + 1]); if (!a || !b) continue;
       h += `<path class="thread" d="${path(center(a), center(b)).d}"/>`;
     }
     svg.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8486"/></marker></defs>` + h;
-    svg.querySelectorAll(".hit").forEach(p => p.onpointerdown = e => { e.stopPropagation(); select({ type: "link", id: p.dataset.link }); });
+    svg.querySelectorAll(".hit").forEach(p => {
+      const vis = svg.querySelector(`path.vis[data-v="${p.dataset.link}"]`), mid = world.querySelector(`.lmid[data-link="${p.dataset.link}"]`);
+      p.onpointerenter = () => { vis && vis.classList.add("hot"); mid && mid.classList.add("hot"); };
+      p.onpointerleave = () => { vis && vis.classList.remove("hot"); mid && mid.classList.remove("hot"); };
+      p.onpointerdown = e => { e.stopPropagation(); selIds = new Set(); select({ type: "link", id: p.dataset.link }); };
+    });
   }
 
   // ---------- card interaction ----------
+  let selIds = new Set(), editing = null;
+  function afterMultiSelect() {
+    if (selIds.size === 1) { const id = [...selIds][0]; select({ type: "card", id }); }
+    else if (selIds.size > 1) { sel = null; draw(); openView({ kind: "multi" }); }
+    else { sel = null; draw(); }
+  }
+  function duplicate(ids, dx, dy) {
+    const map = {}, copies = [];
+    for (const id of ids) { const c = cardById(id); if (!c) continue; const n = JSON.parse(JSON.stringify(c)); n.id = uid("c"); n.x += dx; n.y += dy; map[id] = n.id; copies.push(n); }
+    const links = B.links.filter(l => map[l.from] && map[l.to]).map(l => ({ ...l, id: uid("l"), from: map[l.from], to: map[l.to] }));
+    B.cards.push(...copies); B.links.push(...links);
+    return copies.map(c => c.id);
+  }
   function bindCard(el) {
     el.addEventListener("pointerdown", e => {
       const id = el.dataset.id, c = cardById(id); if (!c) return;
       e.stopPropagation();
+      if (editing && editing.id === id) return;                      // clicks inside text being edited stay in the text
+      if (typing()) document.activeElement.blur();
       if (e.target.classList.contains("handle")) return startLinkDrag(e, c);
-      if (tool === "link") { linkClick(c); return; }
       if (e.target.closest("a,iframe,video")) return;
-      select({ type: "card", id });
-      const grip = e.target.classList.contains("grip");
-      const start = { x: e.clientX, y: e.clientY, cx: c.x, cy: c.y, w: c.w, h: c.h }; let moved = false, before = null;
+      if (e.shiftKey || e.metaKey) {                                // add to / remove from the selection
+        selIds.has(id) ? selIds.delete(id) : selIds.add(id); sel = null; paintSel(); afterMultiSelect(); return;
+      }
+      if (!selIds.has(id)) { selIds = new Set([id]); select({ type: "card", id }); }
+      else if (selIds.size === 1 && !(VIEW.cardId === id && panel.classList.contains("open"))) select({ type: "card", id });
+      const grip = e.target.classList.contains("grip"), ew = e.target.classList.contains("ew");
+      let ids = [...selIds];
+      const start = { x: e.clientX, y: e.clientY, w: c.w, h: c.h, ratio: c.h / c.w, pos: {} };
+      let moved = false, before = null, dup = e.altKey && !grip && !ew;
       el.setPointerCapture(e.pointerId);
       const mv = ev => {
         const dx = (ev.clientX - start.x) / view.z, dy = (ev.clientY - start.y) / view.z;
         if (!moved && Math.abs(dx) + Math.abs(dy) < 3) return;
-        if (!moved) { moved = true; before = snap(); }
-        if (grip) { c.w = Math.max(140, start.w + dx); c.h = Math.max(80, start.h + dy); }
-        else { c.x = Math.round(start.cx + dx); c.y = Math.round(start.cy + dy); }
+        if (!moved) {
+          moved = true; before = snap();
+          if (dup) { ids = duplicate(ids, 0, 0); selIds = new Set(ids); }     // Option-drag: the copy moves, the original stays
+          ids.forEach(i => { const k = cardById(i); start.pos[i] = [k.x, k.y]; });
+        }
+        if (grip) {
+          if (c.kind === "record" && (LIBBY[c.ref] || {}).preview) { c.w = Math.max(140, start.w + dx); c.h = Math.round(c.w * start.ratio); }  // pictures keep their proportions
+          else { c.w = Math.max(140, start.w + dx); c.h = Math.max(80, start.h + dy); }
+        } else if (ew) c.w = Math.max(80, start.w + dx);
+        else ids.forEach(i => { const k = cardById(i); k.x = Math.round(start.pos[i][0] + dx); k.y = Math.round(start.pos[i][1] + dy); });
         draw();
       };
       const up = () => {
         el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up);
-        if (moved) { undoStack.push(before); redoStack.length = 0; B.updated_at = new Date().toISOString(); markDirty(); }
+        if (moved) { undoStack.push(before); redoStack.length = 0; B.updated_at = new Date().toISOString(); markDirty(); if (dup) { toast(`Duplicated ${ids.length > 1 ? ids.length + " cards" : "card"}`); afterMultiSelect(); } }
       };
       el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up);
     });
     el.addEventListener("dblclick", e => {
       const c = cardById(el.dataset.id); if (!c) return;
       if (c.kind === "embed") { el.classList.toggle("live"); return; }
-      if (c.kind === "note" || c.kind === "marker") return editText(c);
+      if (c.kind === "ftext") return editRich(c, el.querySelector(".rt"));
+      if (c.kind === "note") { if (e.target.closest(".nlabel")) return editLabel(c, el.querySelector(".lt")); return editRich(c, el.querySelector(".rt")); }
+      if (c.kind === "marker") return editText(c);
       if (c.kind === "record") { const it = LIBBY[c.ref]; if (it && it.preview) preview(it.preview).then(u => { if (u) { $("#lb img").src = u; $("#lb").style.display = "flex"; } }); }
     });
   }
   $("#lb").onclick = () => $("#lb").style.display = "none";
+
+  // ---------- rich text: Notion-style, in place, no visible chrome ----------
+  const SIZES = [11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 120];
+  const stepSize = (cur, d) => { let i = SIZES.findIndex(s => s >= cur); if (i < 0) i = SIZES.length - 1; return SIZES[Math.max(0, Math.min(SIZES.length - 1, i + d))]; };
+  function sanitize(html) {
+    const ok = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, S: 1, STRIKE: 1, DEL: 1, UL: 1, OL: 1, LI: 1, H1: 1, H2: 1, H3: 1, BLOCKQUOTE: 1, P: 1, DIV: 1, BR: 1, A: 1, CODE: 1, HR: 1 };
+    const box = document.createElement("div"); box.innerHTML = html;
+    const walk = n => { [...n.childNodes].forEach(ch => {
+      if (ch.nodeType === 3) return;
+      if (ch.nodeType === 1 && /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|TEMPLATE)$/.test(ch.tagName)) { ch.remove(); return; }
+      if (ch.nodeType !== 1 || !ok[ch.tagName]) { if (ch.nodeType === 1) { walk(ch); ch.replaceWith(...ch.childNodes); } else ch.remove(); return; }
+      const href = ch.tagName === "A" ? ch.getAttribute("href") : null;
+      [...ch.attributes].forEach(a => ch.removeAttribute(a.name));
+      if (href && /^https?:/i.test(href)) { ch.setAttribute("href", href); ch.setAttribute("target", "_blank"); ch.setAttribute("rel", "noopener"); }
+      walk(ch);
+    }); };
+    walk(box);
+    return box.innerHTML.replace(/^(<br>|<div><br><\/div>)+$/, "").trim();
+  }
+  function caretBlock() {
+    const s = getSelection(); if (!s.rangeCount) return null;
+    let n = s.anchorNode; while (n && n.nodeType === 3) n = n.parentNode;
+    return n;
+  }
+  function textBeforeCaret(root) {
+    const s = getSelection(); if (!s.rangeCount) return "";
+    const r = s.getRangeAt(0).cloneRange(); const blk = caretBlock() || root;
+    const pre = document.createRange(); pre.selectNodeContents(blk === root ? root : blk); pre.setEnd(r.startContainer, r.startOffset);
+    const t = pre.toString(); const nl = t.lastIndexOf("\n"); return nl >= 0 ? t.slice(nl + 1) : t;
+  }
+  function deleteBack(n) { for (let i = 0; i < n; i++) document.execCommand("delete"); }
+  function editRich(c, rt) {
+    if (!rt) return;
+    editing = { id: c.id }; selIds = new Set([c.id]); sel = { type: "card", id: c.id }; paintSel();
+    rt.contentEditable = "true"; rt.focus();
+    const r = document.createRange(); r.selectNodeContents(rt); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    const before = rt.innerHTML;
+    rt.onkeydown = e => {
+      const m = e.metaKey || e.ctrlKey, k = e.key;
+      if (k === "Escape") { e.preventDefault(); rt.blur(); return; }
+      if (m && (k === "=" || k === "+")) { e.preventDefault(); c.size = stepSize(c.size || (c.kind === "note" ? 15 : 16), 1); rt.style.fontSize = c.size + "px"; return; }
+      if (m && k === "-") { e.preventDefault(); c.size = stepSize(c.size || (c.kind === "note" ? 15 : 16), -1); rt.style.fontSize = c.size + "px"; return; }
+      if (m && k.toLowerCase() === "b") { e.preventDefault(); document.execCommand("bold"); return; }
+      if (m && k.toLowerCase() === "i") { e.preventDefault(); document.execCommand("italic"); return; }
+      if (m && k.toLowerCase() === "u") { e.preventDefault(); document.execCommand("underline"); return; }
+      if (m && e.shiftKey && k.toLowerCase() === "x") { e.preventDefault(); document.execCommand("strikeThrough"); return; }
+      if (m && e.shiftKey && (k === "7" || k === "&")) { e.preventDefault(); document.execCommand("insertOrderedList"); return; }
+      if (m && e.shiftKey && (k === "8" || k === "*")) { e.preventDefault(); document.execCommand("insertUnorderedList"); return; }
+      if (m && k.toLowerCase() === "e") { e.preventDefault(); const t = getSelection().toString(); if (t) document.execCommand("insertHTML", false, `<code>${esc(t)}</code>`); return; }
+      if (m && k.toLowerCase() === "k") { e.preventDefault(); const t = getSelection().toString(); const u = window.prompt("Link to", "https://"); if (u && /^https?:/i.test(u)) { if (t) document.execCommand("createLink", false, u); else document.execCommand("insertHTML", false, `<a href="${esc(u)}">${esc(u)}</a>`); } return; }
+      if (k === "Tab") { e.preventDefault(); document.execCommand(e.shiftKey ? "outdent" : "indent"); return; }
+      if (k === " ") {                                               // markdown shortcuts at the start of a line
+        const t = textBeforeCaret(rt);
+        const fmt = { "-": "ul", "*": "ul", "•": "ul", "1.": "ol", "1)": "ol", "#": "h1", "##": "h2", "###": "h3", ">": "quote", "[]": "ul" }[t.trim() === t ? t : ""];
+        if (fmt) {
+          e.preventDefault(); deleteBack(t.length);
+          if (fmt === "ul") document.execCommand("insertUnorderedList");
+          else if (fmt === "ol") document.execCommand("insertOrderedList");
+          else if (fmt === "quote") document.execCommand("formatBlock", false, "blockquote");
+          else document.execCommand("formatBlock", false, fmt);
+          return;
+        }
+      }
+      if (k === "Enter" && !e.shiftKey) {                             // leaving a heading or quote starts a normal line
+        const blk = caretBlock(); const h = blk && blk.closest && blk.closest("h1,h2,h3,blockquote");
+        if (h && rt.contains(h) && getSelection().isCollapsed && textBeforeCaret(rt).length === h.textContent.length) {
+          e.preventDefault(); document.execCommand("insertParagraph"); document.execCommand("formatBlock", false, "div"); return;
+        }
+      }
+      if (k === "-" && !m) {                                          // "---" makes a divider
+        const t = textBeforeCaret(rt); if (t === "--") { e.preventDefault(); deleteBack(2); document.execCommand("insertHorizontalRule"); return; }
+      }
+    };
+    rt.onpaste = e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData("text/plain"); document.execCommand("insertText", false, t); };
+    rt.onblur = () => {
+      rt.contentEditable = "false"; rt.onkeydown = rt.onpaste = rt.onblur = null; editing = null;
+      const html = sanitize(rt.innerHTML);
+      if (c.kind === "ftext" && !rt.textContent.trim() && !/<hr>/.test(html)) {
+        B.cards = B.cards.filter(x => x.id !== c.id); world.querySelector(`.card[data-id="${c.id}"]`)?.remove(); selIds.delete(c.id); sel = null; markDirty(); draw(); return;
+      }
+      if (html !== sanitize(before) || c.html == null || c._sizeTouched !== c.size) {
+        const size = c.size; undoStack.push(snap()); c.html = html; c.size = size; if (c.kind === "note") delete c.text;
+        redoStack.length = 0; B.updated_at = new Date().toISOString(); markDirty();
+      }
+      delete c._sizeTouched; draw();
+    };
+    c._sizeTouched = c.size;
+  }
+  function editLabel(c, lt) {
+    editing = { id: c.id }; lt.contentEditable = "true"; lt.focus();
+    const r = document.createRange(); r.selectNodeContents(lt); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    lt.onkeydown = e => {
+      if (e.key === "Escape") { e.preventDefault(); lt.blur(); }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); lt.blur(); const el = world.querySelector(`.card[data-id="${c.id}"]`); requestAnimationFrame(() => editRich(c, el && el.querySelector(".rt"))); }  // label, then straight into the note
+    };
+    lt.onblur = () => { lt.contentEditable = "false"; lt.onkeydown = lt.onblur = null; editing = null; const v = lt.textContent.trim(); if (v !== (c.label || "")) change(() => c.label = v); renderPanel(); };
+  }
   function startLinkDrag(e, c) {
     const tmp = document.createElementNS("http://www.w3.org/2000/svg", "path"); tmp.setAttribute("class", "sel"); $("#links").appendChild(tmp);
     const a = center(c);
@@ -447,30 +655,32 @@ body.resizing{cursor:col-resize;user-select:none}
     };
     document.addEventListener("pointermove", mv); document.addEventListener("pointerup", up);
   }
-  function linkClick(c) {
-    if (!linkFrom) { linkFrom = c.id; draw(); toast("Now click the card to connect to"); return; }
-    if (linkFrom !== c.id) addLink(linkFrom, c.id);
-    linkFrom = null; setTool(null); draw();
-  }
   function addLink(from, to) {
-    if (B.links.some(l => l.from === from && l.to === to)) { toast("Already connected"); return; }
+    if (B.links.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from))) { toast("Already connected"); return; }
     const id = uid("l"); change(() => B.links.push({ id, from, to, label: "" }));
-    select({ type: "link", id }); setTimeout(() => { const i = $("#drawer [data-f=label]"); if (i) i.focus(); }, 50);
+    selIds = new Set(); select({ type: "link", id }); setTimeout(() => { const i = $("#drawer [data-f=label]"); if (i) i.focus(); }, 50);
+  }
+  function breakLink(id) {
+    change(() => B.links = B.links.filter(l => l.id !== id));
+    if (sel && sel.type === "link" && sel.id === id) { sel = null; if (VIEW.kind === "link") openView({ kind: "library" }); }
+    else renderPanel();
+    toast("Connection removed · ⌘Z to undo");
   }
   function editText(c) {
-    modal(`<h2>${c.kind === "marker" ? "Week marker" : "Note"}</h2>
-      ${c.kind === "marker" ? `<div class="field"><label>Small line above</label><input type="text" id="m-sub" value="${esc(c.sub || "Starting point")}"></div>` : ""}
-      <div class="field"><label>${c.kind === "marker" ? "Marker" : "Note"}</label><textarea id="m-text">${esc(c.text || "")}</textarea></div>
+    modal(`<h2>Week marker</h2>
+      <div class="field"><label>Small line above</label><input type="text" id="m-sub" value="${esc(c.sub || "Starting point")}"></div>
+      <div class="field"><label>Marker</label><textarea id="m-text">${esc(c.text || "")}</textarea></div>
       <div class="row"><button class="primary" id="m-ok">Done</button><button id="m-cancel">Cancel</button></div>`, () => {
-      const t = $("#m-text").value, s = $("#m-sub") ? $("#m-sub").value : undefined;
-      change(() => { c.text = t; if (s !== undefined) c.sub = s; });
+      const t = $("#m-text").value, s = $("#m-sub").value;
+      change(() => { c.text = t; c.sub = s; });
     });
   }
 
   // ---------- placing things ----------
   function placeAt(e) {
     const p = toWorld(e.clientX, e.clientY), k = tool;
-    if (k === "note") { const c = { id: uid("c"), kind: "note", x: Math.round(p.x), y: Math.round(p.y), w: 240, h: 160, text: "" }; change(() => B.cards.push(c)); setTool(null); editText(c); }
+    if (k === "note") { const c = { id: uid("c"), kind: "note", x: Math.round(p.x), y: Math.round(p.y), w: 260, h: 180, label: "", color: "sand", html: "" }; change(() => B.cards.push(c)); setTool(null); requestAnimationFrame(() => editLabel(c, world.querySelector(`.card[data-id="${c.id}"] .lt`))); }
+    if (k === "text") { const c = { id: uid("c"), kind: "ftext", x: Math.round(p.x), y: Math.round(p.y - 12), w: 340, h: 40, size: 16, html: "" }; B.cards.push(c); setTool(null); draw(); requestAnimationFrame(() => editRich(c, world.querySelector(`.card[data-id="${c.id}"] .rt`))); }
     if (k === "marker") { const c = { id: uid("c"), kind: "marker", x: Math.round(p.x), y: Math.round(p.y), w: 220, h: 60, text: `Week ${B.cards.filter(x => x.kind === "marker").length + 1}`, sub: "Starting point" }; change(() => B.cards.push(c)); setTool(null); editText(c); }
     if (k === "embed") {
       setTool(null);
@@ -488,8 +698,10 @@ body.resizing{cursor:col-resize;user-select:none}
     const [w, h] = it.preview ? KINDSIZE.record : KINDSIZE.text;
     const c = { id: uid("c"), kind: "record", ref: id, x: Math.round(p.x - w / 2), y: Math.round(p.y - h / 2), w, h };
     change(() => B.cards.push(c));
+    selIds = new Set([c.id]);
     if (quiet) { sel = { type: "card", id: c.id }; draw(); } else select({ type: "card", id: c.id });
   }
+  board.addEventListener("dblclick", e => { if (e.target.closest(".card,.lmid")) return; const t = tool; tool = "text"; placeAt(e); tool = t; });
   board.addEventListener("dragover", e => e.preventDefault());
   board.addEventListener("drop", e => { e.preventDefault(); const id = e.dataTransfer.getData("text/ba-id"); if (id) addRecord(id, toWorld(e.clientX, e.clientY)); });
 
@@ -550,6 +762,7 @@ body.resizing{cursor:col-resize;user-select:none}
     if (v.kind === "link") return viewLink(v);
     if (v.kind === "threads") return viewThreads();
     if (v.kind === "versions") return viewVersions();
+    if (v.kind === "multi") return viewMulti();
   }
 
   // Library: search + results (the category lives in the breadcrumb)
@@ -615,27 +828,45 @@ body.resizing{cursor:col-resize;user-select:none}
   }
   function connList(c, conns) {
     return conns.length ? conns.map(l => { const o = cardById(l.from === c.id ? l.to : l.from);
-      return `<div class="conn"><span>${l.from === c.id ? "→" : "←"}</span><div><a data-go="${o ? o.id : ""}">${esc(cardTitle(o))}</a><div class="lab">${esc(l.label || "no label yet")}</div></div></div>`; }).join("")
+      return `<div class="conn"><div><a data-go="${o ? o.id : ""}">${esc(cardTitle(o))}</a><div class="lab">${esc(l.label || "no label yet")}</div></div><button class="brk" data-brk="${l.id}" title="Break this connection">×</button></div>`; }).join("")
       : `<div class="ro">No connections yet. Drag from the green dot on the card's edge to another card.</div>`;
   }
   function bindGo(root) {
+    root.querySelectorAll("[data-brk]").forEach(b => b.onclick = () => breakLink(b.dataset.brk));
     root.querySelectorAll("[data-go]").forEach(a => a.onclick = () => { const o = cardById(a.dataset.go); if (o) { centerOn(o.x + o.w / 2, o.y + o.h / 2); select({ type: "card", id: o.id }); } });
   }
 
-  // Notes, embeds, markers
+  // several cards selected
+  function viewMulti() {
+    const ids = [...selIds].filter(cardById); if (ids.length < 2) return toLibrary();
+    const body = shell([{ label: "Library", go: toLibrary }, { label: "On the board" }, { label: `${ids.length} selected` }],
+      `<div class="selcount">${ids.length} cards selected</div>
+       <p class="muted" style="margin-top:0">Drag any of them to move them together. Option-drag or ⌘D duplicates, arrow keys nudge, Delete removes.</p>
+       <div class="row"><button id="mDup">Duplicate</button><button id="mThr">Add all to a thread</button><button id="mDel">Remove from board</button></div>`);
+    $("#mDup").onclick = () => { let n; change(() => n = duplicate(ids, 24, 24)); selIds = new Set(n); draw(); viewMulti(); };
+    $("#mThr").onclick = () => addToThread(ids);
+    $("#mDel").onclick = () => removeCards(ids);
+  }
+  // Notes, text, embeds, markers
   function viewCard(v) {
     const c = cardById(v.cardId); if (!c) return toLibrary();
-    const kind = c.kind === "marker" ? "Week marker" : c.kind === "embed" ? "Embed" : "Note";
+    const kind = c.kind === "marker" ? "Week marker" : c.kind === "embed" ? "Embed" : c.kind === "ftext" ? "Text" : "Note";
     const conns = B.links.filter(l => l.from === c.id || l.to === c.id);
     const threadsIn = B.threads.filter(t => t.steps.includes(c.id));
     const body = shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => centerOn(c.x + c.w / 2, c.y + c.h / 2) }, { label: kind }],
       `<h2>${esc(cardTitle(c))}</h2>
-       ${c.kind === "embed" ? `<div class="field"><label>Link</label><input type="url" data-f="url" value="${esc(c.url)}"></div><p class="muted">Double-click the card to play it; double-click again to move it.</p>` : `<button id="cEdit">Edit text</button>`}
+       ${c.kind === "embed" ? `<div class="field"><label>Link</label><input type="url" data-f="url" value="${esc(c.url)}"></div><p class="muted">Double-click the card to play it; double-click again to move it.</p>`
+         : c.kind === "note" ? `<div class="field"><label>Label</label><input type="text" data-f="label" value="${esc(c.label || "")}" placeholder="e.g. Question, Prompt, Reading"></div>
+             <div class="field"><label>Color</label><div class="swatches">${Object.entries(NOTE_COLORS).map(([k, [bg, fg]]) => `<button data-col="${k}" class="${(c.color || "sand") === k ? "on" : ""}" style="background:${bg};box-shadow:0 0 0 ${(c.color || "sand") === k ? 2 : 1}px ${(c.color || "sand") === k ? "var(--ink)" : fg}" title="${k}"></button>`).join("")}</div></div>
+             <button id="cEdit">Edit the note</button>`
+         : c.kind === "ftext" ? `<button id="cEdit">Edit text</button>` : `<button id="cEdit">Edit marker</button>`}
        <div class="row" style="margin-top:12px"><button id="cThread">Add to thread</button><button id="cDel">Remove from board</button></div>
        <h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connList(c, conns)}
        ${threadsIn.length ? `<h3 class="eyebrow" style="margin-top:20px">In threads</h3>${threadsIn.map(t => `<div class="ro">${esc(t.name)}</div>`).join("")}` : ""}`);
-    if ($("#cEdit")) $("#cEdit").onclick = () => editText(c);
+    if ($("#cEdit")) $("#cEdit").onclick = () => { const el = world.querySelector(`.card[data-id="${c.id}"]`); if (c.kind === "marker") editText(c); else editRich(c, el && el.querySelector(".rt")); };
     const u = body.querySelector("[data-f=url]"); if (u) u.onchange = () => change(() => c.url = u.value.trim());
+    const lab = body.querySelector("[data-f=label]"); if (lab) { let t; lab.oninput = () => { clearTimeout(t); t = setTimeout(() => change(() => c.label = lab.value.trim()), 300); }; }
+    body.querySelectorAll("[data-col]").forEach(b => b.onclick = () => { change(() => c.color = b.dataset.col); viewCard(v); });
     $("#cDel").onclick = () => { removeCard(c.id); toLibrary(); };
     $("#cThread").onclick = () => addToThread(c.id);
     bindGo(body);
@@ -648,18 +879,26 @@ body.resizing{cursor:col-resize;user-select:none}
     shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => { if (a) centerOn(a.x + a.w / 2, a.y + a.h / 2); } }, { label: "Connection" }],
       `<h2>${esc(cardTitle(a))} → ${esc(cardTitle(b))}</h2>
        <div class="field"><label>What connects them?</label><input type="text" data-f="label" value="${esc(l.label || "")}" placeholder="e.g. same river, answers, echoes, contradicts"></div>
-       <div class="row"><button id="lSwap">Flip direction</button><button id="lDel">Remove connection</button></div>`);
+       <div class="row"><button id="lSwap">Flip direction</button><button id="lDel">Break connection</button></div>`);
     const inp = inner.querySelector("[data-f=label]"); let t = null;
     inp.oninput = () => { clearTimeout(t); t = setTimeout(() => change(() => l.label = inp.value.trim()), 400); };
     $("#lSwap").onclick = () => change(() => { [l.from, l.to] = [l.to, l.from]; });
-    $("#lDel").onclick = () => { change(() => B.links = B.links.filter(x => x !== l)); sel = null; draw(); toLibrary(); };
+    $("#lDel").onclick = () => breakLink(l.id);
   }
 
   function cardTitle(c) {
     if (!c) return "(removed)";
     if (c.kind === "record") return (LIBBY[c.ref] || {}).title || "Record";
     if (c.kind === "embed") return embedOf(c.url).label;
-    return clip(c.text, 60) || (c.kind === "marker" ? "Week marker" : "Note");
+    const plain = c.html != null ? (() => { const d = document.createElement("div"); d.innerHTML = c.html; return d.textContent; })() : c.text;
+    if (c.kind === "note") return c.label ? (clip(plain, 40) ? `${c.label}: ${clip(plain, 40)}` : c.label) : (clip(plain, 60) || "Note");
+    return clip(plain, 60) || (c.kind === "marker" ? "Week marker" : c.kind === "ftext" ? "Text" : "Note");
+  }
+  function removeCards(ids) {
+    const set = new Set(ids);
+    change(() => { B.cards = B.cards.filter(c => !set.has(c.id)); B.links = B.links.filter(l => !set.has(l.from) && !set.has(l.to)); B.threads.forEach(t => t.steps = t.steps.filter(s => !set.has(s))); });
+    selIds = new Set(); sel = null; draw(); toLibrary();
+    toast(`Removed ${ids.length} ${ids.length === 1 ? "card" : "cards"} · ⌘Z to undo`);
   }
   function removeCard(id) {
     change(() => { B.cards = B.cards.filter(c => c.id !== id); B.links = B.links.filter(l => l.from !== id && l.to !== id); B.threads.forEach(t => t.steps = t.steps.filter(s => s !== id)); });
@@ -668,7 +907,8 @@ body.resizing{cursor:col-resize;user-select:none}
   const renderLibrary = () => { if (VIEW.kind === "library" && panel.classList.contains("open")) viewLibrary(); };
 
   // ---------- threads ----------
-  function addToThread(cardId) {
+  function addToThread(cardIdOrIds) {
+    const cardIds = Array.isArray(cardIdOrIds) ? cardIdOrIds : [cardIdOrIds];
     const opts = B.threads.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
     modal(`<h2>Add to a thread</h2><p class="muted">A thread is an ordered path through the board, for walking a session from card to card.</p>
       ${B.threads.length ? `<div class="field"><label>Thread</label><select id="m-thr">${opts}<option value="__new">New thread…</option></select></div>` : ""}
@@ -677,7 +917,7 @@ body.resizing{cursor:col-resize;user-select:none}
       let tid = $("#m-thr") ? $("#m-thr").value : "__new";
       change(() => {
         if (tid === "__new") { const t = { id: uid("t"), name: $("#m-new").value.trim() || `Thread ${B.threads.length + 1}`, steps: [] }; B.threads.push(t); tid = t.id; }
-        const t = B.threads.find(x => x.id === tid); if (!t.steps.includes(cardId)) t.steps.push(cardId);
+        const t = B.threads.find(x => x.id === tid); cardIds.forEach(cardId => { if (!t.steps.includes(cardId)) t.steps.push(cardId); });
       });
       toast("Added to the thread"); renderView();
     });
@@ -807,8 +1047,7 @@ body.resizing{cursor:col-resize;user-select:none}
     if (tool === "versions") { tool = null; toggleView("versions"); return; }
     railState();
     if (tool === "fit") { tool = null; fit(); setTool(null); return; }
-    if (tool === "note" || tool === "embed" || tool === "marker") toast("Click on the board to place it");
-    if (tool === "link") toast("Click a card, then the card to connect it to");
+    if (tool === "note" || tool === "embed" || tool === "marker" || tool === "text") toast(tool === "text" ? "Click where the text should go" : "Click on the board to place it");
   }
   document.querySelectorAll("#rail [data-tool]").forEach(b => b.onclick = () => setTool(b.dataset.tool));
   function modal(html, ok) {
@@ -819,23 +1058,45 @@ body.resizing{cursor:col-resize;user-select:none}
     const f = $("#mbox").querySelector("textarea,input"); if (f) { f.focus(); f.select && f.select(); }
   }
   document.addEventListener("keydown", e => {
-    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || $("#modal").style.display === "flex") {
-      if (e.key === "Escape") $("#modal").style.display = "none";
+    if ($("#modal").style.display === "flex") { if (e.key === "Escape") $("#modal").style.display = "none"; return; }
+    const k = e.key.toLowerCase(), m = e.metaKey || e.ctrlKey;
+    if (typing()) {
+      if (m && k === "s") { e.preventDefault(); saveBoard(); }
+      return;                                                     // text editing owns the keyboard
+    }
+    if (k === " ") { e.preventDefault(); if (!spaceDown) { spaceDown = true; board.classList.add("spacepan"); } return; }
+    if (m && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+    if (m && k === "s") { e.preventDefault(); saveBoard(); return; }
+    if (m && k === "a") { e.preventDefault(); selIds = new Set(B.cards.map(c => c.id)); afterMultiSelect(); return; }
+    if (m && k === "d") { e.preventDefault(); if (!selIds.size) return; let n; change(() => n = duplicate([...selIds], 24, 24)); selIds = new Set(n); afterMultiSelect(); return; }
+    if (m && (k === "=" || k === "+" || k === "-")) {           // size selected text without entering it
+      const t = [...selIds].map(cardById).filter(c => c && (c.kind === "ftext" || c.kind === "note"));
+      if (t.length) { e.preventDefault(); change(() => t.forEach(c => c.size = stepSize(c.size || (c.kind === "note" ? 15 : 16), k === "-" ? -1 : 1))); }
       return;
     }
-    const k = e.key.toLowerCase();
-    if ((e.metaKey || e.ctrlKey) && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
-    if ((e.metaKey || e.ctrlKey) && k === "s") { e.preventDefault(); saveBoard(); return; }
-    if (present) { if (k === "arrowright" || k === " ") step(1); else if (k === "arrowleft") step(-1); else if (k === "escape") stopPresent(); return; }
-    if (k === "escape") { if ($("#lb").style.display === "flex") { $("#lb").style.display = "none"; return; } setTool(null); linkFrom = null; sel = null; draw(); closePanel(); }
-    else if ((k === "arrowright" || k === "arrowleft") && panel.classList.contains("open") && VIEW.kind === "record" && VIEW.list) { const b = $(k === "arrowright" ? "#rnext" : "#rprev"); if (b && !b.disabled) b.click(); }
-    else if ((k === "backspace" || k === "delete") && sel) {
-      if (sel.type === "card") removeCard(sel.id);
-      else if (sel.type === "link") { change(() => B.links = B.links.filter(l => l.id !== sel.id)); select(null); }
+    if (present) { if (k === "arrowright") step(1); else if (k === "arrowleft") step(-1); else if (k === "escape") stopPresent(); return; }
+    if (k === "escape") {
+      if ($("#lb").style.display === "flex") { $("#lb").style.display = "none"; return; }
+      if (selIds.size || sel) { selIds = new Set(); sel = null; setTool(null); draw(); return; }
+      setTool(null); closePanel(); return;
     }
-    else if (k === "l") setTool("library"); else if (k === "n") setTool("note"); else if (k === "e") setTool("embed");
-    else if (k === "w") setTool("marker"); else if (k === "c") setTool("link"); else if (k === "f") fit();
+    if (k.startsWith("arrow") && selIds.size) {                   // nudge; Shift for bigger steps
+      e.preventDefault(); const d = e.shiftKey ? 10 : 1, dx = k === "arrowleft" ? -d : k === "arrowright" ? d : 0, dy = k === "arrowup" ? -d : k === "arrowdown" ? d : 0;
+      change(() => selIds.forEach(id => { const c = cardById(id); if (c) { c.x += dx; c.y += dy; } })); return;
+    }
+    if ((k === "arrowright" || k === "arrowleft") && panel.classList.contains("open") && VIEW.kind === "record" && VIEW.list) { const b = $(k === "arrowright" ? "#rnext" : "#rprev"); if (b && !b.disabled) b.click(); return; }
+    if (k === "enter" && selIds.size === 1) { const c = cardById([...selIds][0]); const el = c && world.querySelector(`.card[data-id="${c.id}"]`); if (c && (c.kind === "ftext" || c.kind === "note")) { e.preventDefault(); editRich(c, el.querySelector(".rt")); } return; }
+    if (k === "backspace" || k === "delete") {
+      if (selIds.size) { e.preventDefault(); removeCards([...selIds]); }
+      else if (sel && sel.type === "link") { e.preventDefault(); breakLink(sel.id); }
+      return;
+    }
+    if (m || e.altKey) return;
+    if (k === "l") setTool("library"); else if (k === "n") setTool("note"); else if (k === "t") setTool("text"); else if (k === "e") setTool("embed");
+    else if (k === "w") setTool("marker"); else if (k === "f") fit();
   });
+  document.addEventListener("keyup", e => { if (e.key === " ") { spaceDown = false; board.classList.remove("spacepan"); } });
+  window.addEventListener("blur", () => { spaceDown = false; board.classList.remove("spacepan"); });
   window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 
   load();
