@@ -1251,6 +1251,7 @@ body.resizing{cursor:col-resize;user-select:none}
     $("#m-cancel").onclick = close;
     const f = $("#mbox").querySelector("textarea,input"); if (f) { f.focus(); f.select && f.select(); }
   }
+  let pasteN = 0;
   document.addEventListener("keydown", e => {
     if ($("#modal").style.display === "flex") { if (e.key === "Escape") $("#modal").style.display = "none"; return; }
     const k = e.key.toLowerCase(), m = e.metaKey || e.ctrlKey;
@@ -1262,6 +1263,29 @@ body.resizing{cursor:col-resize;user-select:none}
     if (m && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (m && k === "s") { e.preventDefault(); saveBoard(); return; }
     if (m && k === "a") { e.preventDefault(); selIds = new Set(B.cards.map(c => c.id)); afterMultiSelect(); return; }
+    if (m && (k === "c" || k === "x")) {                         // copy (or cut) the selected cards, with the connections between them
+      if (!selIds.size || (getSelection() && String(getSelection()).trim())) return;
+      e.preventDefault(); const ids = new Set(selIds);
+      const clip = { cards: B.cards.filter(c => ids.has(c.id)).map(c => JSON.parse(JSON.stringify(c))), links: B.links.filter(l => ids.has(l.from) && ids.has(l.to)).map(l => ({ ...l })) };
+      S.set("wb.clip", clip); pasteN = 0;
+      if (k === "x") { removeCards([...ids]); toast(`Cut ${clip.cards.length > 1 ? clip.cards.length + " cards" : "card"}`); }
+      else toast(`Copied ${clip.cards.length > 1 ? clip.cards.length + " cards" : "card"} · ⌘V to paste`);
+      return;
+    }
+    if (m && k === "v") {
+      const clip = S.get("wb.clip", null); if (!clip || !clip.cards || !clip.cards.length) return;
+      e.preventDefault(); pasteN++;
+      const x0 = Math.min(...clip.cards.map(c => c.x)), y0 = Math.min(...clip.cards.map(c => c.y)), r = board.getBoundingClientRect();
+      const inBoard = lastPt.x > r.left && lastPt.x < r.right && lastPt.y > r.top && lastPt.y < r.bottom;
+      const at = inBoard ? toWorld(lastPt.x, lastPt.y) : { x: x0 + 28 * pasteN, y: y0 + 28 * pasteN };
+      if (inBoard && pasteN > 1) { at.x += 20 * (pasteN - 1); at.y += 20 * (pasteN - 1); }
+      const map = {}, copies = clip.cards.map(c => { const n = JSON.parse(JSON.stringify(c)); n.id = uid("c"); map[c.id] = n.id; n.x = Math.round(at.x + (c.x - x0)); n.y = Math.round(at.y + (c.y - y0)); return n; });
+      const links = clip.links.filter(l => map[l.from] && map[l.to]).map(l => ({ ...l, id: uid("l"), from: map[l.from], to: map[l.to] }));
+      change(() => { B.cards.push(...copies); B.links.push(...links); });
+      selIds = new Set(copies.map(c => c.id)); afterMultiSelect();
+      requestAnimationFrame(() => copies.forEach(c => { const el = world.querySelector(`.card[data-id="${c.id}"]`); if (el) { el.classList.add("landed"); setTimeout(() => el.classList.remove("landed"), 520); } }));
+      return;
+    }
     if (m && k === "d") { e.preventDefault(); if (!selIds.size) return; let n; change(() => n = duplicate([...selIds], 24, 24)); selIds = new Set(n); afterMultiSelect(); return; }
     if (m && (k === "=" || k === "+" || k === "-")) {           // size selected text without entering it
       const t = [...selIds].map(cardById).filter(c => c && (c.kind === "ftext" || c.kind === "note"));

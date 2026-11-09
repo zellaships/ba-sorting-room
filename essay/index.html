@@ -10,7 +10,7 @@
 html,body{margin:0;height:100%;background:#000;color:var(--ink);font:400 17px/1.75 "Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;overflow:hidden}
 #ocean{position:fixed;left:0;top:0;width:100%;height:calc(100% - var(--bar) - var(--strip));border:0;display:block;will-change:transform}
 /* the deep: darkness gathers from below as you go down */
-#abyss{position:fixed;inset:0;pointer-events:none;opacity:0;will-change:opacity;background:linear-gradient(180deg,rgba(2,12,16,.35) 0%,rgba(1,6,9,.85) 45%,#000 80%)}
+#abyss{position:fixed;inset:0;pointer-events:none;opacity:0;will-change:opacity;background:linear-gradient(180deg,rgba(4,22,34,.35) 0%,rgba(3,18,30,.85) 45%,#03121e 80%)}
 
 /* the drawer: closed, only its bar and the black strip show at the bottom; open, it fills the screen */
 /* the drawer is moved by a spring on the compositor (transform only): no layout work while it travels */
@@ -187,7 +187,10 @@ function paint(){
   // parallax: the water rises faster than the drawer, and the camera sinks, so pulling up reads as going down
   const c=Math.max(0,Math.min(1,p));
   ocean.style.transform=`translate3d(0,${(-c*closedY()*.6).toFixed(1)}px,0)`;
-  abyss.style.opacity=Math.min(1,c*1.35).toFixed(3);
+  abyss.style.opacity=Math.min(1,c*1.1).toFixed(3);
+  // the reading room starts deep blue and goes to black as it rises into place
+  const bl=Math.min(1,Math.max(0,(c-.15)/.85)),mix=(a,b)=>Math.round(a+(b-a)*bl);
+  read.style.background=`linear-gradient(180deg, rgb(${mix(8,7)},${mix(30,7)},${mix(46,7)}) 0%, rgb(${mix(4,7)},${mix(16,7)},${mix(26,7)}) 55%, #070707 100%)`;
   if(Math.abs(c-(paint.lastDive??-1))>.002){paint.lastDive=c;try{ocean.contentWindow.postMessage({ba:'dive',d:c},'*');}catch(e){}}
   // the essay rises into place a beat behind the drawer
   const q=Math.max(0,Math.min(1,(p-.35)/.65));const e=1-Math.pow(1-q,3);
@@ -203,7 +206,7 @@ function tick(now){
   }
   paint();raf=requestAnimationFrame(tick);
 }
-function run(){if(!raf){last=0;raf=requestAnimationFrame(tick);}oceanRest(false);}
+function run(){ocean.style.visibility='visible';if(!raf){last=0;raf=requestAnimationFrame(tick);}oceanRest(false);}
 // the ocean slows while the drawer travels and rests while it covers the water, so the motion never fights the GPU
 function oceanRest(full){try{ocean.contentWindow.postMessage({ba:'ocean',state:full?'rest':(p>.02||target>0)?'slow':'live'},'*');}catch(e){}}
 function settle(){
