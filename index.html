@@ -619,7 +619,7 @@
   function renderGrid(which) {
     if (!Object.keys(records).length) { $("#main").innerHTML = `<div class="empty">Loading records…</div>`; return; }
     const allItems = list(which === "all" ? "all" : which);
-    const empty = { all: "Nothing left to sort.",
+    const empty = { all: `Everything is sorted. <a href="#keep" class="linkbtn">Prod images →</a> &nbsp; <a href="#nix" class="linkbtn">Nixed → (people, events, excerpts, concepts…)</a>`,
                     keep: "Nothing in Prod images yet. Keep something in All.", nix: "Nothing nixed." }[which];
     const waiting = which === "keep" ? allItems.filter(x => !PUB.ids.has(x.id) && !x.rec._hold).length : 0;
     const heldN = which === "keep" ? allItems.filter(x => x.rec._hold).length : 0;
@@ -1199,7 +1199,7 @@
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108214858";
+  const BUILD = "20261108215845";
   setInterval(async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
