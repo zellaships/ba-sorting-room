@@ -15,7 +15,7 @@ canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
 #stat{position:absolute;left:0;top:25px;background:var(--panel);border:2px solid var(--line);border-left:0;padding:3px 8px;font-size:11px;z-index:2;max-width:70vw}
 #thumbs{position:absolute;right:8px;top:8px;width:112px;height:112px;border:2px solid #000;background:#222;z-index:2}
-body.embed #thumbs,body.embed #cap{display:none}body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
+body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
 canvas#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
 #cosmoLabs{position:absolute;inset:0;pointer-events:none;z-index:1}
 .lab{position:absolute;white-space:nowrap;font:500 12px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:.02em;color:#141414;
@@ -634,7 +634,6 @@ void main(){
       fp=f;
     }
   }
-  col+=vec3(.88,.93,1.)*rainFall(gl_FragCoord.xy,u_wt,waterT)*.13*rainAmt();
   o=vec4(col,1.);
   if(u_pickOn>.5)o=vec4(mod(g_pick+1.,256.)/255.,floor((g_pick+1.)/256.)/255.,0.,1.);
 }`;
@@ -1067,7 +1066,7 @@ document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement
 addEventListener('pointermove',()=>{document.body.classList.remove('idle');clearTimeout(idleT);idleT=setTimeout(()=>document.body.classList.add('idle'),2500);});
 // embedded under the essay: just the water, no interface
 if(new URLSearchParams(location.search).has('embed')){document.body.classList.add('proj','embed');
-  const portrait=innerWidth<innerHeight;camT.yaw=cam.yaw=.35;camT.pitch=cam.pitch=.14;camT.dist=cam.dist=portrait?6.4:5;}
+  const portrait=innerWidth<innerHeight;camT.yaw=cam.yaw=.35;camT.pitch=cam.pitch=.16;camT.dist=cam.dist=portrait?7.4:6.1;}
 const panel=$('panel'),pt=$('ptoggle');
 function setPanel(open){panel.classList.toggle('min',!open);pt.setAttribute('aria-expanded',open);
   pt.textContent='VES / Strange Projector water body study v27 - controls '+(open?'-':'+');}
@@ -1184,10 +1183,13 @@ function draw(now,camv){
   ix.setTransform(dpr,0,0,dpr,0,0);ix.clearRect(0,0,w,h);
   labs$.style.display=on?'block':'none';if(!on){hitList=[];return;}
   const cy=CY(),sc=Math.min(1.25,Math.max(.8,Math.min(w,h)/700));
-  stroke(circlePts(0,cy,0,R,'xy',1.3,-.55,-.55+6.28+.26,150),1,4.4*sc,t,{color:colXY});
-  stroke(circlePts(0,cy,0,R*1.006,'xy',4.1,1.9,1.9+3.1,70),2,1.7*sc,t,{jit:.01,color:colXY});
+  const spin=t*.16,spin2=-t*.11;
+  stroke(circlePts(0,cy,0,R,'xy',1.3,-.55+spin,-.55+spin+6.28+.26,150),1,4.4*sc,t,{color:colXY});
+  stroke(circlePts(0,cy,0,R*1.006,'xy',4.1,1.9+spin*1.7,1.9+spin*1.7+3.1,70),2,1.7*sc,t,{jit:.01,color:colXY});
+  stroke(circlePts(0,cy,0,R*1.012,'xy',6.6,4.4+spin2*1.4,4.4+spin2*1.4+1.9,46),7,1.3*sc,t,{jit:.012,color:colXY});
   stroke(circlePts(0,cy,0,R*.46,'xy',2.2,.4,.4+6.28+.2,90),3,2.4*sc,t,{color:colXY});
-  stroke(circlePts(0,cy,0,R,'xz',5.7,.2,.2+6.28+.22,120),4,2.0*sc,t,{jit:.007,flat:true,color:colXZ});
+  stroke(circlePts(0,cy,0,R,'xz',5.7,.2+spin2,.2+spin2+6.28+.22,120),4,2.0*sc,t,{jit:.007,flat:true,color:colXZ});
+  stroke(circlePts(0,cy,0,R*1.01,'xz',8.2,2.6+spin*1.3,2.6+spin*1.3+2.4,50),8,1.2*sc,t,{jit:.01,flat:true,color:colXZ});
   stroke(linePts([-R*1.55,cy,0],[R*1.55,cy,0],40),5,3.4*sc,t,{flat:true,jit:.004,color:colKal});
   stroke(linePts([0,cy+R*1.14,0],[0,cy-R*1.14,0],60),6,3.4*sc,t,{solid:false,color:colAxis});
   [[0,1],[Math.PI/2,2],[Math.PI,3],[Math.PI*1.5,4]].forEach(([th,k])=>{
