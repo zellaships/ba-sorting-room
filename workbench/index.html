@@ -93,7 +93,19 @@ body.roping,body.roping *{cursor:crosshair!important}
 .card.marker{background:var(--ink);color:#fff;border:0;border-radius:999px;padding:0}
 .card.marker .body{padding:10px 20px;font:18px/1.2 Georgia,serif;white-space:nowrap}
 .card.marker .sub{font:11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
-.card.embed .frame{width:100%;height:calc(100% - 36px);background:#111}
+.card.embed .frame{width:100%;height:calc(100% - 36px);background:#111;position:relative;overflow:hidden}
+.card.embed .frame iframe{transform-origin:0 0}
+.card.embed .poster{position:absolute;inset:0;background:#0b1418 center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.card.embed .poster.sound{background:linear-gradient(160deg,#0f2a35,#0b1418)}.card.embed .poster.sound span{font:500 11px/1.5 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#9fc3bb;margin-top:86px;text-align:center;padding:0 18px}
+.card.embed .poster.locked span{margin-top:0;text-transform:none;letter-spacing:0;font:14px/1.45 system-ui;color:#e9e9e6;max-width:30ch}.card.embed .poster.locked a{color:#9fc3bb;font-size:13px}
+.card.embed .playbtn{position:absolute;left:50%;top:calc(50% - 18px);transform:translate(-50%,-50%);width:62px;height:62px;border-radius:50%;border:1px solid rgba(255,255,255,.55);background:rgba(8,22,28,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;display:grid;place-items:center;cursor:pointer;z-index:3;padding:0 0 0 3px;transition:transform .15s,background .15s}
+.card.embed .playbtn:hover{background:rgba(131,181,165,.85);transform:translate(-50%,-50%) scale(1.06)}
+.card.embed.live .playbtn{display:none}
+.card.embed .grip{display:none;position:absolute;top:0;left:0;right:0;height:30px;z-index:4;cursor:grab;background:linear-gradient(rgba(6,14,18,.82),rgba(6,14,18,0));opacity:0;transition:opacity .15s}
+.card.embed .grip i{position:absolute;left:50%;top:9px;width:44px;height:5px;margin-left:-22px;border-radius:3px;background:rgba(255,255,255,.75)}
+.card.embed.live .grip{display:block}.card.embed.live:hover .grip,.card.embed.live.sel .grip{opacity:1}.card.embed .grip:active{cursor:grabbing}
+body.pd .card.embed iframe{pointer-events:none}
+.card.embed .stopbtn{display:none;margin-left:auto;font-size:11.5px;padding:3px 9px;border-radius:5px}.card.embed.live .stopbtn{display:inline-block}
 .card.embed iframe,.card.embed img{width:100%;height:100%;border:0;object-fit:contain;display:block}
 .card.embed .bar{height:36px;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:12px;color:var(--muted);border-top:1px solid var(--rule);white-space:nowrap;overflow:hidden}
 .card.embed .shield{position:absolute;inset:0 0 36px 0}
@@ -642,7 +654,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       return `<div class="lk"><img class="fav" src="https://www.google.com/s2/favicons?sz=64&domain=${esc(host)}" alt=""><div class="lh">${esc(host)}</div><div class="lt2">${esc(c.title || c.url)}</div><a href="${esc(c.url)}" target="_blank" rel="noopener" class="lo">Open ↗</a></div>`; }
     if (c.kind === "embed") {
       const e = embedOf(c.url);
-      return `<div class="frame">${e.html}</div><div class="shield" title="Double-click to play"></div><div class="bar">${esc(e.label)} · <a href="${esc(c.url)}" target="_blank" rel="noopener">open</a></div>`;
+      return `<div class="frame">${e.src ? posterHTML(e) : e.html}</div><div class="shield" title="${e.src ? "Press play, or double-click" : ""}"></div>${e.src ? `<div class="grip" title="Drag to move"><i></i></div>` : ""}${e.src ? `<button class="playbtn" title="Play here" aria-label="Play here"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>` : ""}<div class="bar">${esc(e.label)} · <a href="${esc(c.url)}" target="_blank" rel="noopener">open</a>${e.src ? `<button class="stopbtn" title="Stop and go back to the still">Stop</button>` : ""}</div>`;
     }
     const it = LIBBY[c.ref] || {};
     const title = c.title || it.title || "Record not in the library";
@@ -655,17 +667,44 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     }
     return `<span class="kind">${esc(catLabel(it.type || ""))}</span><div class="body text" style="padding:34px 14px 12px"><div class="q">${esc(title)}</div><div class="m muted" style="margin-top:6px">${esc(known(it.date))}</div></div>`;
   }
+  // Links play on the board. A player card shows a still with one play button; pressing it loads the player in
+  // place with sound, at a comfortable inner size scaled to the card so its controls read normally. Nothing loads
+  // until play is pressed, which keeps a big board light.
   function embedOf(url) {
     url = String(url || "");
-    let m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([\w-]{11})/);
-    if (m) return { html: `<iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`, label: "YouTube" };
-    m = url.match(/vimeo\.com\/(\d+)/);
-    if (m) return { html: `<iframe src="https://player.vimeo.com/video/${m[1]}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`, label: "Vimeo" };
-    if (/twitch\.tv\/(\w+)/.test(url)) { const ch = url.match(/twitch\.tv\/(\w+)/)[1]; return { html: `<iframe src="https://player.twitch.tv/?channel=${ch}&parent=${location.hostname}" allowfullscreen></iframe>`, label: "Twitch live" }; }
+    const allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    let m = url.match(/(?:youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return { label: "YouTube", yt: m[1], poster: `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`, allow, src: `https://www.youtube-nocookie.com/embed/${m[1]}?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}` };
+    m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return { label: "Vimeo", allow, src: `https://player.vimeo.com/video/${m[1]}?autoplay=1` };
+    if (/soundcloud\.com\/[^/]+\/[^/?#]+/.test(url)) return { label: "SoundCloud", allow, sound: true, src: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url.split("?")[0])}&auto_play=true&visual=true&show_comments=false` };
+    m = url.match(/open\.spotify\.com\/(?:intl-[\w-]+\/)?(track|album|playlist|episode|show)\/(\w+)/);
+    if (m) return { label: "Spotify", allow, sound: true, natural: true, src: `https://open.spotify.com/embed/${m[1]}/${m[2]}` };
+    m = url.match(/^(https?:\/\/[\w-]+\.bandcamp\.com\/(?:track|album)\/[^?#]+)/);
+    if (/twitch\.tv\/(\w+)/.test(url)) { const ch = url.match(/twitch\.tv\/(\w+)/)[1]; return { label: "Twitch live", allow, src: `https://player.twitch.tv/?channel=${ch}&parent=${location.hostname}&autoplay=true` }; }
     if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return { html: `<img src="${esc(url)}" alt="">`, label: "Image" };
     if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) return { html: `<video src="${esc(url)}" controls style="width:100%;height:100%"></video>`, label: "Video" };
+    if (/\.(mp3|wav|m4a|ogg|flac)(\?|$)/i.test(url)) return { html: `<div class="poster sound"><audio src="${esc(url)}" controls style="width:86%"></audio></div>`, label: "Sound" };
     return { html: `<div style="color:#ddd;padding:16px;font-size:14px">${esc(url)}</div>`, label: "Link" };
   }
+  const posterHTML = e => `<div class="poster${e.poster ? "" : " sound"}"${e.poster ? ` style="background-image:url('${esc(e.poster)}')"` : ""}>${e.poster ? "" : `<span>${esc(e.label)}</span>`}</div>`;
+  function fitEmbed(el) { const fr = el.querySelector(".frame"), i = fr && fr.querySelector("iframe"); if (!i || i.dataset.natural) return;
+    const w = fr.clientWidth, h = fr.clientHeight, k = Math.min(1, w / 640); i.style.width = w / k + "px"; i.style.height = h / k + "px"; i.style.transform = `scale(${k})`; }
+  function playEmbed(el, c) { const e = embedOf(c.url), fr = el.querySelector(".frame"); if (!e.src || !fr) return;
+    fr.innerHTML = `<iframe src="${esc(e.src)}" allow="${e.allow}" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"${e.natural ? ' data-natural="1"' : ""}></iframe>`;
+    el.classList.add("live"); fitEmbed(el);
+    if (!el._ro && window.ResizeObserver) { el._ro = new ResizeObserver(() => fitEmbed(el)); el._ro.observe(fr); }
+    const i = fr.querySelector("iframe");
+    if (e.yt) i.addEventListener("load", () => { try { i.contentWindow.postMessage(JSON.stringify({ event: "listening", id: c.id, channel: "widget" }), "*"); } catch (x) {} }); }
+  function stopEmbed(el, c) { const e = embedOf(c.url), fr = el.querySelector(".frame"); if (!fr) return; el.classList.remove("live"); if (e.src) fr.innerHTML = posterHTML(e); }
+  // YouTube tells us when an owner has locked a video to youtube.com. Say so on the card, plainly.
+  // while any press is held on the board, players let the pointer through, so a drag never gets swallowed by a video
+  document.addEventListener("pointerdown", () => document.body.classList.add("pd"), true);
+  for (const k of ["pointerup", "pointercancel", "blur"]) window.addEventListener(k, () => document.body.classList.remove("pd"), true);
+  window.addEventListener("message", ev => { if (!/youtube/.test(ev.origin)) return; let d; try { d = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data; } catch (x) { return; }
+    if (!d || d.event !== "onError") return; const fr = [...document.querySelectorAll(".card.embed.live iframe")].find(f => f.contentWindow === ev.source); if (!fr) return;
+    const el = fr.closest(".card"), c = cardById(el.dataset.id); if (!c) return;
+    fr.parentNode.innerHTML = `<div class="poster sound locked"><span>${[101, 150, 153].includes(+d.info) ? "The owner has locked this one to YouTube, so it cannot play on the board." : "YouTube could not play this one here."}</span><a href="${esc(c.url)}" target="_blank" rel="noopener">Open it on YouTube</a></div>`; });
   const cardById = id => B.cards.find(c => c.id === id);
   function draw() {
     world.querySelectorAll(".card").forEach(n => { if (!B.cards.some(c => c.id === n.dataset.id)) n.remove(); });
@@ -786,11 +825,14 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       };
       el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up);
     });
+    el.addEventListener("pointerdown", e => { if (e.target.closest(".playbtn,.stopbtn")) e.stopPropagation(); }, true);
+    el.addEventListener("click", e => { const b = e.target.closest(".playbtn,.stopbtn"); if (!b) return; e.stopPropagation(); const c = cardById(el.dataset.id); if (c) b.classList.contains("playbtn") ? playEmbed(el, c) : stopEmbed(el, c); }, true);
     el.addEventListener("dblclick", e => {
+      if (e.target.closest(".playbtn,.stopbtn")) return;
       const c = cardById(el.dataset.id); if (!c) return;
       if (selIds.size > 1 && selIds.has(c.id)) { openView({ kind: "multi" }); return; }
       selIds = new Set([c.id]); select({ type: "card", id: c.id });          // the only way a card opens in the panel
-      if (c.kind === "embed") { el.classList.toggle("live"); return; }
+      if (c.kind === "embed") { el.classList.contains("live") ? stopEmbed(el, c) : embedOf(c.url).src ? playEmbed(el, c) : el.classList.toggle("live"); return; }
       if (c.kind === "media") { if (c.mk === "video" || c.mk === "audio") { const v = el.querySelector("video,audio"); if (v) v.paused ? v.play() : v.pause(); return; } if (c.url && (c.mk === "image" || c.mk === "vector")) return; srcURL(c.url || c.src).then(u => u && window.open(u, "_blank")); return; }
       if (c.kind === "link") { window.open(c.url, "_blank", "noopener"); return; }
       if (c.kind === "ftext") return editRich(c, el.querySelector(".rt"));
