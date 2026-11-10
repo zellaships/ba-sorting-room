@@ -81,6 +81,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
 <div id="panel" class="min">
  <h1 id="phead"><button id="ptoggle" aria-expanded="false" aria-controls="pbody">VES / Strange Projector water body study v28 - controls +</button></h1>
  <div id="pbody">
+  <p><b>v28, later:</b> going under is an event: near the surface the view is half in and half out, with a waterline that climbs the glass, then a mask-like narrowing and a burst of bubbles. Below is deep and dark with light curtains and no floor. The cosmogram has fine relief, casts shadow on itself, and is slick where wet.</p>
   <p><b>v28:</b> the cosmogram is weathered into the water's world: matte, rusted, salt-crusted at the waterline, wet where it crosses, with a bright meniscus. Luvemba is chalk white. Theme names are hidden: one appears in italic serif only while the cursor rests on its bead, and the four moments stay. The photo under the cursor shows in a round lens in the bottom right corner, with its full caption beside it. A first-visit hint says what dragging and selecting do.</p>
   <p><b>v27:</b> the Kongo cosmogram stands in the water, half above and half below the kalunga line, drawn in the same space as the ocean so it turns with the camera. Below the line it wavers with the water. Tap a node to read it.</p>
   <p><b>v26:</b> no more ruled lines: the strips bend and fan across the water on big slow currents, and the slices between photos are curved arcs that cascade like scales. Photos keep their full interior (the squeeze that drew marble rings is gone), highlights no longer blow out to white, and the picture holds its sharpness.</p>
@@ -710,11 +711,22 @@ vec3 cShade(vec3 pw,vec3 rdw,float id,float sub){
   base=mix(base,vec3(.13,.24,.17),alg*.42);
   // light: matte diffuse, soft sky fill, a broad low glaze sheen, the wet line at the water
   vec3 L=normalize(vec3(.35,.6,.45));
-  float dif=max(dot(n,L),0.),wrap=max(dot(n,L)*.5+.5,0.);
+  // v28: a real surface. fine relief in the glaze, shadow cast by its own arcs, rough where dry and slick where wet
+  float wet=smoothstep(.30,.0,abv)*step(-.02,abv);
+  float shd=1.;
+  if(sub<.5){
+    float b0=vn3(pt*46.),bx=vn3(pt*46.+vec3(.3,0.,0.)),by=vn3(pt*46.+vec3(0.,.3,0.)),bz=vn3(pt*46.+vec3(0.,0.,.3));
+    n=normalize(n-(vec3(bx,by,bz)-b0)*(.34+.5*cr)*(1.-.6*wet));
+    float ts=.05;for(int i=0;i<9;i++){float dd=cMap(p+L*ts).x;shd=min(shd,9.*dd/ts);ts+=clamp(dd,.035,.28);if(ts>2.6)break;}
+    shd=clamp(shd,0.,1.);
+  }
+  float dif=max(dot(n,L),0.)*mix(.30,1.,shd),wrap=max(dot(n,L)*.5+.5,0.);
   float ao=clamp(cMap(p+n*.06).x/.06,0.,1.)*.55+.45;
-  vec3 col=base*(vec3(.20,.27,.29)*(.55+.45*n.y)+vec3(1.,.95,.86)*(dif*1.0+wrap*.06))*ao;
+  vec3 col=base*(vec3(.20,.27,.29)*(.55+.45*n.y)+vec3(1.,.95,.86)*(dif*1.0+wrap*.06)+vec3(.10,.24,.24)*max(-n.y,0.)*.9)*ao*mix(.78,1.,ao);
   float gl=pow(max(dot(reflect(rd,n),L),0.),28.)*(1.-chip)*(1.-sub*.8);
   col+=vec3(1.,.97,.9)*gl*.04;
+  {vec3 hv=normalize(L-rd);float rough=mix(.62,.16,wet)*(1.-.25*(1.-chip)*(1.-rust))+.0;float sp2=pow(max(dot(n,hv),0.),mix(220.,14.,rough))*mix(1.6,.10,rough);col+=vec3(1.,.97,.92)*sp2*shd*(1.-sub)*(1.-chalk*.6);
+   float f0=.04+.96*pow(1.-max(dot(n,-rd),0.),5.);col=mix(col,skyCol(reflect(rd,n)),f0*mix(.10,.55,wet)*(1.-sub)*(1.-chalk*.5));}
   float fr=pow(1.-max(dot(n,-rd),0.),4.);
   col+=skyCol(reflect(rd,n))*fr*.03*(1.-sub);
   float above=pw.y-u_wy;
@@ -724,12 +736,9 @@ vec3 cShade(vec3 pw,vec3 rdw,float id,float sub){
   col+=vec3(.86,.96,.95)*.30*smoothstep(.02,.0,abs(above))*(1.-sub);
   if(abs(id-10.-u_selB)<.5)col+=vec3(.10,.09,.07);
   return col;}
-void main(){
-  vec2 fc=u_pickOn>.5?u_pickXY:gl_FragCoord.xy;
-  vec2 s=(fc-.5*u_res)/u_res.y;
+void scene(vec2 fc,vec2 s,vec3 ro,bool under){
   vec3 rd=normalize(u_fw*1.55+u_rt*s.x+u_up*s.y);
-  vec3 ro=u_ro;
-  if(u_under>.5){vec3 uc=underCol(ro,rd);
+  if(under){vec3 uc=underCol(ro,rd);
     if(u_cosOn>.5){float tS=rd.y>0.?(u_wy-ro.y)/rd.y:1e6;float idc;float tc=cTrace(ro,rd,min(tS,40.),idc);
       if(tc>0.){vec3 ab=exp(-vec3(.75,.42,.36)*tc*.16);uc=mix(uc,cShade(ro+rd*tc,rd,idc,1.)*ab+vec3(.02,.08,.09)*(1.-ab),.96);}
       else if(tS<1e5){vec3 g=ro+rd*tS;float e=.05,h0=wbase(g.xz,u_wt);
@@ -806,6 +815,50 @@ void main(){
   }
   o=vec4(col,1.);
   if(u_pickOn>.5)o=vec4(mod(g_pick+1.,256.)/255.,floor((g_pick+1.)/256.)/255.,0.,1.);
+}
+// v28: going under is an event. Near the surface the lens is half in, half out: a waterline climbs the glass,
+// air above it and water below, with a dark meniscus and a bright rim. Under, the view narrows like a mask and
+// a burst of bubbles rises and clears.
+void main(){
+  vec2 fc=u_pickOn>.5?u_pickXY:gl_FragCoord.xy;
+  vec2 s=(fc-.5*u_res)/u_res.y;
+  vec3 ro=u_ro;
+  float h=ro.y-u_wy;
+  const float L=.075;
+  if(u_pickOn>.5){scene(fc,s,ro,h<0.);return;}
+  bool split=abs(h)<L;
+  float line=-h/L*.60+.020*sin(s.x*6.5+u_wt*1.9)+.012*sin(s.x*15.-u_wt*2.6)+.030*(vnoise(vec2(s.x*4.+u_wt*.5,u_wt*.7))-.5);
+  float d=s.y-line;
+  bool under=split?d<0.:h<0.;
+  vec2 s2=s;
+  if(split){s2.y+=(under?.035:-.02)*exp(-abs(d)*16.);s2.x+=.012*sin(s.y*60.+u_wt*3.)*exp(-abs(d)*22.);
+    ro.y=under?min(ro.y,u_wy-.04):max(ro.y,u_wy+.04);}
+  scene(fc,s2,ro,under);
+  vec3 c=o.rgb;
+  if(split){
+    float k=1.-abs(h)/L;
+    c=mix(c,vec3(.015,.06,.08),smoothstep(-.075,-.004,d)*step(d,0.)*.62);
+    c=mix(c,c*vec3(.80,.94,.96)+vec3(.02,.05,.05),smoothstep(.07,.0,d)*step(0.,d)*.55);
+    c+=vec3(.80,.97,.96)*smoothstep(.007,.0,abs(d))*.85;
+    c+=vec3(.50,.70,.70)*smoothstep(.02,.0,abs(d+.012))*.18;
+    c*=1.-.16*k;
+  }
+  if(under){
+    float v=length(s*vec2(.82,1.18));
+    c*=1.-.46*smoothstep(.36,.82,v);
+    c=mix(c,c*vec3(.86,1.,1.02),.5);
+    float near=clamp(1.+h/.55,0.,1.);
+    if(near>.01){
+      for(int q=0;q<2;q++){float sc=q==0?7.:15.;
+        vec2 g=vec2(s.x*sc+float(q)*3.7,s.y*sc-u_wt*(2.4+float(q)*1.3));vec2 id=floor(g),f=fract(g)-.5;
+        float rnd=h31(vec3(id,7.+float(q)));float r=.03+.16*pow(h31(vec3(id,3.)),2.);
+        vec2 off=(vec2(h31(vec3(id,1.)),h31(vec3(id,2.)))-.5)*.5+vec2(.06*sin(u_wt*3.+rnd*40.),0.);
+        float dd=length(f+off);
+        float ring=smoothstep(.022,.0,abs(dd-r))*(.55+.45*smoothstep(-.3,.3,(f+off).y/r))+.22*smoothstep(r*.7,.0,length(f+off-vec2(-.3,.35)*r)-r*.12);
+        c+=vec3(.70,.92,.92)*ring*step(.93-.30*near*near,rnd)*near*.5;}
+    }
+  }
+  o=vec4(c,1.);
 }`;
 
 function shChecked(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);
@@ -1178,6 +1231,8 @@ function camVecs(){
   const pitch=cam.pitch+(-.62-cam.pitch)*dv, dist=cam.dist*(1-.28*dv);
   const cp=Math.cos(pitch);
   const ro=[Math.sin(cam.yaw)*cp*dist,Math.sin(pitch)*dist-1.4*dv,Math.cos(cam.yaw)*cp*dist];
+  // v28: the camera slows as it meets the surface, so the waterline has time to cross the glass
+  if(dv>0){const hh=ro[1]-P.wlvl,Bd=.7,a=Math.abs(hh);if(a<Bd)ro[1]=P.wlvl+Math.sign(hh)*Bd*Math.pow(a/Bd,2.6);}
   const tg=[0,-2.2*dv,0];const d0=ro.map((v,i)=>tg[i]-v);const l=Math.hypot(...d0);const fw=d0.map(v=>v/l);
   const up0=[0,1,0];
   let rt=[fw[1]*up0[2]-fw[2]*up0[1],fw[2]*up0[0]-fw[0]*up0[2],fw[0]*up0[1]-fw[1]*up0[0]];
