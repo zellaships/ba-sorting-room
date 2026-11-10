@@ -19,6 +19,11 @@ html,body{margin:0;height:100%;background:#000;color:var(--ink);font:400 17px/1.
   box-shadow:0 -1px 0 var(--line),0 -18px 40px rgba(0,0,0,0);contain:layout paint}
 #veil{position:fixed;inset:0;background:#06141a;opacity:0;pointer-events:none;z-index:1;will-change:opacity}
 #read .layout{will-change:transform,opacity}
+/* the reading room's colour change rides the compositor: a blue layer with a black one fading in over it */
+#bgA,#bgB{position:absolute;left:0;right:0;bottom:0;top:calc(var(--bar) + var(--strip));pointer-events:none}
+#bgA{background:linear-gradient(180deg,rgb(8,30,46) 0%,rgb(4,16,26) 55%,#070707 100%)}
+#bgB{background:#070707;opacity:0;will-change:opacity}
+#bar{touch-action:none}
 #bar{flex:none;height:var(--bar);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 28px;
   background:var(--paper);border-top:1px solid var(--line);cursor:grab;user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
 #bar:active{cursor:grabbing}
@@ -35,7 +40,7 @@ html,body{margin:0;height:100%;background:#000;color:var(--ink);font:400 17px/1.
 #strip img.esbi{height:34px}
 
 #read:focus{outline:none}
-#read{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;position:relative}
+#read{background:transparent!important;z-index:1;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;position:relative}
 #wb{position:sticky;top:18px;float:right;margin:18px 24px 0 0;z-index:3;display:inline-flex;align-items:center;gap:10px;padding:9px 16px 9px 18px;background:rgba(10,10,10,.7);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid #2e2e2e;border-radius:999px;color:#e9e8e4;text-decoration:none;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
   transition:border-color .3s,background .3s,color .3s}
@@ -86,11 +91,12 @@ article p.labeled b{font-weight:600}
 </style>
 </head>
 <body>
-<iframe id="ocean" src="../projector/v28/?embed=1&b=20261110193916" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
+<iframe id="ocean" src="../projector/v28/?embed=1&b=20261110212448" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
 
 <div id="abyss" aria-hidden="true"></div>
 <div id="veil" aria-hidden="true"></div>
 <div id="drawer" aria-label="Essay drawer">
+  <div id="bgA" aria-hidden="true"></div><div id="bgB" aria-hidden="true"></div>
   <div id="bar" role="button" tabindex="0" aria-expanded="false" aria-controls="read">
     <span class="label" id="barLabel">Read the essay</span>
     <span class="handle" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -178,7 +184,10 @@ let pRaf=0;read.addEventListener('scroll',()=>{if(pRaf)return;pRaf=requestAnimat
 
 // ---------- the drawer: one spring, driven by the frame clock, on transform only ----------
 // p = how far open (0 closed, 1 open). Clicks set a target; drags move p directly and fling on release.
-let p=0,v=0,target=0,raf=0,dragging=false,last=0;
+let p=0,v=0,target=0,raf=0,dragging=false,last=0,pT=0,wheeling=false,wheelTimer=0;
+const bgB=$('#bgB');
+// a short pull is enough: the bar travels farther than the hand, so one trackpad drag carries it all the way
+const GAIN=2.6;
 const closedY=()=>drawer.offsetHeight-bar.offsetHeight-$('#strip').offsetHeight;
 function paint(){
   const y=(1-p)*closedY();
@@ -189,8 +198,8 @@ function paint(){
   ocean.style.transform=`translate3d(0,${(-c*closedY()*.6).toFixed(1)}px,0)`;
   abyss.style.opacity=Math.min(1,c*1.1).toFixed(3);
   // the reading room starts deep blue and goes to black as it rises into place
-  const bl=Math.min(1,Math.max(0,(c-.15)/.85)),mix=(a,b)=>Math.round(a+(b-a)*bl);
-  read.style.background=`linear-gradient(180deg, rgb(${mix(8,7)},${mix(30,7)},${mix(46,7)}) 0%, rgb(${mix(4,7)},${mix(16,7)},${mix(26,7)}) 55%, #070707 100%)`;
+  const bl=Math.min(1,Math.max(0,(c-.15)/.85));
+  bgB.style.opacity=bl.toFixed(3);
   if(Math.abs(c-(paint.lastDive??-1))>.002){paint.lastDive=c;try{ocean.contentWindow.postMessage({ba:'dive',d:c},'*');}catch(e){}}
   // the essay rises into place a beat behind the drawer
   const q=Math.max(0,Math.min(1,(p-.35)/.65));const e=1-Math.pow(1-q,3);
@@ -198,9 +207,12 @@ function paint(){
 }
 function tick(now){
   const dt=Math.min(.032,(now-(last||now))/1000)||.016;last=now;
-  if(!dragging){
-    // a gently damped spring: quick to leave, soft to land, no bounce
-    const k=reduce?400:150,c=reduce?40:2*Math.sqrt(150)*1.02;
+  if(dragging||wheeling){
+    // the bar eases after the hand, which takes the stutter out of a trackpad
+    const pv=p;p+=(pT-p)*(1-Math.exp(-dt*24));v=(p-pv)/dt;
+  }else{
+    // a soft, critically damped spring: it leaves with the speed you gave it and lands without a bump
+    const k=reduce?400:92,c=reduce?40:2*Math.sqrt(92)*1.04;
     const a=k*(target-p)-c*v;v+=a*dt;p+=v*dt;
     if(Math.abs(target-p)<.0008&&Math.abs(v)<.002){p=target;v=0;paint();settle();raf=0;last=0;return;}
   }
@@ -226,17 +238,27 @@ function setOpen(open,{fromHash=false,instant=false}={}){
 }
 // drag the bar: it follows the hand exactly, then a flick decides
 let sy=0,sp=0,moved=0,lastY=0,lastT=0,vel=0;
-bar.addEventListener('pointerdown',e=>{dragging=true;moved=0;sy=lastY=e.clientY;lastT=performance.now();sp=p;vel=0;bar.setPointerCapture(e.pointerId);run();});
+bar.addEventListener('pointerdown',e=>{dragging=true;moved=0;sy=lastY=e.clientY;lastT=performance.now();sp=pT=p;vel=0;bar.setPointerCapture(e.pointerId);run();});
 bar.addEventListener('pointermove',e=>{if(!dragging)return;const H=closedY();moved=Math.max(moved,Math.abs(e.clientY-sy));
-  const now=performance.now();vel=((lastY-e.clientY)/H)/Math.max(.008,(now-lastT)/1000)*.6+vel*.4;lastY=e.clientY;lastT=now;
-  let np=sp+(sy-e.clientY)/H;if(np<0)np*=.3;if(np>1)np=1+(np-1)*.3;p=np;v=0;});
+  const now=performance.now();vel=((lastY-e.clientY)/H*GAIN)/Math.max(.008,(now-lastT)/1000)*.6+vel*.4;lastY=e.clientY;lastT=now;
+  let np=sp+(sy-e.clientY)/H*GAIN;if(np<0)np*=.25;if(np>1)np=1+(np-1)*.25;pT=np;});
 function endDrag(e){if(!dragging)return;dragging=false;
   if(moved<6){setOpen(target<.5);return;}            // a click
-  v=vel;target=(p+vel*.18)>.5?1:0;                   // a flick or a drop
+  const pull=(sy-lastY)/closedY();                   // how far the hand went, before the gain
+  target=Math.abs(vel)>.5?(vel>0?1:0):Math.abs(pull)>.07?(pull>0?1:0):(pT>.5?1:0);   // a flick, a clear pull, or where it was left
+  v=Math.max(-6,Math.min(6,v));
   if(target===0&&location.hash)history.pushState(null,'',location.pathname+location.search);
   $('#barLabel').textContent=target?'Back to the water':'Read the essay';
   run();}
 bar.addEventListener('pointerup',endDrag);bar.addEventListener('pointercancel',endDrag);
+// two fingers on the trackpad move the bar too, and it finishes the trip in the direction you were going
+bar.addEventListener('wheel',e=>{e.preventDefault();if(dragging)return;
+  if(!wheeling){wheeling=true;pT=p;run();}
+  const d=(e.deltaMode===1?e.deltaY*16:e.deltaY)/closedY()*1.5;pT=Math.max(-.05,Math.min(1.05,pT+d));wheelDir=d>0?1:d<0?-1:wheelDir;
+  clearTimeout(wheelTimer);wheelTimer=setTimeout(()=>{wheeling=false;const moved=Math.abs(pT-target);
+    target=moved>.08?(wheelDir>0?1:0):(pT>.5?1:0);$('#barLabel').textContent=target?'Back to the water':'Read the essay';
+    if(target===0&&location.hash)history.pushState(null,'',location.pathname+location.search);run();},110);},{passive:false});
+let wheelDir=0;
 bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setOpen(target<.5);}});
 addEventListener('keydown',e=>{if(e.key==='Escape'&&target>.5)setOpen(false);});
 addEventListener('resize',()=>{paint();placeInd(curId,true);});
@@ -282,7 +304,7 @@ fromUrl();
 </script>
 <script>
 // stay current: if a newer build is live, reload this page at a fresh address so no saved copy is shown
-(async()=>{try{const B="20261110193916",v=(await (await fetch("../version.json?t="+Date.now(),{cache:"no-store"})).json()).build;
+(async()=>{try{const B="20261110212448",v=(await (await fetch("../version.json?t="+Date.now(),{cache:"no-store"})).json()).build;
   if(v&&v!==B&&!location.search.includes("b="+v))location.replace(location.pathname+"?b="+v+location.hash);}catch(e){}})();
 </script>
 </body>

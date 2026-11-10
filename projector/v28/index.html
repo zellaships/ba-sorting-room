@@ -172,7 +172,7 @@ float g_pick=-1.;float g_far=0.;vec3 g_wn=vec3(0.,1.,0.);uniform vec2 u_swap;uni
 float basinAt(vec2 p){return u_basin*(1.-smoothstep(2.4,5.4,length(p)));}
 uniform float u_t,u_wt,u_head,u_iso,u_layer,u_span,u_smear,u_chroma,u_adv,u_simOK,u_steps,u_wy,u_foam,u_wmix,u_under,u_rain,u_pt;
 uniform int u_bn;
-uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec3 u_wet;float h31(vec3 p);uniform vec4 u_b[12];uniform vec4 u_cr[4];
+uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec3 u_wet;uniform float u_imgs;float h31(vec3 p);uniform vec4 u_b[12];uniform vec4 u_cr[4];
 uniform sampler2D u_atlas,u_sim;
 out vec4 o;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -335,14 +335,15 @@ vec2 rainFX(vec2 p,float t,vec2 vv){
     vec2 o=vec2(float(i),float(j));
     vec2 id=g+o;
     float rn=hash(id);
-    if(rn<.30)continue;
-    float life=.30+.45*hash(id+11.3);
+    if(rn<.66)continue;
+    float life=.22+.40*hash(id+11.3);
     float ph=fract(t*life+rn*9.);
     // the drop lands, then the current takes it: anchor drifts with the local
     // flow for the ring's whole age, spreading and thinning as it travels
     vec2 dp=(vec2(hash(id+3.1),hash(id+7.7))-.5)*.55+vv*(ph/life)*1.1;
     float r=length(f-o-dp)/2.2;
-    h+=exp(-(55.-30.*ph)*abs(r-ph*.38))*(1.-ph)*.030;
+    float rs=.20+.30*hash(id+5.9),dd=r-ph*rs;
+    h+=exp(-dd*dd*(900.-620.*ph))*cos(dd*(70.-30.*ph))*(1.-ph)*(1.-ph)*.020;
     sp+=exp(-r*22.)*smoothstep(.09,.0,ph);
   }
   return vec2(h,sp);
@@ -481,6 +482,10 @@ vec4 water(vec3 ro,vec3 rd){
   // photos melt into one sea tone, keeping only a faint organic modulation
   float melt=smoothstep(.22,.55,fwidth(bnd)+fwidth(slc0)*.5);
   img=mix(img,vec3(.52,.58,.57),melt*.65);
+  // the photographs belong to the near water: toward the horizon they give way to open sea, and until they
+  // have arrived the surface is one water tone (no cell grid, no border lines)
+  img=mix(img,vec3(.50,.565,.56),max(1.-u_imgs,smoothstep(6.,19.,tw)*.92));
+  {float nc=1.-smoothstep(1.2,3.4,length(g.xz));img=mix(img,mix(vec3(dot(img,vec3(.333))),img,.5)*.97,nc*.55);}
   vec3 body=img*(tint*.8+.82)*(1.+pool*.15);
   body=mix(body,img*1.04,pool*.45);
   // beneath the skin: dimmed and cooled by the water above, with caustic light drifting over the photos
@@ -500,8 +505,9 @@ vec4 water(vec3 ro,vec3 rd){
   float sp=pow(max(dot(reflect(rd,ns),ld),0.),220.);
   col+=vec3(1.,.98,.9)*sp*.6;
   col=mix(col,vec3(.965,.965,.94),foam*.82*(1.-.85*bsn));
-  col+=vec3(.93,.96,.95)*rfx.y*.34*rainAmt()*exp(-tw*.012);
-  col+=vec3(.95,.97,1.)*max(rfx.x,0.)*2.1*rainAmt()*exp(-tw*.008);
+  // ripples are lit, not drawn: the face toward the light brightens, the far face darkens, and they fade as they spread
+  col+=vec3(.93,.96,.95)*rfx.y*.16*rainAmt()*exp(-tw*.012);
+  col*=1.+clamp(rfx.x*26.,-.16,.22)*rainAmt()*exp(-tw*.03);
   col=mix(col,vec3(.66,.90,.87),1.-exp(-tw*.006));
   return vec4(col,tw);
 }
@@ -557,7 +563,7 @@ vec3 underCol(vec3 ro,vec3 rd){
   col+=vec3(.55,.82,.76)*beam*(.30+.70*(sh*.6+sh2*.4));
   // v28: curtains of light hanging from the surface, fading with depth
   float cur=pow(vnoise(vec2(ang*7.+u_wt*.02,3.1)),2.5)*.6+pow(vnoise(vec2(ang*17.-u_wt*.03,9.7)),3.)*.4;
-  col+=vec3(.28,.52,.50)*cur*smoothstep(-.60,.35,rd.y)*.24;
+  col+=vec3(.28,.52,.50)*cur*smoothstep(-.60,.35,rd.y)*.33;
   // slow particulate drift
   // marine snow: fine flecks at three depths, sinking slowly. Near ones are soft out-of-focus discs, far ones
   // pinpoints, and each brightens for a moment as it turns in the light.
@@ -597,6 +603,8 @@ vec3 underCol(vec3 ro,vec3 rd){
     float wbx=.5*(1.-smoothstep(.0,bw,bd2));
     if(wbx>.001)img=mix(img,flowCell(rh+wob2+(bf2b<.5?-.147:.147),ridge,vv,vec3(0.,1.,0.),pool),wbx);
     img=mix(vec3(dot(img,vec3(.333))),img,1.18);
+    // from below the surface is a sheet of sky light; the photographs only tint it
+    img=mix(mix(vec3(.50,.78,.80),vec3(.74,.95,.93),clamp((rh+wob2)*2.4+.5,0.,1.)),img,.38*u_imgs);
     float win=pow(clamp(rd.y,0.,1.),1.4);
     float haze=exp(-t0*.07);
     vec3 scol=img*(.60+1.35*win)*vec3(.85,1.0,.95);
@@ -604,7 +612,14 @@ vec3 underCol(vec3 ro,vec3 rd){
     // Snell's window: past about 49 degrees from straight up, water mirrors the depths below
     float snell=smoothstep(.56,.70,rd.y+length(slope)*u_disp*.08);
     vec3 below=mix(vec3(.05,.15,.19),vec3(.10,.24,.27),sh)*(.8+.4*(1.-win));
-    scol=mix(scol,mix(below,scol,.25),(1.-snell)*clamp(u_refl,0.,1.)*.85);
+    scol=mix(scol,mix(below,scol,.12),(1.-snell)*clamp(u_refl,0.,1.)*.94);
+    // the sun, broken up by the waves it comes through, and the bright rim where the whole horizon is squeezed
+    // into the edge of the window
+    {vec3 sv=normalize(rd+vec3(slope.x,0.,slope.y)*.38);float sdt=max(dot(sv,ld),0.);
+      scol+=vec3(1.,.97,.86)*(pow(sdt,120.)*1.9+pow(sdt,14.)*.30)*snell;
+      scol+=vec3(.70,.93,.90)*exp(-pow((rd.y+length(slope)*u_disp*.08-.635)*17.,2.))*.20;
+      float net=pow(1.-abs(vnoise(g.xz*2.4+slope*1.6+vec2(u_wt*.22,-u_wt*.17))-.5)*2.,7.)+.6*pow(1.-abs(vnoise(g.xz*5.1-slope*1.2+u_wt*.3)-.5)*2.,9.);
+      scol+=vec3(.80,1.,.95)*net*.16*snell*exp(-t0*.10);}
     // glints where the wave faces catch the sun from below
     scol+=vec3(.9,1.,.95)*pow(max(1.-length(slope)*1.6,0.),6.)*snell*.10;
     col=mix(col,scol,clamp(haze,0.,1.)*.94*smoothstep(.015,.06,rd.y));
@@ -785,7 +800,7 @@ void scene(vec2 fc,vec2 s,vec3 ro,bool under){
         float clear=mix(.5,.88,basinAt(g.xz));
         col=mix(col,cShade(q,rr,id2,1.)*ab+vec3(.03,.08,.09)*(1.-ab),clamp((1.-fres)*clear,0.,1.));}
       // what stands above, mirrored in the surface
-      vec3 rf=reflect(rd,normalize(mix(vec3(0.,1.,0.),n,.4)));float id3;float t3=cTrace(g+n*.003,rf,6.,id3);
+      vec3 rf=reflect(rd,normalize(mix(vec3(0.,1.,0.),n,.24)));float id3;float t3=cTrace(g+n*.003,rf,6.,id3);
       if(t3>0.)col=mix(col,cShade(g+rf*t3,rf,id3,0.),clamp(fres*1.5+.14,0.,.62));
       // where the clay breaks the surface: a bright meniscus and a darker ring of wet water around it
       float dm=cMap(toLoc(g)).x;
@@ -880,44 +895,51 @@ vec3 bubbles(vec3 c,vec2 s,float near){
 // own time, and runners that let go one by one, stick and slip downward and leave a thin trail that breaks into beads.
 // The scene is drawn through this field (each drop is a small lens), then lit: a dark rim and a highlight.
 // returns x: drops (beads, runners, their trails)  y: the draining sheet  z: the sheet's lip
+// Order of events: the sheet covers the glass and its upper edge slides down. Only glass the edge has already
+// passed can hold drops, so beads appear top first, and a runner swells where it sits before it lets go.
+float wetVe(float x,float K,float sd){return (.75+.5*K)*(.7+.6*vnoise(vec2(x*2.2+sd,3.)));}
 vec3 wetH(vec2 s,float t,float K){
-  float T=mix(5.,11.,K),env=1.-smoothstep(T*.65,T,t),H=0.,sd=u_wet.z;
+  float T=mix(6.,12.,K),env=1.-smoothstep(T*.65,T,t),H=0.,sd=u_wet.z;
   if(env<=0.)return vec3(0.);
-  vec2 sh=vec2(sd*3.17,sd*1.71);                       // every surfacing lands the water somewhere new
+  vec2 sh=vec2(sd*3.17,sd*1.71);
   for(int q=0;q<2;q++){
-    float fq=float(q),sc=q==0?4.5:9.;vec2 g=(s+sh)*sc+fq*4.7,id=floor(g),f=fract(g)-.5;
-    if(h31(vec3(id,21.+fq))>K*(q==0?.20:.26))continue;
-    float life=mix(2.2,9.,h31(vec3(id,23.)))*(.6+.6*K);
-    float r=mix(.05,.17,pow(h31(vec3(id,26.)),2.))*(1.-smoothstep(life*.7,life,t))*smoothstep(0.,.3,t);
+    float fq=float(q),sc=q==0?5.5:10.;vec2 g=(s+sh)*sc+fq*4.7,id=floor(g),f=fract(g)-.5;
+    if(h31(vec3(id,21.+fq))>K*(q==0?.27:.31))continue;
+    vec2 cc=(id+.5-fq*4.7)/sc-sh;
+    float tb=t-(.60-cc.y)/wetVe(cc.x,K,sd)-.12-.5*h31(vec3(id,27.));
+    if(tb<=0.)continue;
+    float life=mix(2.2,8.,h31(vec3(id,23.)))*(.6+.6*K);
+    float r=mix(.035,.115,pow(h31(vec3(id,26.)),2.))*(1.-smoothstep(life*.7,life,tb))*smoothstep(0.,.4,tb);
     if(r<.004)continue;
     vec2 pp=f-(vec2(h31(vec3(id,24.)),h31(vec3(id,25.)))-.5)*.55;pp.y*=pp.y>0.?1.3:.88;
     H+=sqrt(max(1.-dot(pp,pp)/(r*r),0.))*(.35+3.2*r);
   }
   for(int q=0;q<2;q++){
-    float fq=float(q),sc=q==0?9.:15.,gx=(s.x+sh.x)*sc+fq*2.3,cl=floor(gx),fx=fract(gx)-.5;
+    float fq=float(q),sc=q==0?11.:17.,gx=(s.x+sh.x)*sc+fq*2.3,cl=floor(gx),fx=fract(gx)-.5;
     float r0=hash(vec2(cl,31.+fq));
-    if(r0>K*.45+.03)continue;
-    float tt=max(t-hash(vec2(cl,33.))*1.6*(1.+K),0.);
-    float v=mix(.10,.34,hash(vec2(cl,34.)))*(.6+.8*K);
+    if(r0>K*.42+.03)continue;
     float y0=mix(.46,-.05,hash(vec2(cl,35.)));
-    float yd=y0-v*(tt+.24*sin(tt*2.3+r0*20.));
+    float xc=(cl+.5-fq*2.3)/sc-sh.x;
+    float tt=t-(.60-y0)/wetVe(xc,K,sd)-.1-hash(vec2(cl,33.))*1.3*(1.+K);
+    if(tt<=0.)continue;
+    float tg=max(tt-.55,0.);                                   // it sits and swells, then lets go
+    float v=mix(.10,.32,hash(vec2(cl,34.)))*(.6+.8*K);
+    float yd=y0-v*(tg+.24*sin(tg*2.3+r0*20.)-.24*sin(r0*20.));
+    float run=max(y0-yd,0.);
     float x=fx-(hash(vec2(cl,36.))-.5)*.4-(vnoise(vec2(cl*7.,s.y*5.))-.5)*.30;
-    float rr=mix(.10,.17,hash(vec2(cl,37.)));
+    // the drop spends itself on its trail: it is smaller the farther it has run, and gone when it has nothing left
+    float rr=mix(.075,.125,hash(vec2(cl,37.)))*smoothstep(0.,.5,tt)*mix(1.,.30,smoothstep(0.,.75,run));
     vec2 pp=vec2(x,(s.y-yd)*sc);pp.y*=pp.y>0.?.62:1.15;
     float head=sqrt(max(1.-dot(pp,pp)/(rr*rr),0.));
-    // the trail: born as a fine point where the drop let go, widest just behind the head, drying into separate beads
-    float ab=s.y-yd,top=y0-s.y,run=max(y0-yd,1e-3);
-    float wid=rr*.40*(.30+.70*exp(-ab*5.))*smoothstep(0.,min(.10,run),top);
+    float ab=s.y-yd,top=y0-s.y;
+    float wid=rr*.42*(.30+.70*exp(-ab*5.))*smoothstep(0.,min(.10,run+1e-3),top);
     float line=(1.-smoothstep(wid*.35,wid,abs(x)))*step(0.,ab)*step(0.,top);
     float beadsP=smoothstep(.52,.70,vnoise(vec2(cl*3.,s.y*24.)));
     float tr=line*mix(beadsP,1.,exp(-ab*9.))*exp(-ab*3.2/(.3+K))*smoothstep(0.,.02,top);
-    // what stays behind where it started
-    vec2 po=vec2(x,(s.y-y0)*sc);float seedB=sqrt(max(1.-dot(po,po)/(rr*rr*.16),0.))*smoothstep(0.,.5,tt)*(1.-smoothstep(3.,6.,tt));
-    H+=head*.9+tr*.42+seedB*.3;
+    H+=head*.9+tr*.42;
   }
-  // the sheet: it covers the glass, then its upper edge slides down in scallops, leaving the glass clear above
   float fing=pow(abs(sin((s.x+sh.x)*7.+2.*vnoise(vec2(s.x*3.,sd)))),3.);
-  float yf=.60-t*(.75+.5*K)*(.7+.6*vnoise(vec2(s.x*2.2+sd,3.)))-.07*fing*min(t*1.5,1.)+.02*(vnoise(vec2(s.x*15.,t*1.3))-.5);
+  float yf=.60-t*wetVe(s.x,K,sd)-.07*fing*min(t*1.5,1.)+.02*(vnoise(vec2(s.x*15.,t*1.3))-.5);
   float life=K*exp(-t*.75);
   float cover=smoothstep(0.,.05,yf-s.y);
   float thick=cover*life*(.45+.55*exp(-(yf-s.y)*5.));
@@ -1009,7 +1031,7 @@ gl.useProgram(pr);
 const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
 const al=gl.getAttribLocation(pr,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
-const U={};['u_wet','u_cosOn','u_spinA','u_nb','u_selB','u_bob','u_beads','u_basin','u_curl','u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
+const U={};['u_wet','u_imgs','u_cosOn','u_spinA','u_nb','u_selB','u_bob','u_beads','u_basin','u_curl','u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
 const tex=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,ATLASW,ATLASH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
@@ -1360,7 +1382,7 @@ function stir(x,y,fx,fy,r){
 const DEF={yaw:.55,pitch:-.34,dist:(innerWidth<innerHeight?4.5:2.8)};let cam={...DEF},camT={...DEF};
 try{const h=location.hash.match(/cam=([-\d.]+),([-\d.]+),([-\d.]+)/);if(h){cam={yaw:+h[1],pitch:+h[2],dist:+h[3]};camT={...cam};}}catch(e){}
 // the essay's drawer pulls the camera down under the surface and on into the deep
-const WETQ=+(new URLSearchParams(location.search).get('wet')||0);let wetSeed=0,dive=0,diveT=0,wetT=99,wetK=0,wetPrevH=1,wetPrevD=0,wetPeak=0,veilT0=0,veilGone=false;
+const WETQ=+(new URLSearchParams(location.search).get('wet')||0);let wetSeed=0,imgsK=0,dive=0,diveT=0,wetT=99,wetK=0,wetPrevH=1,wetPrevD=0,wetPeak=0,veilT0=0,veilGone=false;
 function camVecs(){
   const dv=dive*dive*(3-2*dive);
   const pitch=cam.pitch+(-.62-cam.pitch)*dv, dist=cam.dist*(1-.28*dv);
@@ -1645,7 +1667,7 @@ function frame(now){
   gl.uniform1f(U.u_simOK,simOK?1:0);gl.uniform1i(U.u_bn,Math.min(P.nsw,NB));
   gl.uniform1f(U.u_steps,qual[+$('q').value].steps);
   gl.uniform1f(U.u_wy,P.wlvl);gl.uniform1f(U.u_foam,P.foam);gl.uniform1f(U.u_wmix,P.wmix);gl.uniform1f(U.u_rain,P.rain);gl.uniform1f(U.u_pt,cam.pitch);
-  gl.uniform3f(U.u_wet,wetT,wetK,wetSeed);
+  gl.uniform3f(U.u_wet,wetT,wetK,wetSeed);{const on=slotItem.filter(Boolean).length,tg=Math.min(1,on/Math.max(6,N*.3));imgsK+=(tg-imgsK)*(1-Math.exp(-dtr*.8));gl.uniform1f(U.u_imgs,imgsK);}
   gl.uniform3fv(U.u_ro,c.ro);gl.uniform3fv(U.u_fw,c.fw);gl.uniform3fv(U.u_rt,c.rt);gl.uniform3fv(U.u_up,c.up);
   gl.uniform1f(U.u_under,c.ro[1]<P.wlvl?1:0);
   const bb=new Float32Array(NB*4);B.forEach((b,i)=>{bb.set([b.p[0],b.p[1],b.p[2],b.r],i*4);});
