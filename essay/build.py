@@ -1,5 +1,5 @@
 """Builds essay/index.html from essay/essay.txt (Cyrus's text, word for word).
-The ocean (projector v26) fills the screen; the bar at the bottom opens the essay drawer."""
+The ocean (projector v28) fills the screen; the bar at the bottom opens the essay drawer."""
 import html, re, os
 HERE = os.path.dirname(os.path.abspath(__file__))
 lines = open(os.path.join(HERE, "essay.txt"), encoding="utf-8").read().split("\n")

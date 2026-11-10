@@ -86,13 +86,13 @@ article p.labeled b{font-weight:600}
 </style>
 </head>
 <body>
-<iframe id="ocean" src="../projector/v27/?embed=1" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
+<iframe id="ocean" src="../projector/v28/?embed=1" title="The water, made of the Black Aquatics archive, with the Kongo cosmogram standing in it" allow="fullscreen"></iframe>
 
 <div id="abyss" aria-hidden="true"></div>
 <div id="veil" aria-hidden="true"></div>
 <div id="drawer" aria-label="Essay drawer">
   <div id="bar" role="button" tabindex="0" aria-expanded="false" aria-controls="read">
-    <span class="label" id="barLabel">Open the drawer</span>
+    <span class="label" id="barLabel">Read the essay</span>
     <span class="handle" aria-hidden="true"><i></i><i></i><i></i></span>
     <span></span>
   </div>
@@ -212,14 +212,14 @@ function oceanRest(full){try{ocean.contentWindow.postMessage({ba:'ocean',state:f
 function settle(){
   const open=target>.5;
   drawer.classList.toggle('open',open);bar.setAttribute('aria-expanded',open);
-  $('#barLabel').textContent=open?'Close the drawer':'Open the drawer';
+  $('#barLabel').textContent=open?'Back to the water':'Read the essay';
   ocean.style.visibility=open?'hidden':'visible';oceanRest(open);
   if(!open)try{ocean.contentWindow.postMessage({ba:'ocean',state:'live'},'*');}catch(e){}
   if(open)read.focus({preventScroll:true});
 }
 function setOpen(open,{fromHash=false,instant=false}={}){
   target=open?1:0;ocean.style.visibility='visible';
-  $('#barLabel').style.opacity=0;setTimeout(()=>{$('#barLabel').textContent=open?'Close the drawer':'Open the drawer';$('#barLabel').style.opacity=1;},180);
+  $('#barLabel').style.opacity=0;setTimeout(()=>{$('#barLabel').textContent=open?'Back to the water':'Read the essay';$('#barLabel').style.opacity=1;},180);
   if(!open&&!fromHash&&location.hash)history.pushState(null,'',location.pathname+location.search);
   if(instant){p=target;v=0;paint();settle();return;}
   run();
@@ -234,7 +234,7 @@ function endDrag(e){if(!dragging)return;dragging=false;
   if(moved<6){setOpen(target<.5);return;}            // a click
   v=vel;target=(p+vel*.18)>.5?1:0;                   // a flick or a drop
   if(target===0&&location.hash)history.pushState(null,'',location.pathname+location.search);
-  $('#barLabel').textContent=target?'Close the drawer':'Open the drawer';
+  $('#barLabel').textContent=target?'Back to the water':'Read the essay';
   run();}
 bar.addEventListener('pointerup',endDrag);bar.addEventListener('pointercancel',endDrag);
 bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setOpen(target<.5);}});
