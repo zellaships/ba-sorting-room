@@ -322,6 +322,11 @@ a{color:var(--teal2)}
 .card.media .mk{position:absolute;top:8px;left:8px;font:500 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;padding:4px 7px;border-radius:3px;background:rgba(12,13,14,.78);color:#cfd2d3;opacity:0;transition:opacity .2s}
 .card.media .mname{position:absolute;left:0;right:0;bottom:0;padding:22px 10px 8px;font-size:12px;color:#e9e9e6;background:linear-gradient(transparent,rgba(0,0,0,.75));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .2s}
 .card.media:hover .mk,.card.media:hover .mname,.card.media.sel .mname{opacity:1}
+.card.media .mcred{display:block;font-size:10.5px;color:#b9bbbc;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.srcimg{display:block;width:100%;max-height:340px;object-fit:contain;background:#0d0e0f;border-radius:6px;margin:10px 0 8px}
+.srcstat{font-size:13px;line-height:1.45;margin:0}
+.btnlike{display:inline-block;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;color:inherit;text-decoration:none;font-size:13px}.btnlike:hover{background:var(--raise)}
+.field textarea{width:100%;min-height:64px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--raise);color:var(--ink)}
 .card.media .maud{position:absolute;inset:0;padding:14px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(160deg,#0f2a35,#0b1418)}
 .card.media .wave{flex:1;display:flex;align-items:center;gap:3px}.card.media .wave i{flex:1;background:#83b5a5;opacity:.7;border-radius:2px}
 .card.media .an{font-size:13px;color:#e9e9e6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -662,7 +667,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     world.querySelectorAll(".lmid").forEach(n => n.remove());
     for (const c of B.cards) {
       let el = world.querySelector(`.card[data-id="${c.id}"]`);
-      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.src, c.mime, c.name, c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview, c.kind === "record" && !!REC[c.ref], STYLE[(LIBBY[c.ref] || {}).type]]);
+      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.src, c.mime, c.name, c.source ? (c.source.creator || c.source.holder || "") : "", c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview, c.kind === "record" && !!REC[c.ref], STYLE[(LIBBY[c.ref] || {}).type]]);
       if (editing && editing.id === c.id && el) { el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px"; continue; }
       if (!el) { el = document.createElement("div"); el.dataset.id = c.id; world.appendChild(el); bindCard(el); }
       if (el.dataset.sig !== sig) {
@@ -781,7 +786,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       if (selIds.size > 1 && selIds.has(c.id)) { openView({ kind: "multi" }); return; }
       selIds = new Set([c.id]); select({ type: "card", id: c.id });          // the only way a card opens in the panel
       if (c.kind === "embed") { el.classList.toggle("live"); return; }
-      if (c.kind === "media") { if (c.mk === "video" || c.mk === "audio") { const v = el.querySelector("video,audio"); if (v) v.paused ? v.play() : v.pause(); return; } srcURL(c.url || c.src).then(u => u && window.open(u, "_blank")); return; }
+      if (c.kind === "media") { if (c.mk === "video" || c.mk === "audio") { const v = el.querySelector("video,audio"); if (v) v.paused ? v.play() : v.pause(); return; } if (c.url && (c.mk === "image" || c.mk === "vector")) return; srcURL(c.url || c.src).then(u => u && window.open(u, "_blank")); return; }
       if (c.kind === "link") { window.open(c.url, "_blank", "noopener"); return; }
       if (c.kind === "ftext") return editRich(c, el.querySelector(".rt"));
       if (c.kind === "note") { if (e.target.closest(".nlabel")) return editLabel(c, el.querySelector(".lt")); return editRich(c, el.querySelector(".rt")); }
@@ -993,7 +998,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   function mediaHTML(c) {
     const k = c.mk || kindOf(c.mime, c.name), tag = `<span class="mk">${esc(k === "vector" ? "SVG" : k.toUpperCase())}</span>`;
     const src = c.url ? `src="${esc(c.url)}"` : `data-pv="${esc(c.src || "")}"`;
-    if (k === "image" || k === "vector") return `<div class="mfill"><img ${src} alt="" draggable="false"></div>${tag}<div class="mname">${esc(c.name || "")}</div><div class="up"></div>`;
+    if (k === "image" || k === "vector") return `<div class="mfill"><img ${src} alt="" draggable="false"></div>${tag}<div class="mname">${esc(c.name || "")}${c.source && (c.source.creator || c.source.holder) ? `<span class="mcred">${esc(clip(c.source.creator || c.source.holder, 60))}</span>` : ""}</div><div class="up"></div>`;
     if (k === "video") return `<div class="mfill"><video data-vsrc="${esc(c.url || c.src || "")}" muted loop playsinline preload="metadata"></video></div>${tag}<div class="mname">${esc(c.name || "")}</div><div class="up"></div>`;
     if (k === "pdf") return `<div class="mfill pdf"><canvas data-pdf="${esc(c.url || c.src || "")}"></canvas><div class="pdfph">PDF</div></div>${tag}<div class="mname">${esc(c.name || "")}${c.pages ? " · " + c.pages + " pages" : ""}</div><div class="up"></div>`;
     if (k === "audio") return `<div class="maud"><div class="wave">${Array.from({ length: 28 }, (_, i) => `<i style="height:${20 + Math.abs(Math.sin(i * 1.7 + (c.name || "").length)) * 70}%"></i>`).join("")}</div><div class="an">${esc(c.name || "Sound")}</div><audio data-vsrc="${esc(c.url || c.src || "")}" controls preload="none"></audio></div>${tag}<div class="up"></div>`;
@@ -1048,7 +1053,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     const html = dt.getData("text/html"), uri = (dt.getData("text/uri-list") || "").split("\n").find(l => l && !l.startsWith("#")), text = dt.getData("text/plain");
     if (html) {                                        // something dragged from another web page
       const doc = new DOMParser().parseFromString(html, "text/html"), img = doc.querySelector("img[src]"), a = doc.querySelector("a[href]");
-      if (img && /^https?:/.test(img.src) && (!text || text === uri || text.trim() === "" || text.trim() === img.src)) { const [w, h] = fitBox(...await imgSize(img.src)); out.push({ id: uid("c"), kind: "media", mk: kindOf("", img.src.split("?")[0]) === "vector" ? "vector" : "image", url: img.src, name: img.alt || img.src.split("/").pop().split("?")[0], w, h }); return out; }
+      if (img && /^https?:/.test(img.src) && (!text || text === uri || text.trim() === "" || text.trim() === img.src)) { const [w, h] = fitBox(...await imgSize(img.src)); const card = { id: uid("c"), kind: "media", mk: kindOf("", img.src.split("?")[0]) === "vector" ? "vector" : "image", url: img.src, name: img.alt || img.src.split("/").pop().split("?")[0], w, h, source: srcFrom(img.src, (a && a.href) || (uri && uri !== img.src ? uri : ""), img.alt || img.title || "") }; out.push(card); enrichSoon(card.id); return out; }
       if (!uri && text && text.trim()) { out.push({ id: uid("c"), kind: "note", w: 300, h: 200, label: "", color: "sand", html: esc(text.trim()).replace(/\n/g, "<br>") + (a ? `<br><a href="${esc(a.href)}">${esc(new URL(a.href).hostname)}</a>` : "") }); return out; }
       if (uri) return [await cardFromURL(uri, (a && a.textContent.trim()) || "")];
     }
@@ -1056,9 +1061,59 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     if (text && text.trim()) { const t = text.trim(); if (/^https?:\/\/\S+$/.test(t)) return [await cardFromURL(t, "")]; out.push({ id: uid("c"), kind: "note", w: 300, h: 200, label: "", color: "sand", html: esc(t).replace(/\n/g, "<br>") }); }
     return out;
   }
+  // ---------- where a web image came from ----------
+  // Every image pulled in from the web keeps its source with it: the image address, the page it sat on when the
+  // browser tells us, and whatever the holder publishes about it (title, maker, date, holder, rights). Wikimedia
+  // Commons, the Internet Archive and the Library of Congress answer directly. For other sites the page cannot be
+  // read from here, so the card says so plainly and the fields stay open to fill in.
+  const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+  const plain = s => { const d = new DOMParser().parseFromString(String(s || ""), "text/html"); return (d.body.textContent || "").replace(/\s+/g, " ").trim(); };
+  function srcFrom(image, page, alt) { return { image, page: page || "", alt: alt || "", host: hostOf(page || image), added: new Date().toISOString(), status: "captured" }; }
+  function enrichSoon(id) { setTimeout(() => enrichSource(id), 900); }
+  async function lookupSource(s) {
+    const img = s.image || "", page = s.page || "", both = img + " " + page;
+    try {
+      let m;
+      if (/wikimedia\.org|wikipedia\.org/.test(both)) {
+        let name = "";
+        if ((m = page.match(/\/wiki\/(File:[^?#]+)/))) name = decodeURIComponent(m[1]);
+        else if ((m = img.match(/\/(?:commons|[a-z-]+)\/thumb\/[0-9a-f]\/[0-9a-f]{2}\/([^/]+)\//))) name = "File:" + decodeURIComponent(m[1]);
+        else if ((m = img.match(/\/[0-9a-f]\/[0-9a-f]{2}\/([^/?#]+)$/))) name = "File:" + decodeURIComponent(m[1]);
+        if (name) {
+          const r = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=imageinfo&iiprop=extmetadata%7Curl&format=json&origin=*`);
+          const j = await r.json(), pg = Object.values((j.query || {}).pages || {})[0], ii = pg && pg.imageinfo && pg.imageinfo[0];
+          if (ii) { const x = ii.extmetadata || {}, v = k => plain((x[k] || {}).value);
+            return { via: "Wikimedia Commons", title: v("ObjectName") || name.replace(/^File:/, "").replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " "), creator: v("Artist"), date: v("DateTimeOriginal") || v("DateTime"), holder: v("Credit"), rights: [v("LicenseShortName"), v("UsageTerms")].filter((a, i, arr) => a && arr.indexOf(a) === i).join(" · "), description: v("ImageDescription"), page: ii.descriptionurl || page }; }
+        }
+      }
+      if ((m = both.match(/archive\.org\/(?:download|details|\d+\/items)\/([^/?#\s]+)/))) {
+        const j = await (await fetch(`https://archive.org/metadata/${m[1]}`)).json(), d = j.metadata;
+        const one = a => Array.isArray(a) ? a.join("; ") : (a || "");
+        if (d) return { via: "Internet Archive", title: one(d.title), creator: one(d.creator), date: one(d.date || d.year), holder: one(d.publisher || d.contributor || d.collection), rights: one(d.rights || d.licenseurl || d["possible-copyright-status"]), description: plain(one(d.description)).slice(0, 600), page: `https://archive.org/details/${m[1]}` };
+      }
+      if ((m = page.match(/loc\.gov\/(?:pictures\/)?(?:item|resource)\/([^/?#]+)/))) {
+        const j = await (await fetch(`https://www.loc.gov/item/${m[1]}/?fo=json`)).json(), d = j.item;
+        const one = a => Array.isArray(a) ? a.join("; ") : (a || "");
+        if (d) return { via: "Library of Congress", title: one(d.title), creator: one(d.contributor_names || d.contributors), date: one(d.date || d.created_published), holder: one(d.repository) || "Library of Congress", rights: plain(one(d.rights_advisory || d.rights)), description: one(d.notes || d.description).slice(0, 600), page: d.url || page };
+      }
+    } catch (e) { return { failed: true }; }
+    return null;
+  }
+  async function enrichSource(id, loud) {
+    const c = cardById(id); if (!c || c.kind !== "media") return;
+    if (!c.source) c.source = srcFrom(c.url || "", "", "");
+    const got = await lookupSource(c.source);
+    change(() => {
+      if (got && !got.failed) { const s = c.source; for (const k of ["title", "creator", "date", "holder", "rights", "description", "page"]) if (got[k] && !s["_mine_" + k]) s[k] = got[k]; s.via = got.via; s.status = "read"; s.checked = new Date().toISOString(); s.host = hostOf(s.page || s.image);
+        if (s.title && (!c.name || /\.(jpe?g|png|gif|webp|svg|tiff?)$/i.test(c.name) || c.name === s.alt)) c.name = s.title.length > 90 ? s.title.slice(0, 88) + "…" : s.title; }
+      else { c.source.status = got && got.failed ? "failed" : "unread"; c.source.checked = new Date().toISOString(); }
+    });
+    if (loud) toast(c.source.status === "read" ? `Source read from ${c.source.via}` : "This site cannot be read from here. Fill in what you know.");
+    if (VIEW && VIEW.kind === "card" && VIEW.cardId === id) renderView();
+  }
   async function cardFromURL(url, title) {
     const e = embedOf(url), mk = kindOf("", url.split("?")[0]);
-    if (mk === "image" || mk === "vector") { const [w, h] = fitBox(...await imgSize(url)); return { id: uid("c"), kind: "media", mk, url, name: url.split("/").pop().split("?")[0], w, h }; }
+    if (mk === "image" || mk === "vector") { const [w, h] = fitBox(...await imgSize(url)); const card = { id: uid("c"), kind: "media", mk, url, name: url.split("/").pop().split("?")[0], w, h, source: srcFrom(url, "", title || "") }; enrichSoon(card.id); return card; }
     if (mk === "pdf") return { id: uid("c"), kind: "media", mk, url, name: decodeURIComponent(url.split("/").pop().split("?")[0]), w: 260, h: 340 };
     if (e.label !== "Link") return { id: uid("c"), kind: "embed", url, w: 400, h: 261 };
     return { id: uid("c"), kind: "link", url, title, w: 280, h: 150 };
@@ -1263,8 +1318,35 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     $("#mDel").onclick = () => removeCards(ids);
   }
   // Notes, text, embeds, markers
+  // an image, file or clip from outside the library: the picture, then everything known about where it came from
+  function viewMedia(v, c) {
+    const s = c.source || (c.url ? srcFrom(c.url, "", "") : null), web = !!c.url, isImg = c.mk === "image" || c.mk === "vector";
+    const conns = B.links.filter(l => l.from === c.id || l.to === c.id);
+    const F = (k, label, ph, area) => `<div class="field"><label>${label}</label>${area ? `<textarea data-s="${k}" rows="3" placeholder="${ph}">${esc((s && s[k]) || "")}</textarea>` : `<input type="${k === "page" ? "url" : "text"}" data-s="${k}" value="${esc((s && s[k]) || "")}" placeholder="${ph}">`}</div>`;
+    const when = d => { try { return new Date(d).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }); } catch { return ""; } };
+    const stat = !s ? "" : s.status === "read" ? `Read from ${esc(s.via || s.host)} on ${when(s.checked)}. Check it against the page before you publish.`
+      : s.status === "unread" ? `Pulled from ${esc(s.host || "the web")}. That site cannot be read from here, so nothing below is filled in yet. Paste the page link and add what you know.`
+      : s.status === "failed" ? `The source lookup did not go through. Try again, or fill in what you know.` : `Pulled from ${esc(s.host || "the web")}${s.added ? " on " + when(s.added) : ""}. Looking up the source…`;
+    const body = shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => centerOn(c.x + c.w / 2, c.y + c.h / 2) }, { label: web ? "From the web" : "File" }],
+      `<h2>${esc(c.name || "Untitled")}</h2>
+       ${web && isImg ? `<img class="srcimg" src="${esc(c.url)}" alt="">` : ""}
+       ${web ? `<p class="muted srcstat">${stat}</p>
+       <h3 class="eyebrow" style="margin-top:16px">Source</h3>
+       ${F("title", "Title", "As the holder gives it")}${F("creator", "Maker", "Photographer, artist, author")}${F("date", "Date", "When it was made")}${F("holder", "Held by", "Archive, museum, newspaper, collection")}${F("rights", "Rights", "License or rights statement")}${F("page", "Page it came from", "https://")}${F("description", "Description", "What the source says about it", true)}${F("notes", "Your notes", "Why it is here, what to check", true)}
+       <div class="row" style="margin-top:6px"><a class="btnlike" href="${esc(c.url)}" target="_blank" rel="noopener">Open the image</a>${s && s.page ? `<a class="btnlike" href="${esc(s.page)}" target="_blank" rel="noopener">Open its page</a>` : ""}<button id="srcAgain">Look up the source</button></div>` : `<p class="muted">A file you added. It lives in the archive.</p>`}
+       <div class="row" style="margin-top:12px"><button id="cThread">Add to thread</button><button id="cDel">Remove from board</button></div>
+       <h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connList(c, conns)}`);
+    body.querySelectorAll("[data-s]").forEach(inp => inp.onchange = () => { const k = inp.dataset.s, val = inp.value.trim();
+      change(() => { if (!c.source) c.source = srcFrom(c.url || "", "", ""); c.source[k] = val; c.source["_mine_" + k] = true; if (k === "title" && val) c.name = val; });
+      if (k === "page" && val) { c.source.host = hostOf(val); enrichSource(c.id, true); } });
+    const again = $("#srcAgain"); if (again) again.onclick = () => { again.textContent = "Looking…"; enrichSource(c.id, true); };
+    $("#cDel").onclick = () => { removeCard(c.id); toLibrary(); };
+    $("#cThread").onclick = () => addToThread(c.id);
+    bindGo(body);
+  }
   function viewCard(v) {
     const c = cardById(v.cardId); if (!c) return toLibrary();
+    if (c.kind === "media") return viewMedia(v, c);
     const kind = c.kind === "marker" ? "Week marker" : c.kind === "embed" ? "Embed" : c.kind === "ftext" ? "Text" : "Note";
     const conns = B.links.filter(l => l.from === c.id || l.to === c.id);
     const threadsIn = B.threads.filter(t => t.steps.includes(c.id));
