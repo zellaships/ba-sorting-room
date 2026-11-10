@@ -15,7 +15,7 @@ canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:
 canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
 #stat{position:absolute;left:0;top:25px;background:var(--panel);border:2px solid var(--line);border-left:0;padding:3px 8px;font-size:11px;z-index:2;max-width:70vw}
-#thumbs{position:absolute;left:0;top:0;width:116px;height:116px;border-radius:50%;background:#222;z-index:2;pointer-events:none;box-shadow:0 0 0 1px rgba(236,246,244,.55),0 0 22px 6px rgba(120,190,186,.45),0 10px 30px rgba(0,20,24,.35);transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .4s;will-change:transform}
+#thumbs{position:absolute;left:0;top:0;width:116px;height:116px;border-radius:50%;background:#0c1a20;opacity:0;z-index:2;pointer-events:none;box-shadow:0 0 0 1px rgba(236,246,244,.55),0 0 22px 6px rgba(120,190,186,.45),0 10px 30px rgba(0,20,24,.35);transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .4s;will-change:transform}
 body.proj .tag,body.proj #stat,body.proj #ver,body.proj #panel{display:none}body.proj.idle canvas#gl{cursor:none}
 canvas#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
 #cosmoLabs{position:absolute;inset:0;pointer-events:none;z-index:2}
@@ -39,9 +39,8 @@ canvas#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
 #cp .x:hover{color:#fff}
 #ver{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:3;display:flex;gap:0;font:12px/1 ui-monospace,Menlo,monospace}
 #ver a,#ver b{display:block;padding:6px 12px;border:2px solid #000;background:#ddd;color:#000;text-decoration:none}#ver b{background:#000;color:#fff}#ver a:hover{background:#fff}
-#cap{position:absolute;left:0;top:0;width:210px;background:rgba(8,20,22,.72);color:#eef5f3;font:italic 13px/1.3 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;padding:7px 10px;border-radius:6px;z-index:2;pointer-events:none;transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .4s;will-change:transform}
+#cap{position:absolute;left:0;top:0;width:max-content;max-width:min(260px,calc(100vw - 170px));background:rgba(8,20,22,.74);color:#eef5f3;font:italic 14px/1.3 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;padding:8px 12px;border-radius:8px;z-index:2;pointer-events:none;text-align:right;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .4s;will-change:transform}
 #cap:empty{display:none}
-#cap{text-align:right}
 body:not(.proj) #hint{bottom:74px}
 #hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;pointer-events:none;font:italic 15px/1.3 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#0e1a1c;background:rgba(236,246,244,.78);padding:8px 14px;border-radius:99px;transition:opacity .8s;white-space:nowrap}
 @media(max-width:600px){#hint{white-space:normal;text-align:center;width:78%}}
@@ -75,7 +74,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
  <div id="cosmoLabs" aria-hidden="true"></div>
  <div id="cp" hidden role="dialog" aria-label="Cosmogram node"></div>
  <canvas id="thumbs" width="192" height="192" aria-label="Current source frame"></canvas>
- <div id="hint">Drag to look around. Select a bead on the cosmogram to open it.</div>
+ <div id="hint">Drag to look around.</div>
  <div id="cap" aria-live="off"></div>
  <div id="stat" role="status" aria-live="polite">starting</div>
 </div>
@@ -539,12 +538,16 @@ vec3 underCol(vec3 ro,vec3 rd){
   vec2 sp2=vec2(-sd2.y,sd2.x);
   float ang=atan(rd.z,rd.x);
   // the water body itself: a deep gradient, darker looking down, never gray, no floor
-  vec3 col=mix(vec3(.13,.31,.34),vec3(.030,.105,.15),clamp(.55-rd.y*.85,0.,1.));
+  // v28: no floor. looking down is depth and dark; light lives near the surface and thins as it falls
+  vec3 col=mix(vec3(.10,.27,.31),vec3(.004,.020,.038),clamp(.50-rd.y*1.15,0.,1.));
   // light shafts falling from the surface
   float sh=vnoise(vec2(ang*2.3+u_wt*.06,rd.y*3.5-u_wt*.10));
   float sh2=vnoise(vec2(ang*6.1-u_wt*.045,rd.y*8.+u_wt*.07));
   float beam=pow(max(dot(rd,ld),0.),3.5);
   col+=vec3(.55,.82,.76)*beam*(.30+.70*(sh*.6+sh2*.4));
+  // v28: curtains of light hanging from the surface, fading with depth
+  float cur=pow(vnoise(vec2(ang*7.+u_wt*.02,3.1)),2.5)*.6+pow(vnoise(vec2(ang*17.-u_wt*.03,9.7)),3.)*.4;
+  col+=vec3(.28,.52,.50)*cur*smoothstep(-.60,.35,rd.y)*.24;
   // slow particulate drift
   float mot=vnoise(rd.xz*18./(abs(rd.y)+.35)+vec2(u_wt*.12,-u_wt*.09));
   col+=vec3(.10,.16,.15)*smoothstep(.86,.99,mot)*(.3+.7*beam);
@@ -589,7 +592,7 @@ vec3 underCol(vec3 ro,vec3 rd){
   // its own current, nearest sharpest, far ones dissolving into haze
   for(int k=3;k>=0;k--){
     float fk=float(k);
-    float ly=u_wy-(.50+fk*.80);
+    float ly=u_wy-(2.6+fk*3.3);float deep=clamp((u_wy-ly)/13.,0.,1.);
     if(abs(rd.y)<.02)continue;
     float t=(ly-ro.y)/rd.y;
     if(t<=0.)continue;
@@ -610,8 +613,8 @@ vec3 underCol(vec3 ro,vec3 rd){
     if(wl>.001)img=mix(img,flowLite(rh+wob2+(bfl<.5?-.147:.147),ridge,pool),wl);
     float haze=exp(-t*.11);
     float fade=exp(-fk*.45);
-    vec3 lcol=img*vec3(.72,.92,.88)*(fade+.35)*(.55+.75*beam+.30);
-    col=mix(col,lcol,clamp(haze,0.,1.)*.62*smoothstep(.02,.10,abs(rd.y)));
+    vec3 lcol=img*mix(vec3(.50,.78,.80),vec3(.10,.30,.42),deep)*(fade+.25)*(.40+.70*beam)*(1.-.70*deep);
+    col=mix(col,lcol,clamp(haze,0.,1.)*.36*(1.-.55*deep)*smoothstep(.02,.10,abs(rd.y)));
   }
   // water-column shimmer: keeps every frame alive even before the archive lands
   col*=.88+.12*vnoise(vec2(u_wt*.9+rd.x*3.,rd.y*5.-u_wt*.7));
@@ -1097,7 +1100,7 @@ function setMode(m){mode=m;$('src').value=m;$('folderWrap').style.display=(m==='
   if(m==='arch'){if(SHEETS){fillWater();return;}useBaked();}
   prefill();}
 function grab(){
-  const o=nextLib();curObj=o;if(o){cx.drawImage(o.c,0,0);curName=o.name;if(!hoverOn){$('cap').textContent=o.name;placeLens();}return;}
+  const o=nextLib();curObj=o;if(o){cx.drawImage(o.c,0,0);curName=o.name;if(!hoverOn)setLens(o.c,o.name);return;}
   cx.fillStyle='#555';cx.fillRect(0,0,TILE,TILE);}
 let count=0,frozen=false;
 function pushFrame(){
@@ -1259,15 +1262,23 @@ cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();hoverOn
 cv.addEventListener('pointerleave',()=>{hoverOn=false;hoverSlot=-1;placeLens();});
 // v28: the photo under the cursor surfaces beside it; at rest the lens waits in the top right corner
 function placeLens(){const cap=$('cap'),W=cv.clientWidth,H=cv.clientHeight,lift=document.body.classList.contains('proj')?0:64;
-  const lx=W-134,ly=H-134-lift;th.style.transform=`translate(${lx}px,${ly}px)`;
-  const side=W>=520,cx=side?lx-226:Math.max(8,W-222),cy=side?ly+116-Math.max(34,cap.offsetHeight):ly-Math.max(34,cap.offsetHeight)-10;
-  cap.style.transform=`translate(${cx}px,${cy}px)`;}
+  const lx=W-132,ly=H-132-lift;th.style.transform=`translate(${lx}px,${ly}px)`;
+  const side=W>=520,cw=cap.offsetWidth,ch=cap.offsetHeight;
+  const cx=side?lx-14-cw:Math.max(8,W-16-cw),cy=side?ly+(116-ch)/2:ly-ch-10;
+  cap.style.transform=`translate(${Math.round(cx)}px,${Math.round(cy)}px)`;}
+// one tidy line or two: the holder's long catalogue strings are cut back to the title itself
+function cleanName(n){let s=String(n||'').replace(/\s*\[title from filename\]/i,'').split(/\s*;\s*|\.\s*Catalog|\s*Catalog\s*title|\s*Printed\s*caption|\s+\|\s+/i)[0].replace(/\s+/g,' ').replace(/[\s.,:;-]+$/,'').trim();
+  if(/^[\w-]+$/.test(s)&&/[-_]/.test(s))s=s.replace(/^i-\d+-/,'').replace(/[-_]+/g,' ');
+  return s.length>84?s.slice(0,82).replace(/\s+\S*$/,'')+'…':s;}
+let lensSet=false;
+function setLens(img,name){lensSet=true;try{tx.clearRect(0,0,th.width,th.height);tx.drawImage(img,0,0,th.width,th.height);th.style.opacity=1;}catch(e){th.style.opacity=0;}
+  const cap=$('cap'),s=cleanName(name);cap.textContent=s;cap.style.opacity=s?1:0;placeLens();}
 placeLens();addEventListener('resize',()=>placeLens());
 {const hint=$('hint'),gone=()=>{hint.style.opacity=0;setTimeout(()=>hint.remove(),900);};let done=false;const once=()=>{if(!done){done=true;gone();}};cv.addEventListener('pointerdown',once);setTimeout(once,12000);}
 const pbo=gl.createBuffer();gl.bindBuffer(gl.PIXEL_PACK_BUFFER,pbo);gl.bufferData(gl.PIXEL_PACK_BUFFER,4,gl.STREAM_READ);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
 let pickFence=null,pickAt=0,lastPickT=0,lastPX2=-9,lastPY2=-9;
 function showPick(){const sl=pickPx[0]+pickPx[1]*256-1;
-  if(sl>=0&&sl!==hoverSlot&&slotObj[sl]){hoverSlot=sl;const o=slotObj[sl];tx.drawImage(o.c,0,0,th.width,th.height);$('cap').textContent=o.name;placeLens();}}
+  if(sl>=0&&sl!==hoverSlot&&slotObj[sl]){hoverSlot=sl;const o=slotObj[sl];setLens(o.c,o.name);}}
 function pickNow(){
   // read the answer from the last request if the GPU has it ready; never wait for it
   if(pickFence){const st=gl.clientWaitSync(pickFence,0,0);
@@ -1372,11 +1383,13 @@ const MOMTXT={TUKULA:'Tukula: the sun at its height, the fullness of life in the
 function openPole(k){selId=null;cpEl.innerHTML=`<button class="x" id="cpx" aria-label="Close">&times;</button><div class="k" style="color:${LABCOL[k]}">Moment</div><h2>${k[0]+k.slice(1).toLowerCase()}</h2><p>${MOMTXT[k]}</p><p class="m">${NODES.filter(c=>c.moment===k).map(c=>esc(c.name)).join(' &middot; ')}</p>`;cpEl.hidden=false;$('cpx').onclick=closeC;}
 function nearest(x,y,r){let best=null,bd=r;hitList.forEach(o=>{const d=Math.hypot(o.x-x,o.y-y);if(d<bd){bd=d;best=o;}});return best;}
 // taps on a node open it; drags still orbit the water
+// v28: descriptions are off. The cosmogram stands unexplained; set DESCRIBE to true to bring back bead names and panels
+const DESCRIBE=false;
 let dn=null;
 cv.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY,t:performance.now()};});
-cv.addEventListener('pointerup',e=>{if(!dn||!on)return;const r=cv.getBoundingClientRect();
+cv.addEventListener('pointerup',e=>{if(!dn||!on||!DESCRIBE){dn=null;return;}const r=cv.getBoundingClientRect();
   if(Math.hypot(e.clientX-dn.x,e.clientY-dn.y)<8&&performance.now()-dn.t<400){const b=nearest(e.clientX-r.left,e.clientY-r.top,26);if(b){if(b.pole)openPole(b.c.pole);else openC(b.c.id);}}dn=null;});
-cv.addEventListener('pointermove',e=>{if(!on||ptrs.size)return;const r=cv.getBoundingClientRect();const nb=nearest(e.clientX-r.left,e.clientY-r.top,22);cv.style.cursor=nb?'pointer':'grab';NODES.forEach(c=>c._el.classList.toggle('near',!!nb&&!nb.pole&&nb.c.id===c.id));});
+cv.addEventListener('pointermove',e=>{if(!on||ptrs.size||!DESCRIBE)return;const r=cv.getBoundingClientRect();const nb=nearest(e.clientX-r.left,e.clientY-r.top,22);cv.style.cursor=nb?'pointer':'grab';NODES.forEach(c=>c._el.classList.toggle('near',!!nb&&!nb.pole&&nb.c.id===c.id));});
 function setOn(v){on=v;const b=$('cosmoBtn');if(b)b.setAttribute('aria-pressed',on);if(!on)closeC();}
 $('cosmoBtn').onclick=()=>setOn(!on);
 return {draw,setOn,pre};
@@ -1449,7 +1462,7 @@ function frame(now){
   COSMO.pre(now);gl.uniform1f(U.u_basin,P.basin);gl.uniform1f(U.u_curl,P.curl);gl.uniform2f(U.u_swap,swap.slot,swap.fade);gl.uniform1f(U.u_glimpse,P.glimpse);gl.uniform1f(U.u_disp,P.disp);gl.uniform1f(U.u_refl,P.refl);gl.uniform1f(U.u_pickOn,0);
   gl.drawArrays(gl.TRIANGLES,0,3);
   if(showThumb&&hoverOn)pickNow();
-  else if(showThumb&&!hoverOn){tx.drawImage(cap,0,0,th.width,th.height);}
+  else if(showThumb&&!hoverOn&&!lensSet){tx.drawImage(cap,0,0,th.width,th.height);}
   if((++tick%20)===0||tick<3)$('stat').textContent=`${W}x${H}  ${fpsS.toFixed(0)} fps  ${N} frames  ${mode==='arch'?'GO':'folder'} ${SHEETS?slotItem.filter(Boolean).length+' on the water of '+SHEETS.items.length:(lib.length||bakedTiles.length)+' of '+(GO.length||'?')} imgs  res ${Math.round(dyn*100)}%  water ${simOK?'on':'off'}  swells ${P.nsw} up ${B.filter(b=>b.rise>.35).length}  slowmo ${P.slow}${paused?'  paused':''}`;
   COSMO.draw(now,c);
   if(!document.body.classList.contains('ready')&&tick>2)document.body.classList.add('ready');
