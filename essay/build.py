@@ -27,6 +27,9 @@ for raw in lines[1:]:
 body.append("</section>")
 nav = "\n".join(f'<a href="#{slug(s)}" data-s="{slug(s)}">{html.escape(s)}</a>' for s in SECTIONS)
 page = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
+import json
+BUILD = json.load(open(os.path.join(HERE, "..", "version.json")))["build"]
+page = page.replace("{{BUILD}}", BUILD)
 page = page.replace("{{TITLE}}", html.escape(title)).replace("{{NAV}}", nav).replace("{{BODY}}", "\n".join(body))
 open(os.path.join(HERE, "index.html"), "w", encoding="utf-8").write(page)
 print("built", len(body), "blocks")
