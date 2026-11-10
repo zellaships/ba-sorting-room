@@ -22,7 +22,9 @@ canvas#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
 .lab{position:absolute;white-space:nowrap;font:italic 400 15px/1.15 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.01em;color:#10181a;
   text-shadow:0 0 6px rgba(236,246,244,.85),0 0 14px rgba(236,246,244,.6),0 1px 1px rgba(236,246,244,.5)}
 .lab.mom{font:600 13px/1 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:.34em;transform:translate(-50%,-50%);text-shadow:0 0 4px rgba(10,22,24,.75),0 0 10px rgba(10,22,24,.5),0 1px 0 rgba(10,22,24,.6)}
-.lab.nd{pointer-events:auto;cursor:pointer;color:#10181a}.lab.nd:hover{color:#000;text-decoration:underline;text-underline-offset:3px}
+/* v28: theme names stay out of the picture; one appears only while the cursor is on its bead */
+.lab.nd{pointer-events:none;color:#10181a;visibility:hidden}.lab.nd.near,.lab.nd.sel{visibility:visible}
+.lab.nd.x{pointer-events:auto;cursor:pointer;color:#10181a}.lab.nd:hover{color:#000;text-decoration:underline;text-underline-offset:3px}
 .lab.sel{font-weight:700}
 @media(max-width:600px){.lab.nd{white-space:normal;width:92px;font-size:12px;line-height:1.12}.lab.mom{font-size:10px}}
 #cp{position:absolute;z-index:6;left:16px;top:16px;width:min(380px,calc(100vw - 32px));max-height:calc(100svh - 170px);overflow:auto;
@@ -71,14 +73,14 @@ button[aria-pressed=true]{background:#000;color:#fff}
  <div id="cosmoLabs" aria-hidden="true"></div>
  <div id="cp" hidden role="dialog" aria-label="Cosmogram node"></div>
  <canvas id="thumbs" width="192" height="192" aria-label="Current source frame"></canvas>
- <div id="hint">Drag to look around. Select a name on the cosmogram to open it.</div>
+ <div id="hint">Drag to look around. Select a bead on the cosmogram to open it.</div>
  <div id="cap" aria-live="off"></div>
  <div id="stat" role="status" aria-live="polite">starting</div>
 </div>
 <div id="panel" class="min">
  <h1 id="phead"><button id="ptoggle" aria-expanded="false" aria-controls="pbody">VES / Strange Projector water body study v28 - controls +</button></h1>
  <div id="pbody">
-  <p><b>v28:</b> the cosmogram is weathered into the water's world: matte, rusted, salt-crusted at the waterline, wet where it crosses, with a bright meniscus. Luvemba is chalk white. Theme names are set in italic serif with a soft halo and step aside for the four moments. The photo under the cursor shows in a round lens in the bottom right corner, with its full caption beside it. A first-visit hint says what dragging and selecting do.</p>
+  <p><b>v28:</b> the cosmogram is weathered into the water's world: matte, rusted, salt-crusted at the waterline, wet where it crosses, with a bright meniscus. Luvemba is chalk white. Theme names are hidden: one appears in italic serif only while the cursor rests on its bead, and the four moments stay. The photo under the cursor shows in a round lens in the bottom right corner, with its full caption beside it. A first-visit hint says what dragging and selecting do.</p>
   <p><b>v27:</b> the Kongo cosmogram stands in the water, half above and half below the kalunga line, drawn in the same space as the ocean so it turns with the camera. Below the line it wavers with the water. Tap a node to read it.</p>
   <p><b>v26:</b> no more ruled lines: the strips bend and fan across the water on big slow currents, and the slices between photos are curved arcs that cascade like scales. Photos keep their full interior (the squeeze that drew marble rings is gone), highlights no longer blow out to white, and the picture holds its sharpness.</p>
   <p><b>v25:</b> three hundred photos ride the water at once (three times as many), and the same photo never sits next to itself. Each patch of water is bigger and shows more of its photo, with thinner seams, less smear and a lighter sea tint, so the photos read about a third more clearly while staying part of the water.</p>
@@ -1372,7 +1374,7 @@ let dn=null;
 cv.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY,t:performance.now()};});
 cv.addEventListener('pointerup',e=>{if(!dn||!on)return;const r=cv.getBoundingClientRect();
   if(Math.hypot(e.clientX-dn.x,e.clientY-dn.y)<8&&performance.now()-dn.t<400){const b=nearest(e.clientX-r.left,e.clientY-r.top,26);if(b){if(b.pole)openPole(b.c.pole);else openC(b.c.id);}}dn=null;});
-cv.addEventListener('pointermove',e=>{if(!on||ptrs.size)return;const r=cv.getBoundingClientRect();cv.style.cursor=nearest(e.clientX-r.left,e.clientY-r.top,22)?'pointer':'grab';});
+cv.addEventListener('pointermove',e=>{if(!on||ptrs.size)return;const r=cv.getBoundingClientRect();const nb=nearest(e.clientX-r.left,e.clientY-r.top,22);cv.style.cursor=nb?'pointer':'grab';NODES.forEach(c=>c._el.classList.toggle('near',!!nb&&!nb.pole&&nb.c.id===c.id));});
 function setOn(v){on=v;const b=$('cosmoBtn');if(b)b.setAttribute('aria-pressed',on);if(!on)closeC();}
 $('cosmoBtn').onclick=()=>setOn(!on);
 return {draw,setOn,pre};
