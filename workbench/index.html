@@ -269,6 +269,11 @@ input[type=text],input[type=search],input[type=url],textarea,select{background:#
 .rt blockquote{color:#b9bbbc}
 #links path{stroke:#6f757a}
 #links path.sel,#links path.hot{stroke:var(--teal)}
+#links path.live{stroke:var(--teal);animation:lkpulse 1.9s ease-in-out infinite}
+.card.kin{outline:2px solid var(--teal);outline-offset:1px;animation:kinpulse 1.9s ease-in-out infinite}
+@keyframes lkpulse{0%,100%{stroke-opacity:.5;stroke-width:1.6}50%{stroke-opacity:1;stroke-width:3.4}}
+@keyframes kinpulse{0%,100%{box-shadow:0 0 0 3px rgba(116,184,165,.12)}50%{box-shadow:0 0 0 12px rgba(116,184,165,.3)}}
+@media (prefers-reduced-motion:reduce){#links path.live{animation:none;stroke-width:2.6}.card.kin{animation:none;box-shadow:0 0 0 6px rgba(116,184,165,.22)}}
 .lbl,.lmid .dot,.lmid .brk,.edge .grip{background:var(--raise)!important}
 .lmid .dot{border-color:#7a8085}
 .lmid .brk{color:#ef8a76}
@@ -686,11 +691,16 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     mapSoon();
     const svg = $("#links"); let h = "";
     const thr = present ? B.threads.find(t => t.id === present.thread) : (sel && sel.type === "thread" ? B.threads.find(t => t.id === sel.id) : null);
-    const path = (a, b) => { const p = edgePoint(a, b), q = edgePoint(b, a); const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2; return { d: `M${p.x},${p.y} Q${mx + (q.y - p.y) * 0.08},${my - (q.x - p.x) * 0.08} ${q.x},${q.y}`, mx, my }; };
+    const path = (a, b, k = 0.08) => { const p = edgePoint(a, b), q = edgePoint(b, a); const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2; return { d: `M${p.x},${p.y} Q${mx + (q.y - p.y) * k},${my - (q.x - p.x) * k} ${q.x},${q.y}`, mx, my }; };
+    // selecting a card wakes its connections: the lines sway and pulse, and the cards at the other end light up
+    const kin = new Set(), calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     for (const l of B.links) {
       const a = cardById(l.from), b = cardById(l.to); if (!a || !b) continue;
       const pa = center(a), pb = center(b), pp = path(pa, pb), on = sel && sel.type === "link" && sel.id === l.id;
-      h += `<path class="vis ${on ? "sel" : ""}" data-v="${l.id}" d="${pp.d}" marker-end="url(#arr)"/><path class="hit" data-link="${l.id}" d="${pp.d}"/>`;
+      const live = selIds.has(l.from) || selIds.has(l.to);
+      if (live) { if (!selIds.has(l.from)) kin.add(l.from); if (!selIds.has(l.to)) kin.add(l.to); }
+      const sway = live && !calm ? `<animate attributeName="d" dur="${(2.6 + (l.id.charCodeAt(2) % 7) * 0.2).toFixed(1)}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" values="${path(pa, pb, 0.01).d};${path(pa, pb, 0.17).d};${path(pa, pb, 0.01).d}"/>` : "";
+      h += `<path class="vis ${on ? "sel" : ""} ${live ? "live" : ""}" data-v="${l.id}" d="${pp.d}" marker-end="url(#arr)">${sway}</path><path class="hit" data-link="${l.id}" d="${pp.d}"/>`;
       const mid = document.createElement("div"); mid.className = "lmid" + (on ? " sel" : ""); mid.dataset.link = l.id;
       mid.style.left = pp.mx + "px"; mid.style.top = pp.my + "px";
       mid.innerHTML = (l.label ? `<span class="lbl ${on ? "sel" : ""}">${esc(l.label)}</span>` : `<span class="dot" title="Name this connection"></span>`) + `<button class="brk" title="Break this connection">×</button>`;
@@ -704,6 +714,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       h += `<path class="thread" d="${path(center(a), center(b)).d}"/>`;
     }
     svg.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${(6 / view.z).toFixed(3)}" markerHeight="${(6 / view.z).toFixed(3)}" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8486"/></marker></defs>` + h;
+    world.querySelectorAll(".card").forEach(el => el.classList.toggle("kin", kin.has(el.dataset.id)));
     svg.querySelectorAll(".hit").forEach(p => {
       const vis = svg.querySelector(`path.vis[data-v="${p.dataset.link}"]`), mid = world.querySelector(`.lmid[data-link="${p.dataset.link}"]`);
       p.onpointerenter = () => { vis && vis.classList.add("hot"); mid && mid.classList.add("hot"); };
