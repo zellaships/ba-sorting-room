@@ -12,12 +12,13 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1
 #stage{position:fixed;inset:0}
 body.embed{background:linear-gradient(#a6dedd,#4f7f84)}body.embed canvas#gl,body.embed canvas#ink{opacity:0;transition:opacity .9s}body.embed.ready canvas#gl,body.embed.ready canvas#ink{opacity:1}
 #veil{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(120% 90% at 50% 36%,#0e3140 0%,#071b24 52%,#03090d 100%);transition:opacity 1.7s ease,filter 1.7s ease,transform 1.7s ease}
-#veil img{width:min(46vw,340px);height:auto;animation:vbreath 3.4s ease-in-out infinite}
-#veil i{display:block;width:min(34vw,230px);height:1px;background:linear-gradient(90deg,transparent,#a5dcd4,transparent) 0 0/50% 100% no-repeat;animation:vline 2.4s ease-in-out infinite}
-#veil span{font:italic 14px/1 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#8fb9b4;letter-spacing:.02em}
+#veil .lg{position:relative;width:min(54vw,460px);aspect-ratio:1614/313;filter:drop-shadow(0 0 22px rgba(140,220,214,.22));animation:vbreath 4.2s ease-in-out infinite}
+#veil .lg,#veil .lg b{-webkit-mask:url(../../essay/logo-hi.png) center/contain no-repeat;mask:url(../../essay/logo-hi.png) center/contain no-repeat}
+#veil .lg{background:linear-gradient(180deg,#f2fbfa,#bfdedb)}
+#veil .lg b{position:absolute;inset:0;background:linear-gradient(105deg,transparent 0 40%,rgba(255,255,255,.0) 42%,#fff 48%,#9ff3ea 50%,#fff 52%,transparent 58% 100%) 0 0/260% 100% no-repeat;mix-blend-mode:screen;animation:vshine 2.8s cubic-bezier(.45,.05,.3,1) infinite}
 #veil.gone{opacity:0;filter:blur(16px);transform:scale(1.07);pointer-events:none}
-@keyframes vbreath{0%,100%{opacity:.72}50%{opacity:1}}@keyframes vline{0%{background-position:-100% 0}100%{background-position:300% 0}}
-@media(prefers-reduced-motion:reduce){#veil img,#veil i{animation:none}}
+@keyframes vbreath{0%,100%{filter:drop-shadow(0 0 14px rgba(140,220,214,.14))}50%{filter:drop-shadow(0 0 30px rgba(140,220,214,.34))}}@keyframes vshine{0%{background-position:160% 0}70%,100%{background-position:-60% 0}}
+@media(prefers-reduced-motion:reduce){#veil .lg,#veil .lg b{animation:none}}
 canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;outline:none}
 canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
@@ -74,7 +75,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
 <body>
 <script>if(/[?&]embed/.test(location.search))document.body.classList.add("proj","embed");setTimeout(function(){var v=document.getElementById("veil");if(v)v.classList.add("gone");},20000);</script>
 <div id="stage">
- <div id="veil" aria-hidden="true"><img src="../../essay/logo.png" alt=""><i></i><span>the water is coming in</span></div>
+ <div id="veil" aria-hidden="true"><div class="lg"><b></b></div></div>
  <canvas id="gl" tabindex="0" role="img" aria-label="A whole body of water fills the screen, its surface made of the GO archive photographs carried by the water, never vanishing. The photographs gather along the real ridge lines of the waves and join into one connected body of water-shaped forms with curved, flowing borders, with whitecaps in slow motion. Move the mouse to ease through many images; drag to stir; wheel zooms."></canvas>
  <div class="tag">Under v28</div>
  <div id="ver"><a href="../">v21</a><a href="../v23/">v23</a><a href="../v24/">v24</a><a href="../v25/">v25</a><a href="../v26/">v26</a><a href="../v27/">v27</a><b>v28</b></div>
@@ -171,7 +172,7 @@ float g_pick=-1.;float g_far=0.;vec3 g_wn=vec3(0.,1.,0.);uniform vec2 u_swap;uni
 float basinAt(vec2 p){return u_basin*(1.-smoothstep(2.4,5.4,length(p)));}
 uniform float u_t,u_wt,u_head,u_iso,u_layer,u_span,u_smear,u_chroma,u_adv,u_simOK,u_steps,u_wy,u_foam,u_wmix,u_under,u_rain,u_pt;
 uniform int u_bn;
-uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec2 u_wet;uniform vec4 u_b[12];uniform vec4 u_cr[4];
+uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec3 u_wet;float h31(vec3 p);uniform vec4 u_b[12];uniform vec4 u_cr[4];
 uniform sampler2D u_atlas,u_sim;
 out vec4 o;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -558,8 +559,19 @@ vec3 underCol(vec3 ro,vec3 rd){
   float cur=pow(vnoise(vec2(ang*7.+u_wt*.02,3.1)),2.5)*.6+pow(vnoise(vec2(ang*17.-u_wt*.03,9.7)),3.)*.4;
   col+=vec3(.28,.52,.50)*cur*smoothstep(-.60,.35,rd.y)*.24;
   // slow particulate drift
-  float mot=vnoise(rd.xz*18./(abs(rd.y)+.35)+vec2(u_wt*.12,-u_wt*.09));
-  col+=vec3(.10,.16,.15)*smoothstep(.86,.99,mot)*(.3+.7*beam);
+  // marine snow: fine flecks at three depths, sinking slowly. Near ones are soft out-of-focus discs, far ones
+  // pinpoints, and each brightens for a moment as it turns in the light.
+  {vec2 uvp=vec2(atan(rd.z,rd.x)*1.6,rd.y*2.2);
+    for(int q=0;q<3;q++){float fq=float(q),sc=q==0?5.:(q==1?11.:22.);
+      vec2 g=uvp*sc+vec2(u_wt*.012*(3.-fq)+fq*3.7,u_wt*.02*(3.-fq)),id=floor(g),f=fract(g)-.5;
+      float rn=h31(vec3(id,41.+fq));if(rn>(q==0?.12:(q==1?.24:.30)))continue;
+      float r2=h31(vec3(id,44.));
+      vec2 off=(vec2(h31(vec3(id,42.)),h31(vec3(id,43.)))-.5)*.7+.06*vec2(sin(u_wt*.5+r2*40.),cos(u_wt*.37+r2*70.));
+      float d=length(f-off)/(q==0?mix(.05,.10,r2):(q==1?.034:.03));
+      float m=q==0?(1.-smoothstep(.75,1.,d))*(.5+.5*smoothstep(.45,.95,d)):exp(-d*d*2.5);
+      float tw=.4+.6*pow(.5+.5*sin(u_wt*(1.2+r2*4.)+r2*200.),3.);
+      col+=vec3(.42,.58,.56)*m*tw*(q==0?.13:(q==1?.40:.36))*(.6+.4*beam);
+    }}
   // the surface overhead seen from below: the photo water-skin as a bright
   // ceiling, pooled light toward the sun window, dimming toward the horizon
   if(rd.y>.015){
@@ -867,11 +879,13 @@ vec3 bubbles(vec3 c,vec2 s,float near){
 // One height field: a sheet that drains from the top with a thick leading edge, beads that cling and dry at their
 // own time, and runners that let go one by one, stick and slip downward and leave a thin trail that breaks into beads.
 // The scene is drawn through this field (each drop is a small lens), then lit: a dark rim and a highlight.
-float wetH(vec2 s,float t,float K){
-  float T=mix(5.,11.,K),env=1.-smoothstep(T*.65,T,t),H=0.;
-  if(env<=0.)return 0.;
+// returns x: drops (beads, runners, their trails)  y: the draining sheet  z: the sheet's lip
+vec3 wetH(vec2 s,float t,float K){
+  float T=mix(5.,11.,K),env=1.-smoothstep(T*.65,T,t),H=0.,sd=u_wet.z;
+  if(env<=0.)return vec3(0.);
+  vec2 sh=vec2(sd*3.17,sd*1.71);                       // every surfacing lands the water somewhere new
   for(int q=0;q<2;q++){
-    float fq=float(q),sc=q==0?4.5:9.;vec2 g=s*sc+fq*4.7,id=floor(g),f=fract(g)-.5;
+    float fq=float(q),sc=q==0?4.5:9.;vec2 g=(s+sh)*sc+fq*4.7,id=floor(g),f=fract(g)-.5;
     if(h31(vec3(id,21.+fq))>K*(q==0?.20:.26))continue;
     float life=mix(2.2,9.,h31(vec3(id,23.)))*(.6+.6*K);
     float r=mix(.05,.17,pow(h31(vec3(id,26.)),2.))*(1.-smoothstep(life*.7,life,t))*smoothstep(0.,.3,t);
@@ -880,25 +894,36 @@ float wetH(vec2 s,float t,float K){
     H+=sqrt(max(1.-dot(pp,pp)/(r*r),0.))*(.35+3.2*r);
   }
   for(int q=0;q<2;q++){
-    float fq=float(q),sc=q==0?9.:15.,gx=s.x*sc+fq*2.3,cl=floor(gx),fx=fract(gx)-.5;
+    float fq=float(q),sc=q==0?9.:15.,gx=(s.x+sh.x)*sc+fq*2.3,cl=floor(gx),fx=fract(gx)-.5;
     float r0=hash(vec2(cl,31.+fq));
     if(r0>K*.45+.03)continue;
     float tt=max(t-hash(vec2(cl,33.))*1.6*(1.+K),0.);
     float v=mix(.10,.34,hash(vec2(cl,34.)))*(.6+.8*K);
-    float y0=mix(.55,-.05,hash(vec2(cl,35.)));
+    float y0=mix(.46,-.05,hash(vec2(cl,35.)));
     float yd=y0-v*(tt+.24*sin(tt*2.3+r0*20.));
-    float x=fx-(hash(vec2(cl,36.))-.5)*.4-(vnoise(vec2(cl*7.,s.y*9.))-.5)*.42;
+    float x=fx-(hash(vec2(cl,36.))-.5)*.4-(vnoise(vec2(cl*7.,s.y*5.))-.5)*.30;
     float rr=mix(.10,.17,hash(vec2(cl,37.)));
     vec2 pp=vec2(x,(s.y-yd)*sc);pp.y*=pp.y>0.?.62:1.15;
     float head=sqrt(max(1.-dot(pp,pp)/(rr*rr),0.));
-    float ab=s.y-yd;
-    float tr=step(0.,ab)*step(s.y,y0)*(1.-smoothstep(0.,rr*.42,abs(x)))*exp(-ab*5./(.3+K))*(.5+.5*smoothstep(.35,.65,vnoise(vec2(cl*3.,s.y*38.))));
-    H+=head*.9+tr*.4;
+    // the trail: born as a fine point where the drop let go, widest just behind the head, drying into separate beads
+    float ab=s.y-yd,top=y0-s.y,run=max(y0-yd,1e-3);
+    float wid=rr*.40*(.30+.70*exp(-ab*5.))*smoothstep(0.,min(.10,run),top);
+    float line=(1.-smoothstep(wid*.35,wid,abs(x)))*step(0.,ab)*step(0.,top);
+    float beadsP=smoothstep(.52,.70,vnoise(vec2(cl*3.,s.y*24.)));
+    float tr=line*mix(beadsP,1.,exp(-ab*9.))*exp(-ab*3.2/(.3+K))*smoothstep(0.,.02,top);
+    // what stays behind where it started
+    vec2 po=vec2(x,(s.y-y0)*sc);float seedB=sqrt(max(1.-dot(po,po)/(rr*rr*.16),0.))*smoothstep(0.,.5,tt)*(1.-smoothstep(3.,6.,tt));
+    H+=head*.9+tr*.42+seedB*.3;
   }
-  float yf=.62-t*(.9+.5*K)*(.65+.7*vnoise(vec2(s.x*2.6,3.)))+.03*(vnoise(vec2(s.x*17.,t*1.5))-.5);
-  float film=smoothstep(0.,.3,yf-s.y)*K*exp(-t*1.1);
-  H+=film*(.25+.55*vnoise(vec2(s.x*22.,s.y*3.+t*5.)))+K*.12*exp(-t*.8)*(1.-smoothstep(0.,.03,abs(s.y-yf)))*(.4+.6*vnoise(vec2(s.x*30.,t*2.)));
-  return H*env;
+  // the sheet: it covers the glass, then its upper edge slides down in scallops, leaving the glass clear above
+  float fing=pow(abs(sin((s.x+sh.x)*7.+2.*vnoise(vec2(s.x*3.,sd)))),3.);
+  float yf=.60-t*(.75+.5*K)*(.7+.6*vnoise(vec2(s.x*2.2+sd,3.)))-.07*fing*min(t*1.5,1.)+.02*(vnoise(vec2(s.x*15.,t*1.3))-.5);
+  float life=K*exp(-t*.75);
+  float cover=smoothstep(0.,.05,yf-s.y);
+  float thick=cover*life*(.45+.55*exp(-(yf-s.y)*5.));
+  float F=thick*(.55+.45*vnoise(vec2(s.x*16.+sd,s.y*2.2+t*4.)));
+  float lip=life*(1.-smoothstep(0.,.009,abs(s.y-yf+.005)))*(.35+.65*vnoise(vec2(s.x*28.+sd,t*2.5)));
+  return vec3(H,F,lip)*env;
 }
 float rip(vec2 v,float tt){return vnoise(v*7.+vec2(tt*.9,tt*.5))+.45*vnoise(v*19.-vec2(tt*1.3,tt*.7))+.2*vnoise(v*47.+tt);}
 void main(){
@@ -916,10 +941,12 @@ void main(){
   vec2 s2=s;
   if(split){s2.y+=(under?.035:-.02)*exp(-abs(d)*16.);s2.x+=.006*sin(s.y*60.+tt*3.)*exp(-abs(d)*22.);
     ro.y=under?min(ro.y,u_wy-.04):max(ro.y,u_wy+.04);}
-  float wH=0.;vec2 wG=vec2(0.);
-  if(u_wet.y>.01&&!under){wH=wetH(s,u_wet.x,u_wet.y);
-    if(wH>.0005){float e=.004;wG=vec2(wetH(s+vec2(e,0.),u_wet.x,u_wet.y)-wH,wetH(s+vec2(0.,e),u_wet.x,u_wet.y)-wH)/e;
-      s2-=clamp(wG*.0010,-.05,.05);}}
+  float wH=0.;vec2 wG=vec2(0.);vec3 w3=vec3(0.);
+  if(u_wet.y>.01&&!under){w3=wetH(s,u_wet.x,u_wet.y);wH=w3.x;
+    if(w3.x+w3.y+w3.z>.0005){float e=.004;vec3 wx=wetH(s+vec2(e,0.),u_wet.x,u_wet.y)-w3,wy=wetH(s+vec2(0.,e),u_wet.x,u_wet.y)-w3;
+      wG=vec2(wx.x,wy.x)/e;
+      vec2 fG=vec2(wx.y*3.+wx.z*.35,wy.y*3.+wy.z*.35)/e;
+      s2-=clamp(wG*.0010,-.05,.05)+clamp(fG*.0012,-.035,.035);}}
   scene(fc,s2,ro,under);
   vec3 c=o.rgb;
   // the water right in front of the lens: fine ripples, sky on the grazing faces, dark depth on the steep ones
@@ -933,6 +960,12 @@ void main(){
         vec3 nw=mix(mix(vec3(.02,.11,.13),c,.30),mix(vec3(.66,.88,.86),c,.35),fr);
         nw+=vec3(1.,.98,.9)*pow(max(dot(reflect(rd,n),normalize(vec3(.3,.5,.8))),0.),160.)*.5;
         c=mix(c,nw,w*.8);}}
+  }
+  if(w3.y+w3.z>.001){                                 // the sheet: a wet, slightly lifted look with running glints and a bright lip
+    c=mix(c,c*vec3(.90,.99,.99)+vec3(.015,.03,.03),clamp(w3.y*1.4,0.,1.));
+    c+=vec3(.9,1.,1.)*.22*w3.y*pow(vnoise(vec2(s.x*46.,s.y*3.+u_wet.x*7.)),4.);
+    c*=1.-.30*w3.z*(1.-smoothstep(0.,.5,w3.z));
+    c+=vec3(.92,1.,1.)*.30*smoothstep(.35,.9,w3.z);
   }
   if(wH>.0005){
     c*=1.-.24*smoothstep(0.,.22,wH)*(1.-smoothstep(.22,.7,wH));
@@ -1327,7 +1360,7 @@ function stir(x,y,fx,fy,r){
 const DEF={yaw:.55,pitch:-.34,dist:(innerWidth<innerHeight?4.5:2.8)};let cam={...DEF},camT={...DEF};
 try{const h=location.hash.match(/cam=([-\d.]+),([-\d.]+),([-\d.]+)/);if(h){cam={yaw:+h[1],pitch:+h[2],dist:+h[3]};camT={...cam};}}catch(e){}
 // the essay's drawer pulls the camera down under the surface and on into the deep
-const WETQ=+(new URLSearchParams(location.search).get('wet')||0);let dive=0,diveT=0,wetT=99,wetK=0,wetPrevH=1,wetPrevD=0,wetPeak=0,veilT0=0,veilGone=false;
+const WETQ=+(new URLSearchParams(location.search).get('wet')||0);let wetSeed=0,dive=0,diveT=0,wetT=99,wetK=0,wetPrevH=1,wetPrevD=0,wetPeak=0,veilT0=0,veilGone=false;
 function camVecs(){
   const dv=dive*dive*(3-2*dive);
   const pitch=cam.pitch+(-.62-cam.pitch)*dv, dist=cam.dist*(1-.28*dv);
@@ -1600,9 +1633,9 @@ function frame(now){
   {const rate=(wetPrevD-dive)/Math.max(dtr,1e-3);wetPrevD=dive;wetPeak=Math.max(wetPeak*Math.exp(-dtr*1.2),rate);}
   const c=camVecs();
   {const hh=c.ro[1]-P.wlvl;
-    if(wetPrevH<0&&hh>=0){wetT=0;wetK=Math.max(.2,Math.min(1,wetPeak/.55));}
+    if(wetPrevH<0&&hh>=0){wetT=0;wetSeed=Math.random()*40;wetK=Math.max(.2,Math.min(1,wetPeak/.55));}
     else if(hh<0)wetK=0;else wetT+=dtr;
-    wetPrevH=hh;if(WETQ&&hh>=0){wetK=WETQ;wetT=wetT%12;}}
+    wetPrevH=hh;if(WETQ&&hh>=0){wetK=WETQ;if(wetT>12){wetT=0;wetSeed=Math.random()*40;}}}
   gl.viewport(0,0,W,H);
   gl.useProgram(pr);
   gl.uniform2f(U.u_res,W,H);gl.uniform1f(U.u_t,clock);gl.uniform1f(U.u_wt,wt);
@@ -1612,7 +1645,7 @@ function frame(now){
   gl.uniform1f(U.u_simOK,simOK?1:0);gl.uniform1i(U.u_bn,Math.min(P.nsw,NB));
   gl.uniform1f(U.u_steps,qual[+$('q').value].steps);
   gl.uniform1f(U.u_wy,P.wlvl);gl.uniform1f(U.u_foam,P.foam);gl.uniform1f(U.u_wmix,P.wmix);gl.uniform1f(U.u_rain,P.rain);gl.uniform1f(U.u_pt,cam.pitch);
-  gl.uniform2f(U.u_wet,wetT,wetK);
+  gl.uniform3f(U.u_wet,wetT,wetK,wetSeed);
   gl.uniform3fv(U.u_ro,c.ro);gl.uniform3fv(U.u_fw,c.fw);gl.uniform3fv(U.u_rt,c.rt);gl.uniform3fv(U.u_up,c.up);
   gl.uniform1f(U.u_under,c.ro[1]<P.wlvl?1:0);
   const bb=new Float32Array(NB*4);B.forEach((b,i)=>{bb.set([b.p[0],b.p[1],b.p[2],b.r],i*4);});
