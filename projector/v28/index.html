@@ -37,6 +37,8 @@ canvas#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
 #ver a,#ver b{display:block;padding:6px 12px;border:2px solid #000;background:#ddd;color:#000;text-decoration:none}#ver b{background:#000;color:#fff}#ver a:hover{background:#fff}
 #cap{position:absolute;left:0;top:0;width:210px;background:rgba(8,20,22,.72);color:#eef5f3;font:italic 13px/1.3 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;padding:7px 10px;border-radius:6px;z-index:2;pointer-events:none;transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .4s;will-change:transform}
 #cap:empty{display:none}
+#cap{text-align:right}
+body:not(.proj) #hint{bottom:74px}
 #hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;pointer-events:none;font:italic 15px/1.3 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#0e1a1c;background:rgba(236,246,244,.78);padding:8px 14px;border-radius:99px;transition:opacity .8s;white-space:nowrap}
 @media(max-width:600px){#hint{white-space:normal;text-align:center;width:78%}}
 @media(prefers-reduced-motion:reduce){#thumbs,#cap{transition:none}}
@@ -76,7 +78,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
 <div id="panel" class="min">
  <h1 id="phead"><button id="ptoggle" aria-expanded="false" aria-controls="pbody">VES / Strange Projector water body study v28 - controls +</button></h1>
  <div id="pbody">
-  <p><b>v28:</b> the cosmogram is weathered into the water's world: matte, rusted, salt-crusted at the waterline, wet where it crosses, with a bright meniscus. Luvemba is chalk white. Theme names are set in italic serif with a soft halo and step aside for the four moments. The photo under the cursor surfaces beside it as a round lens with its full caption. A first-visit hint says what dragging and selecting do.</p>
+  <p><b>v28:</b> the cosmogram is weathered into the water's world: matte, rusted, salt-crusted at the waterline, wet where it crosses, with a bright meniscus. Luvemba is chalk white. Theme names are set in italic serif with a soft halo and step aside for the four moments. The photo under the cursor shows in a round lens in the bottom right corner, with its full caption beside it. A first-visit hint says what dragging and selecting do.</p>
   <p><b>v27:</b> the Kongo cosmogram stands in the water, half above and half below the kalunga line, drawn in the same space as the ocean so it turns with the camera. Below the line it wavers with the water. Tap a node to read it.</p>
   <p><b>v26:</b> no more ruled lines: the strips bend and fan across the water on big slow currents, and the slices between photos are curved arcs that cascade like scales. Photos keep their full interior (the squeeze that drew marble rings is gone), highlights no longer blow out to white, and the picture holds its sharpness.</p>
   <p><b>v25:</b> three hundred photos ride the water at once (three times as many), and the same photo never sits next to itself. Each patch of water is bigger and shows more of its photo, with thinner seams, less smear and a lighter sea tint, so the photos read about a third more clearly while staying part of the water.</p>
@@ -1091,7 +1093,7 @@ function setMode(m){mode=m;$('src').value=m;$('folderWrap').style.display=(m==='
   if(m==='arch'){if(SHEETS){fillWater();return;}useBaked();}
   prefill();}
 function grab(){
-  const o=nextLib();curObj=o;if(o){cx.drawImage(o.c,0,0);curName=o.name;if(!hoverOn)$('cap').textContent=o.name;return;}
+  const o=nextLib();curObj=o;if(o){cx.drawImage(o.c,0,0);curName=o.name;if(!hoverOn){$('cap').textContent=o.name;placeLens();}return;}
   cx.fillStyle='#555';cx.fillRect(0,0,TILE,TILE);}
 let count=0,frozen=false;
 function pushFrame(){
@@ -1252,16 +1254,16 @@ const pickPx=new Uint8Array(4);let hoverOn=false,hoverX=0,hoverY=0,hoverSlot=-1;
 cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();hoverOn=true;hoverX=(e.clientX-r.left)/r.width;hoverY=1-(e.clientY-r.top)/r.height;placeLens(e.clientX-r.left,e.clientY-r.top,r.width,r.height);});
 cv.addEventListener('pointerleave',()=>{hoverOn=false;hoverSlot=-1;placeLens();});
 // v28: the photo under the cursor surfaces beside it; at rest the lens waits in the top right corner
-function placeLens(x,y,w,h){const cap=$('cap'),W=cv.clientWidth,H=cv.clientHeight;let lx,ly;
-  if(x==null){lx=W-132;ly=14;}else{lx=x+34;ly=y-140;if(lx+134>W)lx=x-150;if(ly<10)ly=y+30;lx=Math.max(8,lx);}
-  th.style.transform=`translate(${lx}px,${ly}px)`;let cx=lx-47,cy=ly+124;cx=Math.max(8,Math.min(W-218,cx));if(cy+70>H)cy=ly-78;
+function placeLens(){const cap=$('cap'),W=cv.clientWidth,H=cv.clientHeight,lift=document.body.classList.contains('proj')?0:64;
+  const lx=W-134,ly=H-134-lift;th.style.transform=`translate(${lx}px,${ly}px)`;
+  const side=W>=520,cx=side?lx-226:Math.max(8,W-222),cy=side?ly+116-Math.max(34,cap.offsetHeight):ly-Math.max(34,cap.offsetHeight)-10;
   cap.style.transform=`translate(${cx}px,${cy}px)`;}
 placeLens();addEventListener('resize',()=>placeLens());
 {const hint=$('hint'),gone=()=>{hint.style.opacity=0;setTimeout(()=>hint.remove(),900);};let done=false;const once=()=>{if(!done){done=true;gone();}};cv.addEventListener('pointerdown',once);setTimeout(once,12000);}
 const pbo=gl.createBuffer();gl.bindBuffer(gl.PIXEL_PACK_BUFFER,pbo);gl.bufferData(gl.PIXEL_PACK_BUFFER,4,gl.STREAM_READ);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
 let pickFence=null,pickAt=0,lastPickT=0,lastPX2=-9,lastPY2=-9;
 function showPick(){const sl=pickPx[0]+pickPx[1]*256-1;
-  if(sl>=0&&sl!==hoverSlot&&slotObj[sl]){hoverSlot=sl;const o=slotObj[sl];tx.drawImage(o.c,0,0,th.width,th.height);$('cap').textContent=o.name;}}
+  if(sl>=0&&sl!==hoverSlot&&slotObj[sl]){hoverSlot=sl;const o=slotObj[sl];tx.drawImage(o.c,0,0,th.width,th.height);$('cap').textContent=o.name;placeLens();}}
 function pickNow(){
   // read the answer from the last request if the GPU has it ready; never wait for it
   if(pickFence){const st=gl.clientWaitSync(pickFence,0,0);
