@@ -11,6 +11,13 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.35 ui-monospace,Menlo,Consolas,monospace;overscroll-behavior:none}
 #stage{position:fixed;inset:0}
 body.embed{background:linear-gradient(#a6dedd,#4f7f84)}body.embed canvas#gl,body.embed canvas#ink{opacity:0;transition:opacity .9s}body.embed.ready canvas#gl,body.embed.ready canvas#ink{opacity:1}
+#veil{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(120% 90% at 50% 36%,#0e3140 0%,#071b24 52%,#03090d 100%);transition:opacity 1.7s ease,filter 1.7s ease,transform 1.7s ease}
+#veil img{width:min(46vw,340px);height:auto;animation:vbreath 3.4s ease-in-out infinite}
+#veil i{display:block;width:min(34vw,230px);height:1px;background:linear-gradient(90deg,transparent,#a5dcd4,transparent) 0 0/50% 100% no-repeat;animation:vline 2.4s ease-in-out infinite}
+#veil span{font:italic 14px/1 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#8fb9b4;letter-spacing:.02em}
+#veil.gone{opacity:0;filter:blur(16px);transform:scale(1.07);pointer-events:none}
+@keyframes vbreath{0%,100%{opacity:.72}50%{opacity:1}}@keyframes vline{0%{background-position:-100% 0}100%{background-position:300% 0}}
+@media(prefers-reduced-motion:reduce){#veil img,#veil i{animation:none}}
 canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;outline:none}
 canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
@@ -65,8 +72,9 @@ button[aria-pressed=true]{background:#000;color:#fff}
 </style>
 </head>
 <body>
-<script>if(/[?&]embed/.test(location.search))document.body.classList.add("proj","embed");</script>
+<script>if(/[?&]embed/.test(location.search))document.body.classList.add("proj","embed");setTimeout(function(){var v=document.getElementById("veil");if(v)v.classList.add("gone");},20000);</script>
 <div id="stage">
+ <div id="veil" aria-hidden="true"><img src="../../essay/logo.png" alt=""><i></i><span>the water is coming in</span></div>
  <canvas id="gl" tabindex="0" role="img" aria-label="A whole body of water fills the screen, its surface made of the GO archive photographs carried by the water, never vanishing. The photographs gather along the real ridge lines of the waves and join into one connected body of water-shaped forms with curved, flowing borders, with whitecaps in slow motion. Move the mouse to ease through many images; drag to stir; wheel zooms."></canvas>
  <div class="tag">Under v28</div>
  <div id="ver"><a href="../">v21</a><a href="../v23/">v23</a><a href="../v24/">v24</a><a href="../v25/">v25</a><a href="../v26/">v26</a><a href="../v27/">v27</a><b>v28</b></div>
@@ -163,7 +171,7 @@ float g_pick=-1.;float g_far=0.;vec3 g_wn=vec3(0.,1.,0.);uniform vec2 u_swap;uni
 float basinAt(vec2 p){return u_basin*(1.-smoothstep(2.4,5.4,length(p)));}
 uniform float u_t,u_wt,u_head,u_iso,u_layer,u_span,u_smear,u_chroma,u_adv,u_simOK,u_steps,u_wy,u_foam,u_wmix,u_under,u_rain,u_pt;
 uniform int u_bn;
-uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec4 u_b[12];uniform vec4 u_cr[4];
+uniform vec3 u_ro,u_fw,u_rt,u_up;uniform vec2 u_wet;uniform vec4 u_b[12];uniform vec4 u_cr[4];
 uniform sampler2D u_atlas,u_sim;
 out vec4 o;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -854,6 +862,44 @@ vec3 bubbles(vec3 c,vec2 s,float near){
   }
   return c;
 }
+// Coming up: water on the glass. u_wet.x is seconds since the lens broke the surface, u_wet.y how hard it came up
+// (a slow rise leaves a few beads, a fast one a full sheet that drains, runs and takes longer to dry).
+// One height field: a sheet that drains from the top with a thick leading edge, beads that cling and dry at their
+// own time, and runners that let go one by one, stick and slip downward and leave a thin trail that breaks into beads.
+// The scene is drawn through this field (each drop is a small lens), then lit: a dark rim and a highlight.
+float wetH(vec2 s,float t,float K){
+  float T=mix(5.,11.,K),env=1.-smoothstep(T*.65,T,t),H=0.;
+  if(env<=0.)return 0.;
+  for(int q=0;q<2;q++){
+    float fq=float(q),sc=q==0?4.5:9.;vec2 g=s*sc+fq*4.7,id=floor(g),f=fract(g)-.5;
+    if(h31(vec3(id,21.+fq))>K*(q==0?.20:.26))continue;
+    float life=mix(2.2,9.,h31(vec3(id,23.)))*(.6+.6*K);
+    float r=mix(.05,.17,pow(h31(vec3(id,26.)),2.))*(1.-smoothstep(life*.7,life,t))*smoothstep(0.,.3,t);
+    if(r<.004)continue;
+    vec2 pp=f-(vec2(h31(vec3(id,24.)),h31(vec3(id,25.)))-.5)*.55;pp.y*=pp.y>0.?1.3:.88;
+    H+=sqrt(max(1.-dot(pp,pp)/(r*r),0.))*(.35+3.2*r);
+  }
+  for(int q=0;q<2;q++){
+    float fq=float(q),sc=q==0?9.:15.,gx=s.x*sc+fq*2.3,cl=floor(gx),fx=fract(gx)-.5;
+    float r0=hash(vec2(cl,31.+fq));
+    if(r0>K*.45+.03)continue;
+    float tt=max(t-hash(vec2(cl,33.))*1.6*(1.+K),0.);
+    float v=mix(.10,.34,hash(vec2(cl,34.)))*(.6+.8*K);
+    float y0=mix(.55,-.05,hash(vec2(cl,35.)));
+    float yd=y0-v*(tt+.24*sin(tt*2.3+r0*20.));
+    float x=fx-(hash(vec2(cl,36.))-.5)*.4-(vnoise(vec2(cl*7.,s.y*9.))-.5)*.42;
+    float rr=mix(.10,.17,hash(vec2(cl,37.)));
+    vec2 pp=vec2(x,(s.y-yd)*sc);pp.y*=pp.y>0.?.62:1.15;
+    float head=sqrt(max(1.-dot(pp,pp)/(rr*rr),0.));
+    float ab=s.y-yd;
+    float tr=step(0.,ab)*step(s.y,y0)*(1.-smoothstep(0.,rr*.42,abs(x)))*exp(-ab*5./(.3+K))*(.5+.5*smoothstep(.35,.65,vnoise(vec2(cl*3.,s.y*38.))));
+    H+=head*.9+tr*.4;
+  }
+  float yf=.62-t*(.9+.5*K)*(.65+.7*vnoise(vec2(s.x*2.6,3.)))+.03*(vnoise(vec2(s.x*17.,t*1.5))-.5);
+  float film=smoothstep(0.,.3,yf-s.y)*K*exp(-t*1.1);
+  H+=film*(.25+.55*vnoise(vec2(s.x*22.,s.y*3.+t*5.)))+K*.12*exp(-t*.8)*(1.-smoothstep(0.,.03,abs(s.y-yf)))*(.4+.6*vnoise(vec2(s.x*30.,t*2.)));
+  return H*env;
+}
 float rip(vec2 v,float tt){return vnoise(v*7.+vec2(tt*.9,tt*.5))+.45*vnoise(v*19.-vec2(tt*1.3,tt*.7))+.2*vnoise(v*47.+tt);}
 void main(){
   vec2 fc=u_pickOn>.5?u_pickXY:gl_FragCoord.xy;
@@ -870,6 +916,10 @@ void main(){
   vec2 s2=s;
   if(split){s2.y+=(under?.035:-.02)*exp(-abs(d)*16.);s2.x+=.006*sin(s.y*60.+tt*3.)*exp(-abs(d)*22.);
     ro.y=under?min(ro.y,u_wy-.04):max(ro.y,u_wy+.04);}
+  float wH=0.;vec2 wG=vec2(0.);
+  if(u_wet.y>.01&&!under){wH=wetH(s,u_wet.x,u_wet.y);
+    if(wH>.0005){float e=.004;wG=vec2(wetH(s+vec2(e,0.),u_wet.x,u_wet.y)-wH,wetH(s+vec2(0.,e),u_wet.x,u_wet.y)-wH)/e;
+      s2-=clamp(wG*.0010,-.05,.05);}}
   scene(fc,s2,ro,under);
   vec3 c=o.rgb;
   // the water right in front of the lens: fine ripples, sky on the grazing faces, dark depth on the steep ones
@@ -883,6 +933,12 @@ void main(){
         vec3 nw=mix(mix(vec3(.02,.11,.13),c,.30),mix(vec3(.66,.88,.86),c,.35),fr);
         nw+=vec3(1.,.98,.9)*pow(max(dot(reflect(rd,n),normalize(vec3(.3,.5,.8))),0.),160.)*.5;
         c=mix(c,nw,w*.8);}}
+  }
+  if(wH>.0005){
+    c*=1.-.24*smoothstep(0.,.22,wH)*(1.-smoothstep(.22,.7,wH));
+    c=mix(c,c*vec3(.92,1.,1.)+vec3(.01,.02,.02),smoothstep(0.,.2,wH)*.35);
+    float lit=clamp(dot(wG,vec2(.6,-.8))*.012-.25,0.,1.);
+    c+=vec3(.92,1.,1.)*lit*lit*.32*smoothstep(.15,.5,wH);
   }
   if(split){
     float k=1.-abs(h)/L;
@@ -920,7 +976,7 @@ gl.useProgram(pr);
 const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
 const al=gl.getAttribLocation(pr,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
-const U={};['u_cosOn','u_spinA','u_nb','u_selB','u_bob','u_beads','u_basin','u_curl','u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
+const U={};['u_wet','u_cosOn','u_spinA','u_nb','u_selB','u_bob','u_beads','u_basin','u_curl','u_swap','u_glimpse','u_disp','u_refl','u_pickOn','u_pickXY','u_res','u_t','u_wt','u_head','u_iso','u_layer','u_span','u_smear','u_chroma','u_adv','u_simOK','u_steps','u_wy','u_foam','u_wmix','u_under','u_rain','u_pt','u_bn','u_ro','u_fw','u_rt','u_up','u_b','u_cr','u_atlas','u_sim'].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
 const tex=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,ATLASW,ATLASH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
@@ -1271,7 +1327,7 @@ function stir(x,y,fx,fy,r){
 const DEF={yaw:.55,pitch:-.34,dist:(innerWidth<innerHeight?4.5:2.8)};let cam={...DEF},camT={...DEF};
 try{const h=location.hash.match(/cam=([-\d.]+),([-\d.]+),([-\d.]+)/);if(h){cam={yaw:+h[1],pitch:+h[2],dist:+h[3]};camT={...cam};}}catch(e){}
 // the essay's drawer pulls the camera down under the surface and on into the deep
-let dive=0,diveT=0;
+const WETQ=+(new URLSearchParams(location.search).get('wet')||0);let dive=0,diveT=0,wetT=99,wetK=0,wetPrevH=1,wetPrevD=0,wetPeak=0,veilT0=0,veilGone=false;
 function camVecs(){
   const dv=dive*dive*(3-2*dive);
   const pitch=cam.pitch+(-.62-cam.pitch)*dv, dist=cam.dist*(1-.28*dv);
@@ -1540,7 +1596,13 @@ function frame(now){
   cam.yaw+=(camT.yaw-cam.yaw)*k;cam.pitch+=(camT.pitch-cam.pitch)*k;
   if(camMid===null)camMid=cam.dist;const kz=1-Math.exp(-dtr*9);camMid+=(camT.dist-camMid)*kz;cam.dist+=(camMid-cam.dist)*kz;
   dive+=(diveT-dive)*(1-Math.exp(-dtr*14));if(Math.abs(diveT-dive)<1e-4)dive=diveT;
+  // coming up: how fast the lens rose decides how much water it carries on the glass
+  {const rate=(wetPrevD-dive)/Math.max(dtr,1e-3);wetPrevD=dive;wetPeak=Math.max(wetPeak*Math.exp(-dtr*1.2),rate);}
   const c=camVecs();
+  {const hh=c.ro[1]-P.wlvl;
+    if(wetPrevH<0&&hh>=0){wetT=0;wetK=Math.max(.2,Math.min(1,wetPeak/.55));}
+    else if(hh<0)wetK=0;else wetT+=dtr;
+    wetPrevH=hh;if(WETQ&&hh>=0){wetK=WETQ;wetT=wetT%12;}}
   gl.viewport(0,0,W,H);
   gl.useProgram(pr);
   gl.uniform2f(U.u_res,W,H);gl.uniform1f(U.u_t,clock);gl.uniform1f(U.u_wt,wt);
@@ -1550,6 +1612,7 @@ function frame(now){
   gl.uniform1f(U.u_simOK,simOK?1:0);gl.uniform1i(U.u_bn,Math.min(P.nsw,NB));
   gl.uniform1f(U.u_steps,qual[+$('q').value].steps);
   gl.uniform1f(U.u_wy,P.wlvl);gl.uniform1f(U.u_foam,P.foam);gl.uniform1f(U.u_wmix,P.wmix);gl.uniform1f(U.u_rain,P.rain);gl.uniform1f(U.u_pt,cam.pitch);
+  gl.uniform2f(U.u_wet,wetT,wetK);
   gl.uniform3fv(U.u_ro,c.ro);gl.uniform3fv(U.u_fw,c.fw);gl.uniform3fv(U.u_rt,c.rt);gl.uniform3fv(U.u_up,c.up);
   gl.uniform1f(U.u_under,c.ro[1]<P.wlvl?1:0);
   const bb=new Float32Array(NB*4);B.forEach((b,i)=>{bb.set([b.p[0],b.p[1],b.p[2],b.r],i*4);});
@@ -1567,6 +1630,8 @@ function frame(now){
   if((++tick%20)===0||tick<3)$('stat').textContent=`${W}x${H}  ${fpsS.toFixed(0)} fps  ${N} frames  ${mode==='arch'?'GO':'folder'} ${SHEETS?slotItem.filter(Boolean).length+' on the water of '+SHEETS.items.length:(lib.length||bakedTiles.length)+' of '+(GO.length||'?')} imgs  res ${Math.round(dyn*100)}%  water ${simOK?'on':'off'}  swells ${P.nsw} up ${B.filter(b=>b.rise>.35).length}  slowmo ${P.slow}${paused?'  paused':''}`;
   COSMO.draw(now,c);
   if(!document.body.classList.contains('ready')&&tick>2)document.body.classList.add('ready');
+  if(!veilGone){if(!veilT0)veilT0=now;const on=slotItem.filter(Boolean).length;
+    if(tick>4&&now-veilT0>1400&&(on>=6||now-veilT0>5000)){veilGone=true;const v=$('veil');if(v){v.classList.add('gone');setTimeout(()=>v.remove(),2000);}}}
   requestAnimationFrame(frame);}
 requestAnimationFrame(frame);
 // test hook: ?t=SECONDS pre-rolls clock, swells, water and frames before the first paint

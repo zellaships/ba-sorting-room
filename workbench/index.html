@@ -30,7 +30,7 @@ header .stat{font-size:13px;color:var(--muted)}
 #rail button{width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;font-size:18px;border-color:transparent}
 #rail button.on{background:var(--ink);color:#fff}
 #rail .tip{position:relative}
-#rail button[title]:hover::after{content:attr(title);position:absolute;left:48px;background:var(--ink);color:#fff;font-size:12px;padding:3px 8px;border-radius:4px;white-space:nowrap;pointer-events:none}
+#rail button[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:48px;background:var(--ink);color:#fff;font-size:12px;padding:3px 8px;border-radius:4px;white-space:nowrap;pointer-events:none}
 #rail button{position:relative}
 #rail #railLib{width:40px;height:auto;padding:16px 0 14px;border-radius:10px;border:1px solid var(--rule);background:#fff;writing-mode:vertical-rl;
   font:500 13px/1 system-ui;letter-spacing:.08em;color:var(--ink);gap:9px;transition:background .25s,color .25s,border-color .25s,transform .4s cubic-bezier(.34,1.56,.64,1)}
@@ -266,7 +266,7 @@ button:hover{background:#2c3135}
 button.primary,#rail button.on,.chips button.on,#rail #railLib.on{background:var(--fill)!important;color:var(--onfill)!important;border-color:var(--fill)!important}
 #rail #railLib{background:var(--raise)}
 #rail #railLib.on::before{background:#2f6f62}
-#rail button[title]:hover::after,#toast,.wlabel{background:var(--fill);color:var(--onfill)}
+#rail button[data-tip]:hover::after,#toast,.wlabel{background:var(--fill);color:var(--onfill)}
 input[type=text],input[type=search],input[type=url],textarea,select{background:#16191b;border-color:var(--rule)}
 #board{background:radial-gradient(circle at 1px 1px,#30353a 1px,transparent 1.2px) 0 0/28px 28px,var(--bg)!important}
 .card{background:var(--raise);border-color:#33383d;box-shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px rgba(0,0,0,.28)}
@@ -337,6 +337,9 @@ a{color:var(--teal2)}
 .card.media .mcred{display:block;font-size:10.5px;color:#b9bbbc;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .srcimg{display:block;width:100%;max-height:340px;object-fit:contain;background:#0d0e0f;border-radius:6px;margin:10px 0 8px}
 .srcstat{font-size:13px;line-height:1.45;margin:0}
+#mediaBtn{display:none}
+#dropTip{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;max-width:min(640px,80%);padding:9px 10px 9px 16px;border-radius:999px;background:rgba(14,26,32,.86);border:1px solid rgba(159,195,187,.28);color:#cfe0dc;font-size:13px;line-height:1.35;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#dropTip button{border:0;background:transparent;color:#9fc3bb;font-size:17px;line-height:1;padding:2px 7px;cursor:pointer;border-radius:50%}#dropTip button:hover{background:rgba(159,195,187,.16)}
 .card.media .mcred.q{color:#e6c98a}
 .guess{margin:12px 0 4px;padding:14px 14px 10px;border:1px dashed #b89a55;border-radius:8px;background:rgba(184,154,85,.09)}
 .guess .gk{font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#b89a55;margin-bottom:10px}.guess .gk span{opacity:.7;margin-left:6px;font-weight:400}
@@ -1101,7 +1104,8 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   }
   async function cardsFromTransfer(dt) {
     const out = [], files = [...(dt.files || [])];
-    if (files.length) { for (const f of files) out.push(await cardFromFile(f)); return out; }
+    if (files.length) { let bad = 0; for (const f of files) { try { out.push(await cardFromFile(f)); } catch (x) { bad++; } }
+      if (bad) toast(bad === 1 ? "One file could not be read. If it is a HEIC photo, drag it out as a JPEG." : `${bad} files could not be read`); return out; }
     const html = dt.getData("text/html"), uri = (dt.getData("text/uri-list") || "").split("\n").find(l => l && !l.startsWith("#")), text = dt.getData("text/plain");
     if (html) {                                        // something dragged from another web page
       const doc = new DOMParser().parseFromString(html, "text/html"), img = doc.querySelector("img[src]"), a = doc.querySelector("a[href]");
@@ -1232,10 +1236,16 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     e.preventDefault(); const at = toWorld(e.clientX, e.clientY);
     const id = e.dataTransfer.getData("text/ba-id"); if (id) { dzOff(); addRecord(id, at); return; }
     dz.classList.add("burst"); setTimeout(() => dz.classList.remove("burst"), 450); setTimeout(dzOff, 380);
-    try { landCards(await cardsFromTransfer(e.dataTransfer), at); } catch (err) { toast("Could not read what was dropped"); }
+    try { landCards(await cardsFromTransfer(e.dataTransfer), at); dropTipOff(); } catch (err) { toast("Could not read what was dropped"); }
   });
   addEventListener("dragover", e => { if (isOutside(e)) e.preventDefault(); });     // a stray drop outside the board never navigates away
-  addEventListener("drop", e => { if (!board.contains(e.target)) { e.preventDefault(); dzOff(); } });
+  addEventListener("drop", async e => { if (board.contains(e.target)) return; e.preventDefault(); dzOff(); if (!isOutside(e)) return;
+    const r = board.getBoundingClientRect(); try { landCards(await cardsFromTransfer(e.dataTransfer), toWorld(r.left + r.width / 2, r.top + r.height / 2)); dropTipOff(); } catch (err) { toast("Could not read what was dropped"); } });
+  // the way in is the drag itself: a quiet line says so until the first thing lands
+  const dropTip = document.createElement("div"); dropTip.id = "dropTip"; dropTip.innerHTML = `<span>Drag photos, files or links straight onto the board, from your desktop, Photos or any web page. Paste works too.</span><button title="Got it" aria-label="Dismiss">×</button>`;
+  function dropTipOff() { S.set("wb.dropTip", 1); dropTip.remove(); }
+  if (!S.get("wb.dropTip", 0)) { board.appendChild(dropTip); dropTip.querySelector("button").onclick = dropTipOff; }
+  document.querySelectorAll("#rail button[title]").forEach(b => { b.dataset.tip = b.title; b.setAttribute("aria-label", b.title); b.removeAttribute("title"); });
   // paste: files, pictures, links and text from anywhere; cards copied on the board paste as cards
   document.addEventListener("paste", async e => {
     if (typing()) return; const dt = e.clipboardData; if (!dt) return;
