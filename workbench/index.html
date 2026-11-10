@@ -325,6 +325,11 @@ a{color:var(--teal2)}
 .card.media .mcred{display:block;font-size:10.5px;color:#b9bbbc;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .srcimg{display:block;width:100%;max-height:340px;object-fit:contain;background:#0d0e0f;border-radius:6px;margin:10px 0 8px}
 .srcstat{font-size:13px;line-height:1.45;margin:0}
+.card.media .mcred.q{color:#e6c98a}
+.guess{margin:12px 0 4px;padding:14px 14px 10px;border:1px dashed #b89a55;border-radius:8px;background:rgba(184,154,85,.09)}
+.guess .gk{font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#b89a55;margin-bottom:10px}.guess .gk span{opacity:.7;margin-left:6px;font-weight:400}
+.guess dl{display:grid;grid-template-columns:72px 1fr;gap:5px 10px;margin:0 0 10px;font-size:13.5px;line-height:1.4}.guess dt{opacity:.6;font-size:12px;padding-top:1px}.guess dd{margin:0;overflow-wrap:anywhere}
+.guess .gwhy{font-size:12.5px;line-height:1.5;margin:0 0 8px}.guess .gby{font-size:11.5px;opacity:.6;margin:8px 0 0}.guess a{color:inherit}
 .btnlike{display:inline-block;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;color:inherit;text-decoration:none;font-size:13px}.btnlike:hover{background:var(--raise)}
 .field textarea{width:100%;min-height:64px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--raise);color:var(--ink)}
 .card.media .maud{position:absolute;inset:0;padding:14px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(160deg,#0f2a35,#0b1418)}
@@ -667,7 +672,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     world.querySelectorAll(".lmid").forEach(n => n.remove());
     for (const c of B.cards) {
       let el = world.querySelector(`.card[data-id="${c.id}"]`);
-      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.src, c.mime, c.name, c.source ? (c.source.creator || c.source.holder || "") : "", c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview, c.kind === "record" && !!REC[c.ref], STYLE[(LIBBY[c.ref] || {}).type]]);
+      const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.src, c.mime, c.name, c.source ? (c.source.creator || c.source.holder || "") + "|" + (c.source.status || "") : "", c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview, c.kind === "record" && !!REC[c.ref], STYLE[(LIBBY[c.ref] || {}).type]]);
       if (editing && editing.id === c.id && el) { el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px"; continue; }
       if (!el) { el = document.createElement("div"); el.dataset.id = c.id; world.appendChild(el); bindCard(el); }
       if (el.dataset.sig !== sig) {
@@ -995,10 +1000,14 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     if (mime.startsWith("text/") || /\.(txt|md|csv|json)$/.test(name)) return "text";
     return "file"; };
   const prettySize = n => n > 1e6 ? (n / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1e3)) + " KB";
+  function srcLine(c) { const s = c.source; if (!s) return "";
+    if (s.status === "guess") return `<span class="mcred q">Source: a guess to check</span>`;
+    if (s.status === "wanted") return `<span class="mcred q">Source wanted</span>`;
+    return s.creator || s.holder ? `<span class="mcred">${esc(clip(s.creator || s.holder, 60))}</span>` : ""; }
   function mediaHTML(c) {
     const k = c.mk || kindOf(c.mime, c.name), tag = `<span class="mk">${esc(k === "vector" ? "SVG" : k.toUpperCase())}</span>`;
     const src = c.url ? `src="${esc(c.url)}"` : `data-pv="${esc(c.src || "")}"`;
-    if (k === "image" || k === "vector") return `<div class="mfill"><img ${src} alt="" draggable="false"></div>${tag}<div class="mname">${esc(c.name || "")}${c.source && (c.source.creator || c.source.holder) ? `<span class="mcred">${esc(clip(c.source.creator || c.source.holder, 60))}</span>` : ""}</div><div class="up"></div>`;
+    if (k === "image" || k === "vector") return `<div class="mfill"><img ${src} alt="" draggable="false"></div>${tag}<div class="mname">${esc(c.name || "")}${srcLine(c)}</div><div class="up"></div>`;
     if (k === "video") return `<div class="mfill"><video data-vsrc="${esc(c.url || c.src || "")}" muted loop playsinline preload="metadata"></video></div>${tag}<div class="mname">${esc(c.name || "")}</div><div class="up"></div>`;
     if (k === "pdf") return `<div class="mfill pdf"><canvas data-pdf="${esc(c.url || c.src || "")}"></canvas><div class="pdfph">PDF</div></div>${tag}<div class="mname">${esc(c.name || "")}${c.pages ? " · " + c.pages + " pages" : ""}</div><div class="up"></div>`;
     if (k === "audio") return `<div class="maud"><div class="wave">${Array.from({ length: 28 }, (_, i) => `<i style="height:${20 + Math.abs(Math.sin(i * 1.7 + (c.name || "").length)) * 70}%"></i>`).join("")}</div><div class="an">${esc(c.name || "Sound")}</div><audio data-vsrc="${esc(c.url || c.src || "")}" controls preload="none"></audio></div>${tag}<div class="up"></div>`;
@@ -1045,6 +1054,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     else if (mk === "pdf") [w, h] = [260, 340]; else if (mk === "audio") [w, h] = [320, 150]; else if (mk === "file") [w, h] = [220, 200];
     if (mk === "text" && file.size < 200000) { const t = await file.text(); return { id: uid("c"), kind: "note", w: 300, h: 220, label: file.name.replace(/\.\w+$/, ""), color: "sand", html: esc(t.slice(0, 20000)).replace(/\n/g, "<br>") }; }
     const c = { id: uid("c"), kind: "media", mk, mime: file.type, name: file.name, size: file.size, w, h };
+    if (mk === "image" || mk === "vector") c.source = { image: "", page: "", alt: file.name, host: "", added: new Date().toISOString(), status: "wanted", wanted: new Date().toISOString() };
     c._file = file; c._local = local; return c;
   }
   async function cardsFromTransfer(dt) {
@@ -1099,16 +1109,41 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     } catch (e) { return { failed: true }; }
     return null;
   }
+  // When a site cannot be read, the workbench still offers a first guess from what it can see (the address the image
+  // sits at and the title the browser handed over). A guess is never the record: it waits in the panel until it is
+  // confirmed or turned down. Screenshots and files carry no address, so they are marked "wanted" for a source search.
+  const PUBS = { "wsj.net": "The Wall Street Journal", "wsj.com": "The Wall Street Journal", "nyt.com": "The New York Times", "nytimes.com": "The New York Times", "washingtonpost.com": "The Washington Post", "gettyimages.com": "Getty Images", "si.edu": "Smithsonian Institution", "nypl.org": "New York Public Library", "loc.gov": "Library of Congress", "archives.gov": "U.S. National Archives", "britishmuseum.org": "British Museum", "metmuseum.org": "The Metropolitan Museum of Art", "theguardian.com": "The Guardian", "guim.co.uk": "The Guardian", "npr.org": "NPR", "chicagotribune.com": "Chicago Tribune", "latimes.com": "Los Angeles Times", "apnews.com": "Associated Press", "bbc.co.uk": "BBC", "bbci.co.uk": "BBC", "pinimg.com": "Pinterest (a repost, look further)", "cdninstagram.com": "Instagram (a repost, look further)", "fbcdn.net": "Facebook or Instagram (a repost, look further)", "twimg.com": "X / Twitter (a repost, look further)", "tumblr.com": "Tumblr (a repost, look further)" };
+  function addressGuess(c) {
+    const s = c.source || {}, h = hostOf(s.page || s.image || c.url || ""); if (!h) return null;
+    const key = Object.keys(PUBS).find(k => h === k || h.endsWith("." + k));
+    let title = (c.name || s.alt || "").trim(), holder = key ? PUBS[key] : "";
+    const m = title.match(/^(.*\S)\s+[-|]\s+([^-|]{2,40})$/); if (m) { title = m[1].trim(); if (!holder) holder = m[2].trim(); }
+    if (/\.(jpe?g|png|gif|webp|svg|tiff?)$/i.test(title)) title = "";
+    if (!title && !holder) return null;
+    return { title, holder: holder || h, page: s.page || "", why: `Read from the address the image sits at (${h}) and the title the browser handed over. This names where the picture was published. The maker and the holder of the original may be someone else.`, by: "the workbench", at: new Date().toISOString(), sure: "low" };
+  }
+  const SRC_FIELDS = ["title", "creator", "date", "holder", "rights", "page", "description"];
+  function acceptGuess(c) { const s = c.source, g = s && s.guess; if (!g) return;
+    for (const k of SRC_FIELDS) if (g[k] && !s["_mine_" + k]) s[k] = g[k];
+    if (g.why) s.basis = g.why; if (g.leads) s.leads = g.leads; s.guessedBy = g.by || ""; s.status = "confirmed"; s.confirmed = new Date().toISOString(); delete s.guess;
+    if (s.title) c.name = s.title.length > 90 ? s.title.slice(0, 88) + "…" : s.title; if (s.page) s.host = hostOf(s.page); }
+  function refuseGuess(c) { const s = c.source, g = s && s.guess; if (!g) return;
+    (s.refused = s.refused || []).push({ title: g.title || "", holder: g.holder || "", page: g.page || "", at: new Date().toISOString() });
+    delete s.guess; s.status = "wanted"; s.wanted = new Date().toISOString(); }
   async function enrichSource(id, loud) {
     const c = cardById(id); if (!c || c.kind !== "media") return;
     if (!c.source) c.source = srcFrom(c.url || "", "", "");
     const got = await lookupSource(c.source);
     change(() => {
-      if (got && !got.failed) { const s = c.source; for (const k of ["title", "creator", "date", "holder", "rights", "description", "page"]) if (got[k] && !s["_mine_" + k]) s[k] = got[k]; s.via = got.via; s.status = "read"; s.checked = new Date().toISOString(); s.host = hostOf(s.page || s.image);
+      const s = c.source;
+      if (got && !got.failed) { for (const k of SRC_FIELDS) if (got[k] && !s["_mine_" + k]) s[k] = got[k]; s.via = got.via; if (s.status !== "confirmed") s.status = "read"; delete s.guess; s.checked = new Date().toISOString(); s.host = hostOf(s.page || s.image);
         if (s.title && (!c.name || /\.(jpe?g|png|gif|webp|svg|tiff?)$/i.test(c.name) || c.name === s.alt)) c.name = s.title.length > 90 ? s.title.slice(0, 88) + "…" : s.title; }
-      else { c.source.status = got && got.failed ? "failed" : "unread"; c.source.checked = new Date().toISOString(); }
+      else { s.checked = new Date().toISOString();
+        if (s.status === "confirmed" || s.guess) { if (s.guess) s.status = "guess"; }
+        else { const g = got && got.failed ? null : addressGuess(c); if (g) { s.guess = g; s.status = "guess"; } else s.status = got && got.failed ? "failed" : (s.image || s.page) ? "unread" : "wanted"; } }
     });
-    if (loud) toast(c.source.status === "read" ? `Source read from ${c.source.via}` : "This site cannot be read from here. Fill in what you know.");
+    const st = c.source.status;
+    if (loud) toast(st === "read" ? `Source read from ${c.source.via}` : st === "guess" ? "A guess is waiting in the panel for you to check" : st === "confirmed" ? "Nothing new to add. Your confirmed source stands." : "This one cannot be read from here. It is marked for a source search.");
     if (VIEW && VIEW.kind === "card" && VIEW.cardId === id) renderView();
   }
   async function cardFromURL(url, title) {
@@ -1320,26 +1355,47 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   // Notes, text, embeds, markers
   // an image, file or clip from outside the library: the picture, then everything known about where it came from
   function viewMedia(v, c) {
-    const s = c.source || (c.url ? srcFrom(c.url, "", "") : null), web = !!c.url, isImg = c.mk === "image" || c.mk === "vector";
+    const isImg = c.mk === "image" || c.mk === "vector", web = !!c.url, hasSrc = web || isImg;
+    const s = c.source || (web ? srcFrom(c.url, "", "") : null), g = s && s.guess;
     const conns = B.links.filter(l => l.from === c.id || l.to === c.id);
     const F = (k, label, ph, area) => `<div class="field"><label>${label}</label>${area ? `<textarea data-s="${k}" rows="3" placeholder="${ph}">${esc((s && s[k]) || "")}</textarea>` : `<input type="${k === "page" ? "url" : "text"}" data-s="${k}" value="${esc((s && s[k]) || "")}" placeholder="${ph}">`}</div>`;
     const when = d => { try { return new Date(d).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }); } catch { return ""; } };
-    const stat = !s ? "" : s.status === "read" ? `Read from ${esc(s.via || s.host)} on ${when(s.checked)}. Check it against the page before you publish.`
-      : s.status === "unread" ? `Pulled from ${esc(s.host || "the web")}. That site cannot be read from here, so nothing below is filled in yet. Paste the page link and add what you know.`
-      : s.status === "failed" ? `The source lookup did not go through. Try again, or fill in what you know.` : `Pulled from ${esc(s.host || "the web")}${s.added ? " on " + when(s.added) : ""}. Looking up the source…`;
+    const from = web ? `Pulled from ${esc((s && s.host) || "the web")}${s && s.added ? " on " + when(s.added) : ""}.` : `A file or screenshot you added${s && s.added ? " on " + when(s.added) : ""}. It carries no address of its own.`;
+    const st = s ? s.status : "";
+    const stat = !s ? `${from} No source on it yet.`
+      : st === "confirmed" ? `Source confirmed by you on ${when(s.confirmed)}${s.guessedBy ? ", from a guess by " + esc(s.guessedBy) : ""}.`
+      : st === "read" ? `Read from ${esc(s.via || s.host)} on ${when(s.checked)}. Check it against the page before you publish.`
+      : st === "guess" ? `${from} The source below is a guess. Nothing is filled in until you say it is right.`
+      : st === "wanted" ? `${from} Marked for a source search. Ask Claude to find the sources on the board and a guess will land here for you to check.`
+      : st === "unread" ? `${from} That site cannot be read from here. Paste the page link, add what you know, or mark it for a source search.`
+      : st === "failed" ? `The source lookup did not go through. Try again, or fill in what you know.` : `${from} Looking up the source…`;
+    const GL = { title: "Title", creator: "Maker", date: "Date", holder: "Held by", rights: "Rights", page: "Page", description: "About" };
+    const gBox = !g ? "" : `<div class="guess"><div class="gk">Best guess <span>waiting on you</span></div>
+        <dl>${SRC_FIELDS.filter(k => g[k]).map(k => `<dt>${GL[k]}</dt><dd>${k === "page" ? `<a href="${esc(g[k])}" target="_blank" rel="noopener">${esc(clip(g[k].replace(/^https?:\/\//, ""), 70))}</a>` : esc(g[k])}</dd>`).join("")}</dl>
+        ${g.why ? `<p class="gwhy"><b>Why this guess.</b> ${esc(g.why)}</p>` : ""}
+        ${g.leads && g.leads.length ? `<p class="gwhy"><b>Check it here.</b> ${g.leads.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || hostOf(l.url))}</a>`).join(" · ")}</p>` : ""}
+        <div class="row"><button id="gYes" class="primary">That is right</button><button id="gNo">Not right</button></div>
+        <p class="gby">Guessed by ${esc(g.by || "someone")}${g.at ? " on " + when(g.at) : ""}${g.sure ? ". How sure: " + esc(g.sure) : ""}.</p></div>`;
+    const basis = s && st === "confirmed" && (s.basis || (s.leads && s.leads.length)) ? `<p class="muted srcstat" style="margin-top:8px">${s.basis ? esc(s.basis) + " " : ""}${(s.leads || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || hostOf(l.url))}</a>`).join(" · ")}</p>` : "";
+    const lens = web && isImg ? `<a class="btnlike" href="https://lens.google.com/uploadbyurl?url=${encodeURIComponent(c.url)}" target="_blank" rel="noopener">Search by image</a>` : "";
     const body = shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => centerOn(c.x + c.w / 2, c.y + c.h / 2) }, { label: web ? "From the web" : "File" }],
       `<h2>${esc(c.name || "Untitled")}</h2>
-       ${web && isImg ? `<img class="srcimg" src="${esc(c.url)}" alt="">` : ""}
-       ${web ? `<p class="muted srcstat">${stat}</p>
+       ${isImg ? (web ? `<img class="srcimg" src="${esc(c.url)}" alt="">` : c.src ? `<img class="srcimg" data-pv="${esc(c.src)}" alt="">` : "") : ""}
+       ${hasSrc ? `<p class="muted srcstat">${stat}</p>${gBox}${basis}
        <h3 class="eyebrow" style="margin-top:16px">Source</h3>
        ${F("title", "Title", "As the holder gives it")}${F("creator", "Maker", "Photographer, artist, author")}${F("date", "Date", "When it was made")}${F("holder", "Held by", "Archive, museum, newspaper, collection")}${F("rights", "Rights", "License or rights statement")}${F("page", "Page it came from", "https://")}${F("description", "Description", "What the source says about it", true)}${F("notes", "Your notes", "Why it is here, what to check", true)}
-       <div class="row" style="margin-top:6px"><a class="btnlike" href="${esc(c.url)}" target="_blank" rel="noopener">Open the image</a>${s && s.page ? `<a class="btnlike" href="${esc(s.page)}" target="_blank" rel="noopener">Open its page</a>` : ""}<button id="srcAgain">Look up the source</button></div>` : `<p class="muted">A file you added. It lives in the archive.</p>`}
+       <div class="row" style="margin-top:6px;flex-wrap:wrap">${web ? `<a class="btnlike" href="${esc(c.url)}" target="_blank" rel="noopener">Open the image</a>` : ""}${s && s.page ? `<a class="btnlike" href="${esc(s.page)}" target="_blank" rel="noopener">Open its page</a>` : ""}${lens}${web ? `<button id="srcAgain">Look up the source</button>` : ""}${st !== "wanted" && st !== "guess" ? `<button id="srcWant">Mark for a source search</button>` : ""}</div>` : `<p class="muted">A file you added. It lives in the archive.</p>`}
        <div class="row" style="margin-top:12px"><button id="cThread">Add to thread</button><button id="cDel">Remove from board</button></div>
        <h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connList(c, conns)}`);
+    hydrate(body);
+    const mk = () => { if (!c.source) c.source = web ? srcFrom(c.url, "", "") : { image: "", page: "", alt: c.name || "", host: "", added: new Date().toISOString(), status: "" }; return c.source; };
     body.querySelectorAll("[data-s]").forEach(inp => inp.onchange = () => { const k = inp.dataset.s, val = inp.value.trim();
-      change(() => { if (!c.source) c.source = srcFrom(c.url || "", "", ""); c.source[k] = val; c.source["_mine_" + k] = true; if (k === "title" && val) c.name = val; });
+      change(() => { const o = mk(); o[k] = val; o["_mine_" + k] = true; if (k === "title" && val) c.name = val; });
       if (k === "page" && val) { c.source.host = hostOf(val); enrichSource(c.id, true); } });
     const again = $("#srcAgain"); if (again) again.onclick = () => { again.textContent = "Looking…"; enrichSource(c.id, true); };
+    const want = $("#srcWant"); if (want) want.onclick = () => { change(() => { const o = mk(); o.status = "wanted"; o.wanted = new Date().toISOString(); }); toast("Marked for a source search"); renderView(); };
+    const yes = $("#gYes"); if (yes) yes.onclick = () => { change(() => acceptGuess(c)); toast("Source confirmed"); renderView(); };
+    const no = $("#gNo"); if (no) no.onclick = () => { change(() => refuseGuess(c)); toast("Guess set aside. Still marked for a source search."); renderView(); };
     $("#cDel").onclick = () => { removeCard(c.id); toLibrary(); };
     $("#cThread").onclick = () => addToThread(c.id);
     bindGo(body);
