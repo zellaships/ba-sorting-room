@@ -84,27 +84,33 @@ button[aria-pressed=true]{background:#000;color:#fff}
 im.onload=function(){try{
   var W=cv.width,H=cv.height,lw=im.width,lh=im.height,X=460,Y=240,x=cv.getContext('2d');
   function mk(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
-  function rim(e){var er=mk(lw,lh),g=er.getContext('2d');g.drawImage(im,0,0);g.globalCompositeOperation='destination-in';
-    for(var k=0;k<8;k++){var a=k*Math.PI/4;g.drawImage(im,Math.round(Math.cos(a)*e),Math.round(Math.sin(a)*e));}
-    var r=mk(lw,lh),h=r.getContext('2d');h.drawImage(im,0,0);h.globalCompositeOperation='destination-out';h.drawImage(er,0,0);return r;}
-  function tint(src,top,bot){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(src,0,0);g.globalCompositeOperation='source-in';
-    var gr=g.createLinearGradient(0,0,lw*.25,lh);gr.addColorStop(0,top);gr.addColorStop(1,bot);g.fillStyle=gr;g.fillRect(0,0,lw,lh);return c;}
-  var thin=tint(rim(3),'rgba(255,255,255,1)','rgba(150,200,245,.75)'),wide=tint(rim(9),'rgba(190,225,255,.55)','rgba(70,130,200,.25)'),
-      body=tint(im,'rgba(170,215,255,.30)','rgba(40,95,170,.10)'),smear=tint(im,'rgba(150,200,250,.9)','rgba(70,130,200,.5)'),ghost=tint(rim(3),'rgba(190,220,250,1)','rgba(110,165,225,.8)');
+  var F='filter' in x;
+  function fill(src,top,bot){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(src,0,0);g.globalCompositeOperation='source-in';
+    var gr=g.createLinearGradient(0,0,lw*.2,lh);gr.addColorStop(0,top);gr.addColorStop(1,bot);g.fillStyle=gr;g.fillRect(0,0,lw,lh);return c;}
+  // a rounded bevel has no line in it: light is strongest at the very edge and falls away smoothly toward the
+  // middle of the stroke. inner(r) is exactly that falloff, r pixels deep.
+  function inner(r){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(im,0,0);g.globalCompositeOperation='destination-out';
+    if(F)g.filter='blur('+r+'px)';g.drawImage(im,0,0);g.drawImage(im,0,0);g.filter='none';return c;}
+  // the faces that look up catch the most light, the ones that look down catch a little from the floor
+  function facing(dy,soft){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(im,0,0);g.globalCompositeOperation='destination-out';g.drawImage(im,0,dy);
+    var o=mk(lw,lh),h=o.getContext('2d');if(F)h.filter='blur('+soft+'px)';h.drawImage(c,0,0);h.filter='none';h.globalCompositeOperation='destination-in';h.drawImage(im,0,0);return o;}
+  var deep=fill(inner(16),'rgba(165,210,255,.55)','rgba(60,120,200,.30)'),edge=fill(inner(5),'rgba(235,246,255,.85)','rgba(140,195,245,.55)'),
+      topL=fill(facing(7,2.2),'rgba(255,255,255,1)','rgba(225,240,255,.9)'),botL=fill(facing(-6,2.5),'rgba(120,180,240,.55)','rgba(90,150,220,.45)'),
+      body=fill(im,'rgba(150,200,255,.10)','rgba(40,95,170,.04)'),smear=fill(inner(10),'rgba(140,195,250,1)','rgba(70,135,215,.7)');
   x.globalCompositeOperation='lighter';
-  // the streak: the mark arriving from the left
-  for(var i=1;i<=140;i++){x.globalAlpha=.0075*Math.pow(1-i/140,1.1);x.drawImage(smear,X-i*3.0,Y);}
-  [[90,.16],[230,.07]].forEach(function(s){x.globalAlpha=s[1];x.drawImage(wide,X-s[0],Y);x.globalAlpha=s[1]*.7;x.drawImage(ghost,X-s[0],Y);});
-  // thickness: a back face, then the body, then the lit front rims
-  x.globalAlpha=.30;x.drawImage(ghost,X-15,Y+9);x.globalAlpha=.16;x.drawImage(ghost,X-8,Y+5);
-  x.globalAlpha=1;x.drawImage(body,X,Y);x.globalAlpha=.9;x.drawImage(wide,X,Y);x.globalAlpha=1;x.drawImage(thin,X,Y);
+  // one continuous blur trailing left, the way a long exposure smears a thing that just stopped
+  for(var i=1;i<=190;i++){x.globalAlpha=.0042*Math.pow(1-i/190,1.8);x.drawImage(smear,X-i*1.15,Y);}
+  // the glass itself, softened as a whole so no edge is ever a hard line
+  var gl=mk(lw,lh),gg=gl.getContext('2d');gg.globalCompositeOperation='lighter';gg.drawImage(body,0,0);gg.drawImage(deep,0,0);gg.drawImage(edge,0,0);gg.drawImage(botL,0,0);gg.drawImage(topL,0,0);
+  if(F)x.filter='blur(1.1px)';x.globalAlpha=1;x.drawImage(gl,X,Y);
   // bloom
-  if('filter' in x){x.filter='blur(10px)';x.globalAlpha=.85;x.drawImage(thin,X,Y);x.filter='blur(34px)';x.globalAlpha=.55;x.drawImage(thin,X,Y);x.filter='none';}
+  if(F){x.filter='blur(9px)';x.globalAlpha=.55;x.drawImage(topL,X,Y);x.filter='blur(30px)';x.globalAlpha=.45;x.drawImage(edge,X,Y);x.filter='none';}
+  var thin=gl,wide=deep,ghost=smear;
   // the floor: a reflection that fades, and the light skidding along it
-  var rf=mk(lw+400,lh),rg=rf.getContext('2d');rg.translate(0,lh);rg.scale(1,-1);rg.globalAlpha=.55;rg.drawImage(wide,400,0);rg.drawImage(thin,400,0);rg.drawImage(body,400,0);
-  for(var j=1;j<=60;j++){rg.globalAlpha=.008*(1-j/60);rg.drawImage(smear,400-j*5,0);}
+  var rf=mk(lw+400,lh),rg=rf.getContext('2d');rg.translate(0,lh);rg.scale(1,-1);rg.globalAlpha=.6;rg.drawImage(gl,400,0);
+  for(var j=1;j<=100;j++){rg.globalAlpha=.0025*Math.pow(1-j/100,1.8);rg.drawImage(smear,400-j*2,0);}
   rg.setTransform(1,0,0,1,0,0);rg.globalAlpha=1;rg.globalCompositeOperation='destination-in';var fg=rg.createLinearGradient(0,0,0,lh);fg.addColorStop(0,'rgba(0,0,0,.75)');fg.addColorStop(.75,'rgba(0,0,0,0)');rg.fillStyle=fg;rg.fillRect(0,0,lw+400,lh);
-  if('filter' in x)x.filter='blur(2.5px)';x.globalAlpha=.6;x.drawImage(rf,X-400,Y+lh+14);x.filter='none';
+  if(F)x.filter='blur(5px)';x.globalAlpha=.5;x.drawImage(rf,X-400,Y+lh+14);x.filter='none';
   var fl=x.createLinearGradient(X-430,0,X+lw,0);fl.addColorStop(0,'rgba(190,225,255,0)');fl.addColorStop(.35,'rgba(200,230,255,.55)');fl.addColorStop(.7,'rgba(200,230,255,.25)');fl.addColorStop(1,'rgba(190,225,255,0)');
   x.globalAlpha=1;x.fillStyle=fl;x.fillRect(X-430,Y+lh+6,lw+430,2);if('filter' in x){x.filter='blur(6px)';x.fillRect(X-430,Y+lh+4,lw+430,6);x.filter='none';}
   // glints where an upper edge catches the light
