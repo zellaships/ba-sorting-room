@@ -11,14 +11,11 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.35 ui-monospace,Menlo,Consolas,monospace;overscroll-behavior:none}
 #stage{position:fixed;inset:0}
 body.embed{background:linear-gradient(#a6dedd,#4f7f84)}body.embed canvas#gl,body.embed canvas#ink{opacity:0;transition:opacity .9s}body.embed.ready canvas#gl,body.embed.ready canvas#ink{opacity:1}
-#veil{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(180deg,#01040a 0%,#030d1a 36%,#0a2440 66%,#2c5c88 100%);transition:opacity 1.7s ease,filter 1.7s ease,transform 1.7s ease}
-#veil .lgw{position:relative;width:min(104vw,1120px);flex:none;aspect-ratio:2200/900;transform:translateX(calc(-7.6% - 46px));opacity:0;transition:transform 2.4s cubic-bezier(.16,.84,.2,1),opacity 1.1s ease}
-#veil .lgw.in{transform:translateX(-7.6%);opacity:1}
-#veil canvas{position:absolute;inset:0;width:100%;height:100%}
-#veil .lgw b{position:absolute;left:20.909%;top:26.667%;width:73.364%;height:34.778%;-webkit-mask:url(../../essay/logo-hi.png) center/100% 100% no-repeat;mask:url(../../essay/logo-hi.png) center/100% 100% no-repeat;background:linear-gradient(105deg,transparent 0 41%,rgba(255,255,255,.0) 43%,rgba(255,255,255,.85) 49%,rgba(170,225,255,.9) 50%,rgba(255,255,255,.85) 51%,transparent 57% 100%) 0 0/260% 100% no-repeat;mix-blend-mode:screen;animation:vshine 3.4s cubic-bezier(.45,.05,.3,1) 1.2s infinite both}
+#veil{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 50% 40%,#0c2b38 0%,#071a23 55%,#03090d 100%);transition:opacity 1.7s ease,filter 1.7s ease,transform 1.7s ease}
+#veil .lg{width:min(46vw,380px);aspect-ratio:1614/313;background:#e6f1ef;-webkit-mask:url(../../essay/logo-hi.png) center/contain no-repeat;mask:url(../../essay/logo-hi.png) center/contain no-repeat;animation:vbreath 4.5s ease-in-out infinite}
 #veil.gone{opacity:0;filter:blur(16px);transform:scale(1.07);pointer-events:none}
-@keyframes vshine{0%{background-position:160% 0}70%,100%{background-position:-60% 0}}
-@media(prefers-reduced-motion:reduce){#veil .lgw b{animation:none}#veil .lgw{transition:opacity .6s ease}}
+@keyframes vbreath{0%,100%{opacity:.62}50%{opacity:.95}}
+@media(prefers-reduced-motion:reduce){#veil .lg{animation:none}}
 canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;outline:none}
 canvas#gl:focus-visible{outline:3px solid #000;outline-offset:-3px}
 .tag{position:absolute;left:0;top:0;background:#000;color:#fff;padding:3px 8px;font-size:12px;letter-spacing:.04em;z-index:2}
@@ -75,55 +72,7 @@ button[aria-pressed=true]{background:#000;color:#fff}
 <body>
 <script>if(/[?&]embed/.test(location.search))document.body.classList.add("proj","embed");setTimeout(function(){var v=document.getElementById("veil");if(v)v.classList.add("gone");},20000);</script>
 <div id="stage">
- <div id="veil" aria-hidden="true"><div class="lgw"><canvas id="veilC" width="2200" height="900"></canvas><b></b></div></div>
-<script>
-// The loading mark: the wordmark as a block of glass. Drawn once on a canvas from the logo's own shape
-// (lit inner rims, a faint back face for thickness, a streak of ghosted copies trailing left, a floor reflection,
-// bloom and two glints), so it costs nothing while the water compiles. Only the glimmer and the arrival move.
-(function(){var cv=document.getElementById('veilC');if(!cv)return;var im=new Image();
-im.onload=function(){try{
-  var W=cv.width,H=cv.height,lw=im.width,lh=im.height,X=460,Y=240,x=cv.getContext('2d');
-  function mk(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
-  var F='filter' in x;
-  function fill(src,top,bot){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(src,0,0);g.globalCompositeOperation='source-in';
-    var gr=g.createLinearGradient(0,0,lw*.2,lh);gr.addColorStop(0,top);gr.addColorStop(1,bot);g.fillStyle=gr;g.fillRect(0,0,lw,lh);return c;}
-  // a rounded bevel has no line in it: light is strongest at the very edge and falls away smoothly toward the
-  // middle of the stroke. inner(r) is exactly that falloff, r pixels deep.
-  function inner(r){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(im,0,0);g.globalCompositeOperation='destination-out';
-    if(F)g.filter='blur('+r+'px)';g.drawImage(im,0,0);g.drawImage(im,0,0);g.filter='none';return c;}
-  // the faces that look up catch the most light, the ones that look down catch a little from the floor
-  function facing(dy,soft){var c=mk(lw,lh),g=c.getContext('2d');g.drawImage(im,0,0);g.globalCompositeOperation='destination-out';g.drawImage(im,0,dy);
-    var o=mk(lw,lh),h=o.getContext('2d');if(F)h.filter='blur('+soft+'px)';h.drawImage(c,0,0);h.filter='none';h.globalCompositeOperation='destination-in';h.drawImage(im,0,0);return o;}
-  var deep=fill(inner(16),'rgba(165,210,255,.55)','rgba(60,120,200,.30)'),edge=fill(inner(5),'rgba(235,246,255,.85)','rgba(140,195,245,.55)'),
-      topL=fill(facing(7,2.2),'rgba(255,255,255,1)','rgba(225,240,255,.9)'),botL=fill(facing(-6,2.5),'rgba(120,180,240,.55)','rgba(90,150,220,.45)'),
-      body=fill(im,'rgba(150,200,255,.10)','rgba(40,95,170,.04)'),smear=fill(inner(10),'rgba(140,195,250,1)','rgba(70,135,215,.7)');
-  x.globalCompositeOperation='lighter';
-  // one continuous blur trailing left, the way a long exposure smears a thing that just stopped
-  for(var i=1;i<=190;i++){x.globalAlpha=.0042*Math.pow(1-i/190,1.8);x.drawImage(smear,X-i*1.15,Y);}
-  // the glass itself, softened as a whole so no edge is ever a hard line
-  var gl=mk(lw,lh),gg=gl.getContext('2d');gg.globalCompositeOperation='lighter';gg.drawImage(body,0,0);gg.drawImage(deep,0,0);gg.drawImage(edge,0,0);gg.drawImage(botL,0,0);gg.drawImage(topL,0,0);
-  if(F)x.filter='blur(1.1px)';x.globalAlpha=1;x.drawImage(gl,X,Y);
-  // bloom
-  if(F){x.filter='blur(9px)';x.globalAlpha=.55;x.drawImage(topL,X,Y);x.filter='blur(30px)';x.globalAlpha=.45;x.drawImage(edge,X,Y);x.filter='none';}
-  var thin=gl,wide=deep,ghost=smear;
-  // the floor: a reflection that fades, and the light skidding along it
-  var rf=mk(lw+400,lh),rg=rf.getContext('2d');rg.translate(0,lh);rg.scale(1,-1);rg.globalAlpha=.6;rg.drawImage(gl,400,0);
-  for(var j=1;j<=100;j++){rg.globalAlpha=.0025*Math.pow(1-j/100,1.8);rg.drawImage(smear,400-j*2,0);}
-  rg.setTransform(1,0,0,1,0,0);rg.globalAlpha=1;rg.globalCompositeOperation='destination-in';var fg=rg.createLinearGradient(0,0,0,lh);fg.addColorStop(0,'rgba(0,0,0,.75)');fg.addColorStop(.75,'rgba(0,0,0,0)');rg.fillStyle=fg;rg.fillRect(0,0,lw+400,lh);
-  if(F)x.filter='blur(5px)';x.globalAlpha=.5;x.drawImage(rf,X-400,Y+lh+14);x.filter='none';
-  var fl=x.createLinearGradient(X-430,0,X+lw,0);fl.addColorStop(0,'rgba(190,225,255,0)');fl.addColorStop(.35,'rgba(200,230,255,.55)');fl.addColorStop(.7,'rgba(200,230,255,.25)');fl.addColorStop(1,'rgba(190,225,255,0)');
-  x.globalAlpha=1;x.fillStyle=fl;x.fillRect(X-430,Y+lh+6,lw+430,2);if('filter' in x){x.filter='blur(6px)';x.fillRect(X-430,Y+lh+4,lw+430,6);x.filter='none';}
-  // glints where an upper edge catches the light
-  function glint(gx,gy,s){var g1=x.createRadialGradient(gx,gy,0,gx,gy,s);g1.addColorStop(0,'rgba(255,255,255,1)');g1.addColorStop(.25,'rgba(200,230,255,.5)');g1.addColorStop(1,'rgba(200,230,255,0)');x.fillStyle=g1;x.fillRect(gx-s,gy-s,2*s,2*s);
-    [[1,0],[0,1],[.7,.7],[.7,-.7]].forEach(function(d,n){var L=s*(n<2?3.2:1.5),g2=x.createLinearGradient(gx-d[0]*L,gy-d[1]*L,gx+d[0]*L,gy+d[1]*L);g2.addColorStop(0,'rgba(255,255,255,0)');g2.addColorStop(.5,'rgba(255,255,255,.9)');g2.addColorStop(1,'rgba(255,255,255,0)');
-      x.strokeStyle=g2;x.lineWidth=n<2?2:1.2;x.beginPath();x.moveTo(gx-d[0]*L,gy-d[1]*L);x.lineTo(gx+d[0]*L,gy+d[1]*L);x.stroke();});}
-  var pts=[[.305,0],[.69,0]];
-  try{var pc=mk(lw,lh),pg=pc.getContext('2d');pg.drawImage(im,0,0);pts=pts.map(function(q){var px=Math.round(q[0]*lw),d=pg.getImageData(px,0,1,lh).data;for(var yy=0;yy<lh;yy++)if(d[yy*4+3]>128)return [q[0],yy/lh];return q;});}catch(e){}
-  glint(X+pts[0][0]*lw,Y+pts[0][1]*lh+3,26);glint(X+pts[1][0]*lw,Y+pts[1][1]*lh+3,18);
-  cv.parentNode.classList.add('in');
-}catch(e){cv.parentNode.classList.add('in');}};
-im.src='../../essay/logo-hi.png';})();
-</script>
+ <div id="veil" aria-hidden="true"><div class="lg"></div></div>
  <canvas id="gl" tabindex="0" role="img" aria-label="A whole body of water fills the screen, its surface made of the GO archive photographs carried by the water, never vanishing. The photographs gather along the real ridge lines of the waves and join into one connected body of water-shaped forms with curved, flowing borders, with whitecaps in slow motion. Move the mouse to ease through many images; drag to stir; wheel zooms."></canvas>
  <div class="tag">Under v28</div>
  <div id="ver"><a href="../">v21</a><a href="../v23/">v23</a><a href="../v24/">v24</a><a href="../v25/">v25</a><a href="../v26/">v26</a><a href="../v27/">v27</a><b>v28</b></div>
