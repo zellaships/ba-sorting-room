@@ -480,11 +480,11 @@ vec4 water(vec3 ro,vec3 rd){
   vec3 tint=mix(deep,shal,clamp(h*1.6+.5,0.,1.));
   // dissipate instead of ruling lines: as cells shrink toward pixel size the
   // photos melt into one sea tone, keeping only a faint organic modulation
-  float melt=smoothstep(.22,.55,fwidth(bnd)+fwidth(slc0)*.5);
-  img=mix(img,vec3(.52,.58,.57),melt*.65);
+  float melt=smoothstep(.10,.38,fwidth(bnd)+fwidth(slc0)*.5);
+  img=mix(img,vec3(.52,.58,.57),melt*.96);
   // the photographs belong to the near water: toward the horizon they give way to open sea, and until they
   // have arrived the surface is one water tone (no cell grid, no border lines)
-  img=mix(img,vec3(.50,.565,.56),max(1.-u_imgs,smoothstep(6.,19.,tw)*.92));
+  img=mix(img,vec3(.50,.565,.56),max(max(1.-u_imgs,smoothstep(5.,16.,tw)*.95),(1.-smoothstep(.06,.32,-rd.y))*.92));
   {float nc=1.-smoothstep(1.2,3.4,length(g.xz));img=mix(img,mix(vec3(dot(img,vec3(.333))),img,.5)*.97,nc*.55);}
   vec3 body=img*(tint*.8+.82)*(1.+pool*.15);
   body=mix(body,img*1.04,pool*.45);
@@ -557,12 +557,13 @@ vec3 underCol(vec3 ro,vec3 rd){
   // v28: no floor. looking down is depth and dark; light lives near the surface and thins as it falls
   vec3 col=mix(vec3(.10,.27,.31),vec3(.004,.020,.038),clamp(.50-rd.y*1.15,0.,1.));
   // light shafts falling from the surface
-  float sh=vnoise(vec2(ang*2.3+u_wt*.06,rd.y*3.5-u_wt*.10));
-  float sh2=vnoise(vec2(ang*6.1-u_wt*.045,rd.y*8.+u_wt*.07));
+  vec2 dr=normalize(rd.xz+vec2(1e-5,0.));
+  float sh=vnoise(dr*2.3+vec2(u_wt*.06+rd.y*3.5,-u_wt*.10-rd.y*2.1));
+  float sh2=vnoise(dr*6.1+vec2(-u_wt*.045+rd.y*8.,u_wt*.07+rd.y*5.));
   float beam=pow(max(dot(rd,ld),0.),3.5);
   col+=vec3(.55,.82,.76)*beam*(.30+.70*(sh*.6+sh2*.4));
   // v28: curtains of light hanging from the surface, fading with depth
-  float cur=pow(vnoise(vec2(ang*7.+u_wt*.02,3.1)),2.5)*.6+pow(vnoise(vec2(ang*17.-u_wt*.03,9.7)),3.)*.4;
+  float cur=pow(vnoise(dr*7.+vec2(u_wt*.02,3.1)),2.5)*.6+pow(vnoise(dr*17.+vec2(-u_wt*.03,9.7)),3.)*.4;
   col+=vec3(.28,.52,.50)*cur*smoothstep(-.60,.35,rd.y)*.33;
   // slow particulate drift
   // marine snow: fine flecks at three depths, sinking slowly. Near ones are soft out-of-focus discs, far ones
@@ -604,7 +605,7 @@ vec3 underCol(vec3 ro,vec3 rd){
     if(wbx>.001)img=mix(img,flowCell(rh+wob2+(bf2b<.5?-.147:.147),ridge,vv,vec3(0.,1.,0.),pool),wbx);
     img=mix(vec3(dot(img,vec3(.333))),img,1.18);
     // from below the surface is a sheet of sky light; the photographs only tint it
-    img=mix(mix(vec3(.50,.78,.80),vec3(.74,.95,.93),clamp((rh+wob2)*2.4+.5,0.,1.)),img,.38*u_imgs);
+    img=mix(mix(vec3(.50,.78,.80),vec3(.74,.95,.93),clamp((rh+wob2)*2.4+.5,0.,1.)),img,.14*u_imgs);
     float win=pow(clamp(rd.y,0.,1.),1.4);
     float haze=exp(-t0*.07);
     vec3 scol=img*(.60+1.35*win)*vec3(.85,1.0,.95);
@@ -622,7 +623,7 @@ vec3 underCol(vec3 ro,vec3 rd){
       scol+=vec3(.80,1.,.95)*net*.16*snell*exp(-t0*.10);}
     // glints where the wave faces catch the sun from below
     scol+=vec3(.9,1.,.95)*pow(max(1.-length(slope)*1.6,0.),6.)*snell*.10;
-    col=mix(col,scol,clamp(haze,0.,1.)*.94*smoothstep(.015,.06,rd.y));
+    col=mix(col,scol,clamp(haze,0.,1.)*.94*smoothstep(0.,.30,rd.y));
   }
   // the archive as a volume: photo layers at stacked depths, each drifting on
   // its own current, nearest sharpest, far ones dissolving into haze
@@ -650,7 +651,8 @@ vec3 underCol(vec3 ro,vec3 rd){
     float haze=exp(-t*.11);
     float fade=exp(-fk*.45);
     vec3 lcol=img*mix(vec3(.50,.78,.80),vec3(.10,.30,.42),deep)*(fade+.25)*(.40+.70*beam)*(1.-.70*deep);
-    col=mix(col,lcol,clamp(haze,0.,1.)*.36*(1.-.55*deep)*smoothstep(.02,.10,abs(rd.y)));
+    lcol=mix(vec3(dot(lcol,vec3(.333))),lcol,.65);
+    col=mix(col,lcol,clamp(haze,0.,1.)*.20*(1.-.55*deep)*smoothstep(.14,.55,abs(rd.y))*smoothstep(.5,3.2,t));
   }
   // water-column shimmer: keeps every frame alive even before the archive lands
   col*=.88+.12*vnoise(vec2(u_wt*.9+rd.x*3.,rd.y*5.-u_wt*.7));
