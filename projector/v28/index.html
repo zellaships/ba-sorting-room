@@ -305,7 +305,10 @@ vec2 simAt(vec2 xz){
   if(u_simOK>.5)return texture(u_sim,xz/6.4+vec2(.5)).xy;
   return vec2(0.);
 }
-float wbase(vec2 p,float t){
+const float WS=1.9,WT=.72;
+float wbase0(vec2 p,float t);
+float wbase(vec2 p,float t){return wbase0(p*WS,t*WT)/WS;}
+float wbase0(vec2 p,float t){
   p+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*.9;
   float h=0.;
   h+=wv(p,vec2(.38,.20),.55,.26,t,0.);
@@ -328,7 +331,7 @@ float wbase(vec2 p,float t){
 // rain: sparse juicy drops - each impact flashes a small splash and pushes an
 // expanding ring through the same field the photos ride (Cyrus's rain steer)
 vec2 rainFX(vec2 p,float t,vec2 vv){
-  float h=0.,sp=0.;
+  float h=0.,sp=0.;p*=WS;
   vec2 gp=p*2.2;
   vec2 g=floor(gp),f=fract(gp);
   for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
@@ -386,8 +389,8 @@ vec3 skyCol(vec3 rd){
   float sun=pow(max(dot(rd,normalize(vec3(.35,.45,.45))),0.),18.);
   return c+vec3(.95,.93,.85)*sun*.30;
 }
-float hMarch(vec2 p){p+=simAt(p)*.9;p+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*.9;
-  return (wv(p,vec2(.38,.20),.55,.26,u_wt,0.)+wv(p,vec2(.55,.28),.9,.20,u_wt,1.3)+wv(p,vec2(.45,.26),2.2,.12,u_wt,2.9))*u_disp*mix(1.,.32,basinAt(p));}
+float hMarch(vec2 p){vec2 p0=p;p+=simAt(p)*.9;p*=WS;p+=(vec2(vnoise(p*.13+vec2(1.3,4.7)),vnoise(p*.13+vec2(7.9,2.1)))-.5)*.9;float tm=u_wt*WT;
+  return (wv(p,vec2(.38,.20),.55,.26,tm,0.)+wv(p,vec2(.55,.28),.9,.20,tm,1.3)+wv(p,vec2(.45,.26),2.2,.12,tm,2.9))/WS*u_disp*mix(1.,.32,basinAt(p0));}
 vec4 water(vec3 ro,vec3 rd){
   float tw=(u_wy-ro.y)/rd.y;
   if(tw<=0.&&u_disp<.001)return vec4(skyCol(rd),1e6);
@@ -414,8 +417,8 @@ vec4 water(vec3 ro,vec3 rd){
   vec3 n=normalize(vec3(-hx/e*.8,1.,-hz/e*.8));
   // up close the water becomes a clear skin with fine fast ripples; the photos lie just beneath it
   float nearF=1.-smoothstep(1.6,6.,tw);
-  vec2 fr=vec2(vnoise(g.xz*17.+vec2(u_wt*1.3,-u_wt*.9))-.5,vnoise(g.xz*17.+vec2(5.2-u_wt*1.1,u_wt*1.2))-.5)
-     +.5*vec2(vnoise(g.xz*41.+u_wt*2.)-.5,vnoise(g.xz*41.+vec2(9.,9.)-u_wt*2.2)-.5);
+  vec2 fr=vec2(vnoise(g.xz*30.+vec2(u_wt*1.0,-u_wt*.7))-.5,vnoise(g.xz*30.+vec2(5.2-u_wt*.85,u_wt*.9))-.5)
+     +.5*vec2(vnoise(g.xz*72.+u_wt*1.5)-.5,vnoise(g.xz*72.+vec2(9.,9.)-u_wt*1.7)-.5);
   vec3 nS=normalize(n+vec3(fr.x,0.,fr.y)*.45*nearF);
   g_wn=nS;
   float fd=field(vec3(g.x,u_wy,g.z));
@@ -484,7 +487,7 @@ vec4 water(vec3 ro,vec3 rd){
   img=mix(img,vec3(.52,.58,.57),melt*.96);
   // the photographs belong to the near water: toward the horizon they give way to open sea, and until they
   // have arrived the surface is one water tone (no cell grid, no border lines)
-  img=mix(img,vec3(.50,.565,.56),max(max(1.-u_imgs,smoothstep(5.,16.,tw)*.95),(1.-smoothstep(.06,.32,-rd.y))*.92));
+  img=mix(img,vec3(.50,.565,.56),max(max(1.-u_imgs,smoothstep(5.,16.,tw)*.95),(1.-smoothstep(.08,.42,-rd.y))*.95));
   {float nc=1.-smoothstep(1.2,3.4,length(g.xz));img=mix(img,mix(vec3(dot(img,vec3(.333))),img,.5)*.97,nc*.55);}
   vec3 body=img*(tint*.8+.82)*(1.+pool*.15);
   body=mix(body,img*1.04,pool*.45);
@@ -803,7 +806,10 @@ void scene(vec2 fc,vec2 s,vec3 ro,bool under){
         col=mix(col,cShade(q,rr,id2,1.)*ab+vec3(.03,.08,.09)*(1.-ab),clamp((1.-fres)*clear,0.,1.));}
       // what stands above, mirrored in the surface
       vec3 rf=reflect(rd,normalize(mix(vec3(0.,1.,0.),n,.24)));float id3;float t3=cTrace(g+n*.003,rf,6.,id3);
-      if(t3>0.)col=mix(col,cShade(g+rf*t3,rf,id3,0.),clamp(fres*1.5+.14,0.,.62));
+      // a reflection on moving water is soft: rays that only just miss still carry some of it, so the mirror image
+      // feathers out instead of breaking into dashes
+      {float rc=t3>0.?1.:1.-smoothstep(0.,.05,g_cmin),rt=t3>0.?t3:g_ct,rid=t3>0.?id3:g_cid;
+        if(rc>.01)col=mix(col,cShade(g+rf*rt,rf,rid,0.),clamp(fres*1.5+.14,0.,.62)*rc*rc);}
       // where the clay breaks the surface: a bright meniscus and a darker ring of wet water around it
       float dm=cMap(toLoc(g)).x;
       col*=1.-.14*smoothstep(.06,.005,dm);
@@ -932,16 +938,18 @@ vec3 wetH(vec2 s,float t,float K){
     float v=mix(.10,.32,hash(vec2(cl,34.)))*(.6+.8*K);
     float yd=y0-v*(tg+.24*sin(tg*2.3+r0*20.)-.24*sin(r0*20.));
     float run=max(y0-yd,0.);
-    float x=fx-(hash(vec2(cl,36.))-.5)*.4-(vnoise(vec2(cl*7.,s.y*5.))-.5)*.30;
+    float x=fx-(hash(vec2(cl,36.))-.5)*.4-(vnoise(vec2(cl*7.,s.y*6.))-.5)*.44-(vnoise(vec2(cl*3.,s.y*19.))-.5)*.10;
     // the drop spends itself on its trail: it is smaller the farther it has run, and gone when it has nothing left
     float rr=mix(.075,.125,hash(vec2(cl,37.)))*smoothstep(0.,.10,tt)*mix(1.,.30,smoothstep(0.,.75,run));
     vec2 pp=vec2(x,(s.y-yd)*sc);pp.y*=pp.y>0.?.62:1.15;
     float head=sqrt(max(1.-dot(pp,pp)/(rr*rr),0.));
     float ab=s.y-yd,top=y0-s.y;
-    float wid=rr*.42*(.30+.70*exp(-ab*5.))*smoothstep(0.,min(.10,run+1e-3),top);
+    // the trail is short: a wet tail just behind the drop that thins, breaks into a few beads and dries.
+    // it never narrows to a hairline (nothing thinner than about two pixels is drawn)
+    float wid=max(rr*.42*(.35+.65*exp(-ab*7.)),2.2*sc/u_res.y)*smoothstep(0.,min(.10,run+1e-3),top);
     float line=(1.-smoothstep(wid*.35,wid,abs(x)))*step(0.,ab)*step(0.,top);
-    float beadsP=smoothstep(.52,.70,vnoise(vec2(cl*3.,s.y*24.)));
-    float tr=line*mix(beadsP,1.,exp(-ab*9.))*exp(-ab*3.2/(.3+K))*smoothstep(0.,.02,top);
+    float beadsP=smoothstep(.60,.76,vnoise(vec2(cl*3.,s.y*30.)));
+    float tr=line*mix(beadsP,1.,exp(-ab*18.))*exp(-ab*9./(.3+K))*smoothstep(0.,.02,top);
     H+=head*.9+tr*.42;
   }
   float yf=wetYf(s.x,t,K,sd,sh.x);
@@ -952,7 +960,7 @@ vec3 wetH(vec2 s,float t,float K){
   float lip=life*(1.-smoothstep(0.,.009,abs(s.y-yf+.005)))*(.35+.65*vnoise(vec2(s.x*28.+sd,t*2.5)));
   return vec3(H,F,lip)*env;
 }
-float rip(vec2 v,float tt){return vnoise(v*7.+vec2(tt*.9,tt*.5))+.45*vnoise(v*19.-vec2(tt*1.3,tt*.7))+.2*vnoise(v*47.+tt);}
+float rip(vec2 v,float tt){return vnoise(v*13.+vec2(tt*.7,tt*.4))+.45*vnoise(v*34.-vec2(tt*1.,tt*.55))+.2*vnoise(v*80.+tt*.8);}
 void main(){
   vec2 fc=u_pickOn>.5?u_pickXY:gl_FragCoord.xy;
   vec2 s=(fc-.5*u_res)/u_res.y;
@@ -1316,7 +1324,7 @@ function setMode(m){mode=m;$('src').value=m;$('folderWrap').style.display=(m==='
   prefill();}
 function grab(){
   const o=nextLib();curObj=o;if(o){cx.drawImage(o.c,0,0);curName=o.name;if(!hoverOn)setLens(o.c,o.name);return;}
-  cx.fillStyle='#555';cx.fillRect(0,0,TILE,TILE);}
+  cx.fillStyle='#7f908e';cx.fillRect(0,0,TILE,TILE);}
 let count=0,frozen=false;
 function pushFrame(){
   grab();
@@ -1384,7 +1392,7 @@ function stir(x,y,fx,fy,r){
   splats.push({p:[(x/2.4)+.5,(y/2.4)+.5],f:[fx,fy],r:r||.006});}
 
 // ---------- camera ----------
-const DEF={yaw:.55,pitch:-.34,dist:(innerWidth<innerHeight?4.5:2.8)};let cam={...DEF},camT={...DEF};
+const DEF={yaw:.55,pitch:-.27,dist:(innerWidth<innerHeight?4.7:3.0)};let cam={...DEF},camT={...DEF};
 try{const h=location.hash.match(/cam=([-\d.]+),([-\d.]+),([-\d.]+)/);if(h){cam={yaw:+h[1],pitch:+h[2],dist:+h[3]};camT={...cam};}}catch(e){}
 // the essay's drawer pulls the camera down under the surface and on into the deep
 const WETQ=+(new URLSearchParams(location.search).get('wet')||0);let wetSeed=0,imgsK=0,dive=0,diveT=0,wetT=99,wetK=0,wetPrevH=1,wetPrevD=0,wetPeak=0,veilT0=0,veilGone=false;
