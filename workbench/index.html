@@ -515,50 +515,81 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   const undoStack = [], redoStack = [];
 
   // ---------- load ----------
-  async function load() {
-    if (!token) { $("#gate").style.display = "flex"; return; }
-    const t0 = performance.now();
-    // 1. what this device saw last time, drawn immediately
-    const snap = S.get("wb.snap", null);
-    if (snap && snap.repo === repo && snap.board && snap.lib) {
+  // The library and the board are kept on this device with the version GitHub gave them. Each visit asks GitHub
+  // "has this changed since version X?"; when it has not, GitHub answers with no body at all, so an unchanged board
+  // costs a few hundred bytes on even the slowest connection. Downloads show their progress, give up after a
+  // stall and try once more.
+  const DOC = path => ckey(path) + "#doc";
+  async function docCached(path) {
+    const c = await cacheOpen(); if (!c) return null;
+    try { const h = await c.match(DOC(path)); if (!h) return null; return { text: await h.text(), sha: h.headers.get("x-sha") || "" }; } catch (e) { return null; }
+  }
+  async function docFresh(path, have, label) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const ctl = new AbortController(); let stall = setTimeout(() => ctl.abort(), 45000);
       try {
-        LIB = snap.lib; LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i); STYLE = snap.style || {};
-        B = Object.assign(B, snap.board); boardSha = snap.sha; lastSaved = B.updated_at || "";
-        $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board · checking for changes…`;
-        draw(); applyView(); openView({ kind: "library" });
-      } catch (e) {}
-    }
-    // 2. the live versions, fetched side by side
-    try {
-      const [ix, st, br] = await Promise.all([
-        raw("v4/library/index.json"),
-        raw("v4/design/card-styles.json").catch(() => null),
-        api(`/contents/${BOARD_PATH}?ref=main`, { cache: "no-store" })
-      ]);
-      const lib = ix ? (JSON.parse(ix).items || []) : [];
-      let style = {}; try { style = JSON.parse(st || "{}"); } catch { style = {}; }
-      let fresh = null, sha = null;
-      if (br.status !== 404) { const j = await br.json(); sha = j.sha; fresh = JSON.parse(unb64(j.content)); }
-      IXLEN = ix ? ix.length : 0;
-      const same = snap && sha && snap.sha === sha && snap.ixLen === IXLEN;
-      LIB = lib; LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i); STYLE = style;
-      if (!same && !dirty) { if (fresh) B = Object.assign({ version: 1, cards: [], links: [], threads: [], updated_at: "" }, fresh); boardSha = sha; }
-      else if (dirty) boardSha = sha && snap && snap.sha === sha ? sha : boardSha;     // edits made meanwhile merge on save
-      const local = S.get("wb.draft", null);
-      if (local && local.updated_at > (B.updated_at || "") && local.base === sha) { B = local.board; dirty = true; toast("Restored your unsaved changes"); }
-      lastSaved = B.updated_at || lastSaved;
-      if (!same || !snap) { draw(); if (!snap) applyView(); }
-      if (!snap) openView({ kind: "library" });
-      $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board`;
-      saveSnap();
-      console.info(`[workbench] ready in ${Math.round(performance.now() - t0)} ms${same ? " (from this device, nothing changed)" : ""}`);
-    } catch (e) {
-      $("#stat").textContent = snap ? `Offline copy · could not reach GitHub (${e.message})` : `Could not load (${e.message})`;
-      if (!snap) { const s = $("#stat"); s.insertAdjacentHTML("beforeend", ` <button id="retryLoad" class="btnlike" style="margin-left:8px">Try again</button>`); $("#retryLoad").onclick = () => location.reload(); }
+        const h = { Accept: "application/vnd.github.raw+json" }; if (have && have.sha) h["If-None-Match"] = `"${have.sha}"`;
+        const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURI(path)}?ref=main`, { cache: "no-store", signal: ctl.signal,
+          headers: { Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", ...h } });
+        if (r.status === 304 && have) { clearTimeout(stall); return { ...have, same: true }; }
+        if (r.status === 404) { clearTimeout(stall); return null; }
+        if (!r.ok) throw new Error(String(r.status));
+        const sha = (r.headers.get("ETag") || "").replace(/^W\//, "").replace(/"/g, ""), total = +r.headers.get("Content-Length") || 0;
+        let text;
+        if (r.body && r.body.getReader) {
+          const rd = r.body.getReader(), parts = []; let got = 0;
+          for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length;
+            clearTimeout(stall); stall = setTimeout(() => ctl.abort(), 30000);
+            if (label && total) progress(label, got, total); }
+          text = new TextDecoder().decode(parts.length === 1 ? parts[0] : await new Blob(parts).arrayBuffer());
+        } else text = await r.text();
+        clearTimeout(stall);
+        const c = await cacheOpen(); if (c) { try { await c.put(DOC(path), new Response(text, { headers: { "x-sha": sha } })); } catch (e) {} }
+        return { text, sha, same: false };
+      } catch (e) { clearTimeout(stall); if (attempt === 1) throw new Error(e.name === "AbortError" ? "the connection stalled" : e.message); }
     }
   }
-  let IXLEN = 0;
-  function saveSnap() { try { S.set("wb.snap", { repo, sha: boardSha, ixLen: IXLEN, board: B, lib: LIB, style: STYLE }); } catch (e) {} }
+  const PROG = {};
+  function progress(label, got, total) { PROG[label] = [got, total];
+    const all = Object.values(PROG), g = all.reduce((s, x) => s + x[0], 0), tt = all.reduce((s, x) => s + x[1], 0);
+    $("#stat").textContent = `Loading… ${Math.round(g / 1024)} of ${Math.round(tt / 1024)} KB`; }
+  function useLib(text) { LIB = text ? (JSON.parse(text).items || []) : []; LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i); }
+  async function load() {
+    if (!token) { $("#gate").style.display = "flex"; return; }
+    const t0 = performance.now(); let shown = false;
+    // 1. what this device saw last time, drawn immediately
+    const [ixC, brC, stC] = await Promise.all([docCached("v4/library/index.json"), docCached(BOARD_PATH), docCached("v4/design/card-styles.json")]);
+    if (ixC && brC) {
+      try {
+        useLib(ixC.text); try { STYLE = JSON.parse((stC && stC.text) || "{}"); } catch { STYLE = {}; }
+        B = Object.assign(B, JSON.parse(brC.text)); boardSha = brC.sha; lastSaved = B.updated_at || "";
+        $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board · checking for changes…`;
+        draw(); applyView(); openView({ kind: "library" }); shown = true;
+      } catch (e) { shown = false; }
+    }
+    // 2. ask GitHub what changed, all three at once
+    try {
+      const [ix, br, st] = await Promise.all([docFresh("v4/library/index.json", ixC, "lib"), docFresh(BOARD_PATH, brC, "board"), docFresh("v4/design/card-styles.json", stC).catch(() => stC)]);
+      const changed = !shown || !ix || !ix.same || !br || !br.same || (st && !st.same);
+      if (ix && !ix.same) useLib(ix.text); else if (!shown && ix) useLib(ix.text);
+      if (st) { try { STYLE = JSON.parse(st.text || "{}"); } catch { STYLE = {}; } }
+      if (br && (!br.same || !shown)) {
+        if (!dirty) { B = Object.assign({ version: 1, cards: [], links: [], threads: [], updated_at: "" }, JSON.parse(br.text)); boardSha = br.sha; }
+      } else if (br) boardSha = boardSha || br.sha;
+      const local = S.get("wb.draft", null);
+      if (local && local.updated_at > (B.updated_at || "") && br && local.base === br.sha) { B = local.board; dirty = true; toast("Restored your unsaved changes"); }
+      lastSaved = B.updated_at || lastSaved;
+      if (changed) { draw(); if (!shown) { applyView(); openView({ kind: "library" }); } }
+      $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board`;
+      console.info(`[workbench] ready in ${Math.round(performance.now() - t0)} ms${changed ? "" : " (nothing changed, shown from this device)"}`);
+    } catch (e) {
+      const s = $("#stat");
+      s.textContent = shown ? `Showing the copy on this device · could not reach GitHub (${e.message}) ` : `Could not load (${e.message}) `;
+      s.insertAdjacentHTML("beforeend", `<button id="retryLoad" class="btnlike" style="margin-left:6px">Try again</button>`); $("#retryLoad").onclick = () => location.reload();
+    }
+  }
+  function saveSnap() {}
+  async function keepDoc() { if (!boardSha) return; const c = await cacheOpen(); if (c) { try { await c.put(DOC(BOARD_PATH), new Response(JSON.stringify(B), { headers: { "x-sha": boardSha } })); } catch (e) {} } }
   async function rec(id) {
     if (REC[id]) return REC[id];
     const it = LIBBY[id]; if (!it) return null;
@@ -803,7 +834,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
         rec(c.ref).then(x => { const e2 = ELS.get(c.id); if (x && e2) { e2.dataset.sig = ""; drawSoon(); } });
     }
   }
-  let snapT = 0; const snapSoon = () => { clearTimeout(snapT); snapT = setTimeout(saveSnap, 1500); };
+  const snapSoon = () => {};
   const cardH = c => { if (c.kind === "ftext" || c.kind === "marker") { const el = ELS.get(c.id); return el && el.offsetHeight ? el.offsetHeight : (c.kind === "marker" ? 60 : 40); } return c.h; };
   const center = c => { const h = cardH(c); return { x: c.x + c.w / 2, y: c.y + h / 2, w: c.w, h }; };
   function paintSel() { world.querySelectorAll(".card").forEach(el => el.classList.toggle("sel", selIds.has(el.dataset.id))); }
@@ -1695,7 +1726,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
         const body = { message: message || `Board: ${B.cards.length} cards, ${B.links.length} connections`, content: b64(JSON.stringify(B, null, 1) + "\n"), branch: "main" };
         if (boardSha) body.sha = boardSha;
         const r = await api(`/contents/${BOARD_PATH}`, { method: "PUT", body: JSON.stringify(body) });
-        if (r.ok) { boardSha = (await r.json()).content.sha; dirty = false; S.set("wb.draft", null); lastSaved = B.updated_at;
+        if (r.ok) { boardSha = (await r.json()).content.sha; dirty = false; S.set("wb.draft", null); lastSaved = B.updated_at; keepDoc();
           $("#saveBtn").textContent = "Saved"; $("#saveBtn").classList.remove("primary");
           $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board · saved ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`; return true; }
         if (r.status === 409 || r.status === 422) {
