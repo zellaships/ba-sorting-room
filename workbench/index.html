@@ -55,6 +55,7 @@ body.carrying,body.carrying *{cursor:grabbing!important}
 #board.panning{cursor:grabbing}
 #board.linking{cursor:crosshair}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
+#world>.card:not(.ftext):not(.marker):not(.sel):not(.editing){content-visibility:auto}
 #links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 #links path{fill:none;stroke:#8a8486;stroke-width:1.6;vector-effect:non-scaling-stroke}
 #rope path{vector-effect:non-scaling-stroke}
@@ -458,6 +459,28 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     if (!r.ok && r.status !== 404) throw new Error(`${r.status}`);
     return r;
   }
+  // at most six requests in flight; everything else waits its turn instead of choking the connection
+  let inFlight = 0; const waitQ = [];
+  const slot = () => inFlight < 6 ? (inFlight++, Promise.resolve()) : new Promise(r => waitQ.push(r));
+  const free = () => { const n = waitQ.shift(); if (n) n(); else inFlight--; };
+  // records and previews are kept on this device after the first visit, so the second visit is instant
+  const CACHE = "ba-wb-1"; let cacheP = null;
+  const cacheOpen = () => cacheP || (cacheP = (window.caches ? caches.open(CACHE) : Promise.reject()).catch(() => null));
+  const ckey = path => `https://ba-cache.local/${repo}/${path}`;
+  async function cached(path, kind) {
+    const c = await cacheOpen(); const k = ckey(path);
+    if (c) { try { const hit = await c.match(k);
+      if (hit) { const miss = +hit.headers.get("x-miss") || 0;                  // files that are not there are remembered for a day
+        if (!miss) return kind === "blob" ? hit.blob() : hit.text(); if (Date.now() - miss < 864e5) return null; } } catch (e) {} }
+    await slot();
+    try {
+      const r = await api(`/contents/${encodeURI(path)}?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } });
+      if (!r.ok) { if (r.status === 404 && c) { try { await c.put(k, new Response("", { headers: { "x-miss": String(Date.now()) } })); } catch (e) {} } return null; }
+      const body = kind === "blob" ? await r.blob() : await r.text();
+      if (c) { try { await c.put(k, new Response(body)); } catch (e) {} }
+      return body;
+    } finally { free(); }
+  }
   async function raw(path, ref = "main") {
     const r = await api(`/contents/${encodeURI(path)}?ref=${ref}`, { headers: { Accept: "application/vnd.github.raw+json" } });
     return r.status === 404 ? null : r.text();
@@ -467,11 +490,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     if (!path) return "";
     if (/^https?:/.test(path)) return path;
     if (PV[path]) return PV[path];
-    PV[path] = (async () => {
-      const r = await api(`/contents/${encodeURI(path)}?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } });
-      if (!r.ok) return "";
-      return URL.createObjectURL(await r.blob());
-    })();
+    PV[path] = (async () => { const b = await cached(path, "blob"); return b ? URL.createObjectURL(b) : ""; })();
     return PV[path];
   }
   function hydrate(root) {
@@ -486,7 +505,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
 
   // ---------- state ----------
   let LIB = [], LIBBY = {}, STYLE = {};                 // library index (v4/library/index.json)
-  const REC = {};                           // id -> full record (loaded on demand)
+  const REC = {}, RECP = {};                // id -> full record (loaded on demand)
   let B = { version: 1, cards: [], links: [], threads: [], updated_at: "" };
   let boardSha = null, dirty = false, lastSaved = "";
   let view = S.get("wb.view", { x: 120, y: 80, z: 0.8 });
@@ -498,25 +517,53 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   // ---------- load ----------
   async function load() {
     if (!token) { $("#gate").style.display = "flex"; return; }
+    const t0 = performance.now();
+    // 1. what this device saw last time, drawn immediately
+    const snap = S.get("wb.snap", null);
+    if (snap && snap.repo === repo && snap.board && snap.lib) {
+      try {
+        LIB = snap.lib; LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i); STYLE = snap.style || {};
+        B = Object.assign(B, snap.board); boardSha = snap.sha; lastSaved = B.updated_at || "";
+        $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board · checking for changes…`;
+        draw(); applyView(); openView({ kind: "library" });
+      } catch (e) {}
+    }
+    // 2. the live versions, fetched side by side
     try {
-      const ix = await raw("v4/library/index.json");
-      LIB = ix ? (JSON.parse(ix).items || []) : [];
-      LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i);
-      try { STYLE = JSON.parse(await raw("v4/design/card-styles.json") || "{}"); } catch { STYLE = {}; }
-      const br = await api(`/contents/${BOARD_PATH}?ref=main`);
-      if (br.status !== 404) { const j = await br.json(); boardSha = j.sha; B = Object.assign(B, JSON.parse(unb64(j.content))); }
+      const [ix, st, br] = await Promise.all([
+        raw("v4/library/index.json"),
+        raw("v4/design/card-styles.json").catch(() => null),
+        api(`/contents/${BOARD_PATH}?ref=main`, { cache: "no-store" })
+      ]);
+      const lib = ix ? (JSON.parse(ix).items || []) : [];
+      let style = {}; try { style = JSON.parse(st || "{}"); } catch { style = {}; }
+      let fresh = null, sha = null;
+      if (br.status !== 404) { const j = await br.json(); sha = j.sha; fresh = JSON.parse(unb64(j.content)); }
+      IXLEN = ix ? ix.length : 0;
+      const same = snap && sha && snap.sha === sha && snap.ixLen === IXLEN;
+      LIB = lib; LIBBY = {}; LIB.forEach(i => LIBBY[i.id] = i); STYLE = style;
+      if (!same && !dirty) { if (fresh) B = Object.assign({ version: 1, cards: [], links: [], threads: [], updated_at: "" }, fresh); boardSha = sha; }
+      else if (dirty) boardSha = sha && snap && snap.sha === sha ? sha : boardSha;     // edits made meanwhile merge on save
       const local = S.get("wb.draft", null);
-      if (local && local.updated_at > (B.updated_at || "") && local.base === boardSha) { B = local.board; dirty = true; toast("Restored your unsaved changes"); }
-      lastSaved = B.updated_at || "";
+      if (local && local.updated_at > (B.updated_at || "") && local.base === sha) { B = local.board; dirty = true; toast("Restored your unsaved changes"); }
+      lastSaved = B.updated_at || lastSaved;
+      if (!same || !snap) { draw(); if (!snap) applyView(); }
+      if (!snap) openView({ kind: "library" });
       $("#stat").textContent = `${LIB.length} in the library · ${B.cards.length} on the board`;
-      draw(); applyView();
-      openView({ kind: "library" });
-    } catch (e) { $("#stat").textContent = `Could not load (${e.message})`; }
+      saveSnap();
+      console.info(`[workbench] ready in ${Math.round(performance.now() - t0)} ms${same ? " (from this device, nothing changed)" : ""}`);
+    } catch (e) {
+      $("#stat").textContent = snap ? `Offline copy · could not reach GitHub (${e.message})` : `Could not load (${e.message})`;
+      if (!snap) { const s = $("#stat"); s.insertAdjacentHTML("beforeend", ` <button id="retryLoad" class="btnlike" style="margin-left:8px">Try again</button>`); $("#retryLoad").onclick = () => location.reload(); }
+    }
   }
+  let IXLEN = 0;
+  function saveSnap() { try { S.set("wb.snap", { repo, sha: boardSha, ixLen: IXLEN, board: B, lib: LIB, style: STYLE }); } catch (e) {} }
   async function rec(id) {
     if (REC[id]) return REC[id];
     const it = LIBBY[id]; if (!it) return null;
-    const t = await raw(it.path); REC[id] = t ? JSON.parse(t) : null; return REC[id];
+    if (!RECP[id]) RECP[id] = cached(it.path, "text").then(t => { try { REC[id] = t ? JSON.parse(t) : null; } catch (e) { REC[id] = null; } return REC[id]; });
+    return RECP[id];
   }
 
   // ---------- undo ----------
@@ -543,7 +590,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     S.set("wb.view", view);
     const z = view.z; world.style.setProperty("--iz", (1 / z).toFixed(4)); world.style.setProperty("--hz", Math.min(1.8, Math.max(.6, 1 / z)).toFixed(4));
     const m = document.getElementById("arr"); if (m) { m.setAttribute("markerWidth", (6 / z).toFixed(3)); m.setAttribute("markerHeight", (6 / z).toFixed(3)); }
-    mapSoon();
+    mapSoon(); lazySoon();
   }
   // ---------- the map: silhouettes of everything on the board, and where you are ----------
   const mm = document.getElementById("minimap"), mctx = mm.getContext("2d"); let mmRaf = 0, mmFit = null;
@@ -555,16 +602,19 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     mctx.setTransform(dpr, 0, 0, dpr, 0, 0); mctx.clearRect(0, 0, W, H);
     const r = board.getBoundingClientRect(), vx0 = -view.x / view.z, vy0 = -view.y / view.z, vw = r.width / view.z, vh = r.height / view.z;
     let x0 = vx0, y0 = vy0, x1 = vx0 + vw, y1 = vy0 + vh;
-    for (const c of B.cards) { const h = cardH(c) || 80; x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + h); }
+    for (const c of B.cards) { const h = c.kind === "ftext" || c.kind === "marker" ? 60 : (c.h || 80); x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + h); }
     const pad = 10, k = Math.min((W - pad * 2) / (x1 - x0 || 1), (H - pad * 2) / (y1 - y0 || 1));
     const ox = pad + ((W - pad * 2) - (x1 - x0) * k) / 2 - x0 * k, oy = pad + ((H - pad * 2) - (y1 - y0) * k) / 2 - y0 * k;
     mmFit = { k, ox, oy };
     mctx.strokeStyle = "rgba(160,170,175,.35)"; mctx.lineWidth = 1;
-    const byId = Object.fromEntries(B.cards.map(c => [c.id, c]));
+    const byId = Object.fromEntries(B.cards.map(c => [c.id, c])), HH = {};
+    for (const c of B.cards) HH[c.id] = cardH(c) || 80;
+    mctx.beginPath();
     for (const l of B.links) { const a = byId[l.from], b = byId[l.to]; if (!a || !b) continue;
-      mctx.beginPath(); mctx.moveTo(ox + (a.x + a.w / 2) * k, oy + (a.y + (cardH(a) || 80) / 2) * k); mctx.lineTo(ox + (b.x + b.w / 2) * k, oy + (b.y + (cardH(b) || 80) / 2) * k); mctx.stroke(); }
+      mctx.moveTo(ox + (a.x + a.w / 2) * k, oy + (a.y + HH[a.id] / 2) * k); mctx.lineTo(ox + (b.x + b.w / 2) * k, oy + (b.y + HH[b.id] / 2) * k); }
+    mctx.stroke();
     for (const c of B.cards) {
-      const h = cardH(c) || 80, on = selIds.has(c.id);
+      const h = HH[c.id], on = selIds.has(c.id);
       mctx.fillStyle = on ? "#83b5a5" : c.kind === "note" ? "#b89a52" : c.kind === "marker" ? "#ecebe8" : c.kind === "record" && (LIBBY[c.ref] || {}).preview ? "#8a9298" : "#5a6166";
       const x = ox + c.x * k, y = oy + c.y * k, w = Math.max(2, c.w * k), hh = Math.max(2, h * k);
       mctx.beginPath(); mctx.roundRect ? mctx.roundRect(x, y, w, hh, Math.min(2, w / 3)) : mctx.rect(x, y, w, hh); mctx.fill();
@@ -665,7 +715,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       <div class="cap"><div class="t">${esc(title)}</div><div class="m">${esc(known(it.date))}</div></div>`;
     if (window.BACards && BACards.STYLES[it.type]) {
       const r = REC[c.ref] ? BACards.fromRecord(REC[c.ref]) : BACards.fromRecord({ id: c.ref, type: it.type, title, date: { as_stated: it.date || "", edtf: it.date || "" }, tags: it.tags || [] });
-      if (!REC[c.ref]) rec(c.ref).then(x => { if (x) { const el = world.querySelector(`.card[data-id="${c.id}"]`); if (el) { el.dataset.sig = ""; draw(); } } });
+
       return `<div class="bcwrap" style="height:100%">${BACards.render(r, STYLE[it.type])}</div>`;
     }
     return `<span class="kind">${esc(catLabel(it.type || ""))}</span><div class="body text" style="padding:34px 14px 12px"><div class="q">${esc(title)}</div><div class="m muted" style="margin-top:6px">${esc(known(it.date))}</div></div>`;
@@ -708,30 +758,53 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     if (!d || d.event !== "onError") return; const fr = [...document.querySelectorAll(".card.embed.live iframe")].find(f => f.contentWindow === ev.source); if (!fr) return;
     const el = fr.closest(".card"), c = cardById(el.dataset.id); if (!c) return;
     fr.parentNode.innerHTML = `<div class="poster sound locked"><span>${[101, 150, 153].includes(+d.info) ? "The owner has locked this one to YouTube, so it cannot play on the board." : "YouTube could not play this one here."}</span><a href="${esc(c.url)}" target="_blank" rel="noopener">Open it on YouTube</a></div>`; });
-  const cardById = id => B.cards.find(c => c.id === id);
+  let CIX = new Map();
+  const cardById = id => { const i = CIX.get(id); if (i !== undefined && B.cards[i] && B.cards[i].id === id) return B.cards[i]; const c = B.cards.find(c => c.id === id); return c; };
+  const ELS = new Map();
+  let drawRaf = 0; const drawSoon = () => { if (!drawRaf) drawRaf = requestAnimationFrame(() => { drawRaf = 0; draw(); }); };
   function draw() {
-    world.querySelectorAll(".card").forEach(n => { if (!B.cards.some(c => c.id === n.dataset.id)) n.remove(); });
+    if (drawRaf) { cancelAnimationFrame(drawRaf); drawRaf = 0; }
+    CIX = new Map(); B.cards.forEach((c, i) => CIX.set(c.id, i));
+    world.querySelectorAll(".card").forEach(n => { if (!CIX.has(n.dataset.id)) { n.remove(); ELS.delete(n.dataset.id); } else if (!ELS.has(n.dataset.id)) ELS.set(n.dataset.id, n); });
     world.querySelectorAll(".lmid").forEach(n => n.remove());
     for (const c of B.cards) {
-      let el = world.querySelector(`.card[data-id="${c.id}"]`);
+      let el = ELS.get(c.id); if (el && !el.isConnected) { ELS.delete(c.id); el = null; }
       const sig = JSON.stringify([c.kind, c.ref, c.text, c.html, c.label, c.color, c.size, c.sub, c.url, c.title, c.src, c.mime, c.name, c.source ? (c.source.creator || c.source.holder || "") + "|" + (c.source.status || "") : "", c.kind === "record" ? c.h : 0, (LIBBY[c.ref] || {}).preview, c.kind === "record" && !!REC[c.ref], STYLE[(LIBBY[c.ref] || {}).type]]);
       if (editing && editing.id === c.id && el) { el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px"; continue; }
-      if (!el) { el = document.createElement("div"); el.dataset.id = c.id; world.appendChild(el); bindCard(el); }
+      if (!el) { el = document.createElement("div"); el.dataset.id = c.id; world.appendChild(el); bindCard(el); ELS.set(c.id, el); }
       if (el.dataset.sig !== sig) {
         el.dataset.sig = sig;
         el.className = "card " + (c.kind === "record" ? ((LIBBY[c.ref] || {}).preview ? "rec" : "text") : c.kind);
         if (c.kind === "note") { const [bg] = NOTE_COLORS[c.color || "sand"] || NOTE_COLORS.sand; el.style.setProperty("--nc", bg); }
         el.innerHTML = cardHTML(c) + (c.kind === "marker" || c.kind === "ftext" ? "" : `<div class="grip"></div>`) + `<div class="handle" title="Drag to another card to connect"></div>`;
-        hydrate(el); hydrateMedia(el);
+        lazyQ.add(el);
       }
       el.style.left = c.x + "px"; el.style.top = c.y + "px"; el.style.width = c.w + "px";
       if (c.kind !== "marker" && c.kind !== "ftext") el.style.height = c.h + "px";
       el.classList.toggle("sel", selIds.has(c.id));
       el.classList.toggle("linksrc", linkFrom === c.id);
     }
-    drawLinks();
+    drawLinks(); lazySoon(); snapSoon();
   }
-  const cardH = c => { if (c.kind === "ftext" || c.kind === "marker") { const el = world.querySelector(`.card[data-id="${c.id}"]`); return el && el.offsetHeight ? el.offsetHeight : (c.kind === "marker" ? 60 : 40); } return c.h; };
+  // pictures, videos and full records load only for cards near what you are looking at, and only once you are
+  // close enough to see them (below 18% zoom a card is a few pixels wide)
+  const lazyQ = new Set(); let lazyRaf = 0;
+  const lazySoon = () => { if (!lazyRaf) lazyRaf = requestAnimationFrame(lazyTick); };
+  function lazyTick() {
+    lazyRaf = 0; if (!lazyQ.size || view.z < 0.18) return;
+    const r = board.getBoundingClientRect(), m = 500 / view.z;
+    const x0 = -view.x / view.z - m, y0 = -view.y / view.z - m, x1 = x0 + r.width / view.z + 2 * m, y1 = y0 + r.height / view.z + 2 * m;
+    for (const el of lazyQ) {
+      if (!el.isConnected) { lazyQ.delete(el); continue; }
+      const c = cardById(el.dataset.id); if (!c) { lazyQ.delete(el); continue; }
+      if (c.x + c.w < x0 || c.x > x1 || c.y + (c.h || 300) < y0 || c.y > y1) continue;
+      lazyQ.delete(el); hydrate(el); hydrateMedia(el);
+      if (c.kind === "record" && !REC[c.ref] && window.BACards && LIBBY[c.ref] && !LIBBY[c.ref].preview && BACards.STYLES[LIBBY[c.ref].type])
+        rec(c.ref).then(x => { const e2 = ELS.get(c.id); if (x && e2) { e2.dataset.sig = ""; drawSoon(); } });
+    }
+  }
+  let snapT = 0; const snapSoon = () => { clearTimeout(snapT); snapT = setTimeout(saveSnap, 1500); };
+  const cardH = c => { if (c.kind === "ftext" || c.kind === "marker") { const el = ELS.get(c.id); return el && el.offsetHeight ? el.offsetHeight : (c.kind === "marker" ? 60 : 40); } return c.h; };
   const center = c => { const h = cardH(c); return { x: c.x + c.w / 2, y: c.y + h / 2, w: c.w, h }; };
   function paintSel() { world.querySelectorAll(".card").forEach(el => el.classList.toggle("sel", selIds.has(el.dataset.id))); }
   function edgePoint(a, b) {
