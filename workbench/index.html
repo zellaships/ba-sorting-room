@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- what this page may load and talk to: GitHub for the archive, a few public sources for image credits, nothing else -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net; connect-src 'self' blob: data: https://api.github.com https://commons.wikimedia.org https://archive.org https://www.loc.gov https://cdn.jsdelivr.net; img-src * data: blob:; media-src * data: blob:; frame-src https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Black Aquatics · Workbench</title>
@@ -447,6 +450,8 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   const token = S.get("token", ""), repo = S.get("repo", REPO_DEF);
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // links built from records, sources and the board only ever open http(s) pages; anything else (javascript:, data:) goes nowhere
+  const safeUrl = u => { u = String(u || "").trim(); return /^https?:\/\//i.test(u) ? u : "#"; };
   const uid = p => p + "-" + Math.random().toString(36).slice(2, 9);
   const clip = (t, n) => { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
   const known = v => v && v !== "unknown" ? v : "";
@@ -727,18 +732,19 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   // ---------- drawing ----------
   const KINDSIZE = { record: [260, 300], text: [260, 300], note: [260, 180], marker: [220, 60], embed: [420, 280], ftext: [340, 40] };
   const NOTE_COLORS = { sand: ["#2a271e", "#d9b45e"], sea: ["#1b2a26", "#7cc0aa"], rose: ["#2d2021", "#e08a7a"], sky: ["#1c2430", "#8db1e0"], lilac: ["#251f31", "#b39be0"], ink: ["#0d0e0f", "#e8d9a8"], mist: ["#191b1e", "#aab0b6"] };
-  const noteHTML = c => c.html != null ? c.html : esc(c.text || "").replace(/\n/g, "<br>");
+  const CLEAN = new Map(), clean = h => { h = String(h || ""); if (!h) return ""; let v = CLEAN.get(h); if (v === undefined) { v = sanitize(h); if (CLEAN.size > 4000) CLEAN.clear(); CLEAN.set(h, v); } return v; };
+  const noteHTML = c => c.html != null ? clean(c.html) : esc(c.text || "").replace(/\n/g, "<br>");
   function cardHTML(c) {
-    if (c.kind === "ftext") return `<div class="rt" data-ph="Type something" style="font-size:${c.size || 16}px">${c.html || ""}</div><div class="ew"></div>`;
+    if (c.kind === "ftext") return `<div class="rt" data-ph="Type something" style="font-size:${c.size || 16}px">${clean(c.html)}</div><div class="ew"></div>`;
     if (c.kind === "note") { const [bg, fg] = NOTE_COLORS[c.color || "sand"] || NOTE_COLORS.sand;
       return `<div class="nlabel" style="--nl:${fg}"><span class="lt">${esc(c.label || "")}</span></div><div class="rt" data-ph="Write…" style="font-size:${c.size || 15}px;${c.color === "ink" ? "color:#f4efe6" : ""}">${noteHTML(c)}</div>`; }
     if (c.kind === "marker") return `<div class="body"><div class="sub">${esc(c.sub || "Starting point")}</div>${esc(c.text || "Week")}</div>`;
     if (c.kind === "media") return mediaHTML(c);
     if (c.kind === "link") { let host = ""; try { host = new URL(c.url).hostname.replace(/^www\./, ""); } catch (e) {}
-      return `<div class="lk"><img class="fav" src="https://www.google.com/s2/favicons?sz=64&domain=${esc(host)}" alt=""><div class="lh">${esc(host)}</div><div class="lt2">${esc(c.title || c.url)}</div><a href="${esc(c.url)}" target="_blank" rel="noopener" class="lo">Open ↗</a></div>`; }
+      return `<div class="lk"><img class="fav" src="https://www.google.com/s2/favicons?sz=64&domain=${esc(host)}" alt=""><div class="lh">${esc(host)}</div><div class="lt2">${esc(c.title || c.url)}</div><a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener" class="lo">Open ↗</a></div>`; }
     if (c.kind === "embed") {
       const e = embedOf(c.url);
-      return `<div class="frame">${e.src ? posterHTML(e) : e.html}</div><div class="shield" title="${e.src ? "Press play, or double-click" : ""}"></div>${e.src ? `<div class="grip" title="Drag to move"><i></i></div>` : ""}${e.src ? `<button class="playbtn" title="Play here" aria-label="Play here"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>` : ""}<div class="bar">${esc(e.label)} · <a href="${esc(c.url)}" target="_blank" rel="noopener">open</a>${e.src ? `<button class="stopbtn" title="Stop and go back to the still">Stop</button>` : ""}</div>`;
+      return `<div class="frame">${e.src ? posterHTML(e) : e.html}</div><div class="shield" title="${e.src ? "Press play, or double-click" : ""}"></div>${e.src ? `<div class="grip" title="Drag to move"><i></i></div>` : ""}${e.src ? `<button class="playbtn" title="Play here" aria-label="Play here"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>` : ""}<div class="bar">${esc(e.label)} · <a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">open</a>${e.src ? `<button class="stopbtn" title="Stop and go back to the still">Stop</button>` : ""}</div>`;
     }
     const it = LIBBY[c.ref] || {};
     const title = c.title || it.title || "Record not in the library";
@@ -788,7 +794,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
   window.addEventListener("message", ev => { if (!/youtube/.test(ev.origin)) return; let d; try { d = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data; } catch (x) { return; }
     if (!d || d.event !== "onError") return; const fr = [...document.querySelectorAll(".card.embed.live iframe")].find(f => f.contentWindow === ev.source); if (!fr) return;
     const el = fr.closest(".card"), c = cardById(el.dataset.id); if (!c) return;
-    fr.parentNode.innerHTML = `<div class="poster sound locked"><span>${[101, 150, 153].includes(+d.info) ? "The owner has locked this one to YouTube, so it cannot play on the board." : "YouTube could not play this one here."}</span><a href="${esc(c.url)}" target="_blank" rel="noopener">Open it on YouTube</a></div>`; });
+    fr.parentNode.innerHTML = `<div class="poster sound locked"><span>${[101, 150, 153].includes(+d.info) ? "The owner has locked this one to YouTube, so it cannot play on the board." : "YouTube could not play this one here."}</span><a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">Open it on YouTube</a></div>`; });
   let CIX = new Map();
   const cardById = id => { const i = CIX.get(id); if (i !== undefined && B.cards[i] && B.cards[i].id === id) return B.cards[i]; const c = B.cards.find(c => c.id === id); return c; };
   const ELS = new Map();
@@ -996,7 +1002,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       if (m && e.shiftKey && (k === "7" || k === "&")) { e.preventDefault(); document.execCommand("insertOrderedList"); return; }
       if (m && e.shiftKey && (k === "8" || k === "*")) { e.preventDefault(); document.execCommand("insertUnorderedList"); return; }
       if (m && k.toLowerCase() === "e") { e.preventDefault(); const t = getSelection().toString(); if (t) document.execCommand("insertHTML", false, `<code>${esc(t)}</code>`); return; }
-      if (m && k.toLowerCase() === "k") { e.preventDefault(); const t = getSelection().toString(); const u = window.prompt("Link to", "https://"); if (u && /^https?:/i.test(u)) { if (t) document.execCommand("createLink", false, u); else document.execCommand("insertHTML", false, `<a href="${esc(u)}">${esc(u)}</a>`); } return; }
+      if (m && k.toLowerCase() === "k") { e.preventDefault(); const t = getSelection().toString(); const u = window.prompt("Link to", "https://"); if (u && /^https?:/i.test(u)) { if (t) document.execCommand("createLink", false, u); else document.execCommand("insertHTML", false, `<a href="${esc(safeUrl(u))}">${esc(u)}</a>`); } return; }
       if (k === "Tab") { e.preventDefault(); document.execCommand(e.shiftKey ? "outdent" : "indent"); return; }
       if (k === " ") {                                               // markdown shortcuts at the start of a line
         const t = textBeforeCaret(rt);
@@ -1214,7 +1220,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     if (html) {                                        // something dragged from another web page
       const doc = new DOMParser().parseFromString(html, "text/html"), img = doc.querySelector("img[src]"), a = doc.querySelector("a[href]");
       if (img && /^https?:/.test(img.src) && (!text || text === uri || text.trim() === "" || text.trim() === img.src)) { const [w, h] = fitBox(...await imgSize(img.src)); const card = { id: uid("c"), kind: "media", mk: kindOf("", img.src.split("?")[0]) === "vector" ? "vector" : "image", url: img.src, name: img.alt || img.src.split("/").pop().split("?")[0], w, h, source: srcFrom(img.src, (a && a.href) || (uri && uri !== img.src ? uri : ""), img.alt || img.title || "") }; out.push(card); enrichSoon(card.id); return out; }
-      if (!uri && text && text.trim()) { out.push({ id: uid("c"), kind: "note", w: 300, h: 200, label: "", color: "sand", html: esc(text.trim()).replace(/\n/g, "<br>") + (a ? `<br><a href="${esc(a.href)}">${esc(new URL(a.href).hostname)}</a>` : "") }); return out; }
+      if (!uri && text && text.trim()) { out.push({ id: uid("c"), kind: "note", w: 300, h: 200, label: "", color: "sand", html: esc(text.trim()).replace(/\n/g, "<br>") + (a ? `<br><a href="${esc(safeUrl(a.href))}">${esc(new URL(a.href).hostname)}</a>` : "") }); return out; }
       if (uri) return [await cardFromURL(uri, (a && a.textContent.trim()) || "")];
     }
     if (uri) return [await cardFromURL(uri, "")];
@@ -1472,7 +1478,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
     const threadsIn = onCard ? B.threads.filter(t => t.steps.includes(onCard.id)) : [];
     $("#rbody").innerHTML = `${r ? `${r.summary ? `<p>${esc(r.summary)}</p>` : ""}${r.quote ? `<blockquote style="font:15px/1.5 Georgia,serif;margin:8px 0;border-left:3px solid var(--rule);padding-left:12px">${esc(r.quote)}</blockquote>` : ""}
         ${row("Date", r.date && r.date.as_stated)}${row("Creator", r.creator_as_stated)}${row("Held by", r.holder)}
-        ${r.source_url && r.source_url !== "unknown" ? `<div class="ro"><a href="${esc(r.source_url)}" target="_blank" rel="noopener">Source page</a></div>` : ""}
+        ${r.source_url && r.source_url !== "unknown" ? `<div class="ro"><a href="${esc(safeUrl(r.source_url))}" target="_blank" rel="noopener">Source page</a></div>` : ""}
         ${row("Rights", r.rights && r.rights.as_stated)}${row("Care", r.care && r.care.note)}
         ${(r.tags || []).length ? `<div class="ro">${r.tags.map(esc).join(" · ")}</div>` : ""}
         ${(r.questions || []).length ? `<h3 class="eyebrow" style="margin-top:16px">Open questions</h3>${r.questions.map(q => `<div class="ro">${esc(q.q)}${q.answer ? ` <br><span style="color:var(--teal)">${esc(q.answer)}</span>` : ""}</div>`).join("")}` : ""}`
@@ -1527,12 +1533,12 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
       : st === "failed" ? `The source lookup did not go through. Try again, or fill in what you know.` : `${from} Looking up the source…`;
     const GL = { title: "Title", creator: "Maker", date: "Date", holder: "Held by", rights: "Rights", page: "Page", description: "About" };
     const gBox = !g ? "" : `<div class="guess"><div class="gk">Best guess <span>waiting on you</span></div>
-        <dl>${SRC_FIELDS.filter(k => g[k]).map(k => `<dt>${GL[k]}</dt><dd>${k === "page" ? `<a href="${esc(g[k])}" target="_blank" rel="noopener">${esc(clip(g[k].replace(/^https?:\/\//, ""), 70))}</a>` : esc(g[k])}</dd>`).join("")}</dl>
+        <dl>${SRC_FIELDS.filter(k => g[k]).map(k => `<dt>${GL[k]}</dt><dd>${k === "page" ? `<a href="${esc(safeUrl(g[k]))}" target="_blank" rel="noopener">${esc(clip(g[k].replace(/^https?:\/\//, ""), 70))}</a>` : esc(g[k])}</dd>`).join("")}</dl>
         ${g.why ? `<p class="gwhy"><b>Why this guess.</b> ${esc(g.why)}</p>` : ""}
-        ${g.leads && g.leads.length ? `<p class="gwhy"><b>Check it here.</b> ${g.leads.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || hostOf(l.url))}</a>`).join(" · ")}</p>` : ""}
+        ${g.leads && g.leads.length ? `<p class="gwhy"><b>Check it here.</b> ${g.leads.map(l => `<a href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">${esc(l.label || hostOf(l.url))}</a>`).join(" · ")}</p>` : ""}
         <div class="row"><button id="gYes" class="primary">That is right</button><button id="gNo">Not right</button></div>
         <p class="gby">Guessed by ${esc(g.by || "someone")}${g.at ? " on " + when(g.at) : ""}${g.sure ? ". How sure: " + esc(g.sure) : ""}.</p></div>`;
-    const basis = s && st === "confirmed" && (s.basis || (s.leads && s.leads.length)) ? `<p class="muted srcstat" style="margin-top:8px">${s.basis ? esc(s.basis) + " " : ""}${(s.leads || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || hostOf(l.url))}</a>`).join(" · ")}</p>` : "";
+    const basis = s && st === "confirmed" && (s.basis || (s.leads && s.leads.length)) ? `<p class="muted srcstat" style="margin-top:8px">${s.basis ? esc(s.basis) + " " : ""}${(s.leads || []).map(l => `<a href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">${esc(l.label || hostOf(l.url))}</a>`).join(" · ")}</p>` : "";
     const lens = web && isImg ? `<a class="btnlike" href="https://lens.google.com/uploadbyurl?url=${encodeURIComponent(c.url)}" target="_blank" rel="noopener">Search by image</a>` : "";
     const body = shell([{ label: "Library", go: toLibrary }, { label: "On the board", go: () => centerOn(c.x + c.w / 2, c.y + c.h / 2) }, { label: web ? "From the web" : "File" }],
       `<h2>${esc(c.name || "Untitled")}</h2>
@@ -1540,7 +1546,7 @@ body.dropping #board{box-shadow:inset 0 0 0 1.5px rgba(131,181,165,.55),inset 0 
        ${hasSrc ? `<p class="muted srcstat">${stat}</p>${gBox}${basis}
        <h3 class="eyebrow" style="margin-top:16px">Source</h3>
        ${F("title", "Title", "As the holder gives it")}${F("creator", "Maker", "Photographer, artist, author")}${F("date", "Date", "When it was made")}${F("holder", "Held by", "Archive, museum, newspaper, collection")}${F("rights", "Rights", "License or rights statement")}${F("page", "Page it came from", "https://")}${F("description", "Description", "What the source says about it", true)}${F("notes", "Your notes", "Why it is here, what to check", true)}
-       <div class="row" style="margin-top:6px;flex-wrap:wrap">${web ? `<a class="btnlike" href="${esc(c.url)}" target="_blank" rel="noopener">Open the image</a>` : ""}${s && s.page ? `<a class="btnlike" href="${esc(s.page)}" target="_blank" rel="noopener">Open its page</a>` : ""}${lens}${web ? `<button id="srcAgain">Look up the source</button>` : ""}${st !== "wanted" && st !== "guess" ? `<button id="srcWant">Mark for a source search</button>` : ""}</div>` : `<p class="muted">A file you added. It lives in the archive.</p>`}
+       <div class="row" style="margin-top:6px;flex-wrap:wrap">${web ? `<a class="btnlike" href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">Open the image</a>` : ""}${s && s.page ? `<a class="btnlike" href="${esc(safeUrl(s.page))}" target="_blank" rel="noopener">Open its page</a>` : ""}${lens}${web ? `<button id="srcAgain">Look up the source</button>` : ""}${st !== "wanted" && st !== "guess" ? `<button id="srcWant">Mark for a source search</button>` : ""}</div>` : `<p class="muted">A file you added. It lives in the archive.</p>`}
        <div class="row" style="margin-top:12px"><button id="cThread">Add to thread</button><button id="cDel">Remove from board</button></div>
        <h3 class="eyebrow" style="margin-top:20px">Connections</h3>${connList(c, conns)}`);
     hydrate(body);

@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- what this page may load and talk to: GitHub for the archive, a few public sources for image credits, nothing else -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.github.com; img-src * data: blob:; media-src * data: blob:; frame-src https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Black Aquatics · Sorting Room</title>
@@ -260,6 +263,8 @@
   let reflections = "";
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // links built from records, sources and the board only ever open http(s) pages; anything else (javascript:, data:) goes nowhere
+  const safeUrl = u => { u = String(u || "").trim(); return /^https?:\/\//i.test(u) ? u : "#"; };
 
   function toast(msg) { const t = $("#toast"); t.textContent = msg; t.style.opacity = 1; clearTimeout(t._h); t._h = setTimeout(() => t.style.opacity = 0, 2200); }
 
@@ -507,9 +512,9 @@
   }
   const gh = p => `https://github.com/${repo}/blob/main/${p}`;
   function linksHTML(x) {
-    if (x.v4) return `<div class="links">${x.rec.source_url ? `<a href="${esc(x.rec.source_url)}" target="_blank" rel="noopener">Source</a>` : ""}<a href="${gh(`v4/intake/${x.v4.batch}/manifest.json`)}" target="_blank" rel="noopener">Batch</a></div>`;
+    if (x.v4) return `<div class="links">${x.rec.source_url ? `<a href="${esc(safeUrl(x.rec.source_url))}" target="_blank" rel="noopener">Source</a>` : ""}<a href="${gh(`v4/intake/${x.v4.batch}/manifest.json`)}" target="_blank" rel="noopener">Batch</a></div>`;
     const r = x.rec, src = x.path.replace(/\.json$/, ".source.md");
-    return `<div class="links">${r.source_url ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">Source</a>` : ""}
+    return `<div class="links">${r.source_url ? `<a href="${esc(safeUrl(r.source_url))}" target="_blank" rel="noopener">Source</a>` : ""}
       <a href="${gh(x.path)}" target="_blank" rel="noopener">Record</a><a href="${gh(src)}" target="_blank" rel="noopener">Snapshot</a></div>`;
   }
   function sub(r) { return [r.holder || r.institution, r.date_of_item, r.creator].filter(Boolean).map(esc).join(" · "); }
@@ -869,7 +874,7 @@
             ${v.care.note && v.care.note !== "unknown" ? `<div class="sub">Care: ${esc(clip(v.care.note, 300))}</div>` : ""}
             ${v.creator_as_stated && v.creator_as_stated !== "unknown" ? `<div class="sub">By: ${esc(clip(v.creator_as_stated, 300))}</div>` : ""}
             ${v.holder && v.holder !== "unknown" ? `<div class="sub">Held by: ${esc(clip(v.holder, 200))}</div>` : ""}
-            ${v.source_url && v.source_url !== "unknown" ? `<div class="sub"><a href="${esc(v.source_url)}" target="_blank" rel="noopener">Source page</a></div>` : ""}
+            ${v.source_url && v.source_url !== "unknown" ? `<div class="sub"><a href="${esc(safeUrl(v.source_url))}" target="_blank" rel="noopener">Source page</a></div>` : ""}
             <div class="sub">Rights: ${esc(v.rights.as_stated)}${v.status_v3 ? ` · v3 status: ${esc(v.status_v3)}` : ""} · ${esc(v.former_ids.join(", "))}</div></details>
           </div></div>`;
       }).join("")}</div>`;
@@ -1099,7 +1104,7 @@
         <label>Ask a question about this record</label><textarea id="dq" placeholder="e.g. Is there a better source for the date? Who is pictured?"></textarea>
         <button class="primary" id="dask">Add question</button>
         <h3>Source</h3>
-        ${r.source_url ? `<div class="ro"><a href="${esc(r.source_url)}" target="_blank" rel="noopener">Open the source page</a></div>` : ""}
+        ${r.source_url ? `<div class="ro"><a href="${esc(safeUrl(r.source_url))}" target="_blank" rel="noopener">Open the source page</a></div>` : ""}
         ${srcs.map(s => `<div class="ro">${esc(s)}</div>`).join("")}
         ${v ? ro("Care codes suggested", (v.care.suggested_codes || []).join(", ")) + ro("Access", v.care.access) + ro("Former IDs", v.former_ids.join(", ")) + ro("Batch", x.v4.batch) + ro("Same image as", (v.same_as || []).join(", ")) : ro("Find", x.id) + ro("Lane", r.lane) + ro("Seen", r.description_seen)}
       </div>`;
