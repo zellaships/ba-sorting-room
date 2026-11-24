@@ -164,9 +164,9 @@ body.resizing{cursor:col-resize;user-select:none}
 .recimg{background:#1b1718;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:grab;position:relative}
 .recimg img{max-width:100%;max-height:calc(100vh - 260px);object-fit:contain;display:block}
 .recimg{cursor:grab}.recimg:active,.recimg.gripping{cursor:grabbing}
-.recimg .side{position:absolute;top:0;bottom:0;width:var(--sw,30%);min-width:64px;border:0;padding:0;margin:0;background:transparent;font-size:0;opacity:1;transition:background .2s}
+.recimg .side{position:absolute;top:0;bottom:0;width:var(--sw,30%);min-width:64px;border:0;padding:0;margin:0;background:transparent;font-size:0;opacity:1;}
 .recimg .side.l{left:0;cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2256%22%20height%3D%2256%22%20viewBox%3D%220%200%2056%2056%22%3E%3Ccircle%20cx%3D%2228%22%20cy%3D%2228%22%20r%3D%2226%22%20fill%3D%22rgba%2814%2C26%2C32%2C.72%29%22%20stroke%3D%22rgba%28236%2C235%2C232%2C.55%29%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M32%2017%20L21%2028%20L32%2039%22%20fill%3D%22none%22%20stroke%3D%22%23ecebe8%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 28 28,w-resize}.recimg .side.r{right:0;cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2256%22%20height%3D%2256%22%20viewBox%3D%220%200%2056%2056%22%3E%3Ccircle%20cx%3D%2228%22%20cy%3D%2228%22%20r%3D%2226%22%20fill%3D%22rgba%2814%2C26%2C32%2C.72%29%22%20stroke%3D%22rgba%28236%2C235%2C232%2C.55%29%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M24%2017%20L35%2028%20L24%2039%22%20fill%3D%22none%22%20stroke%3D%22%23ecebe8%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 28 28,e-resize}
-.recimg .side.l:hover{background:linear-gradient(90deg,rgba(0,0,0,.28),transparent)}.recimg .side.r:hover{background:linear-gradient(270deg,rgba(0,0,0,.28),transparent)}
+
 .recimg .side[disabled]{display:none}
 .cite{display:grid;grid-template-columns:112px 1fr;gap:6px 14px;margin:12px 0;font-size:13px;line-height:1.45}
 .cite dt{color:var(--muted,#8a8f93);text-transform:uppercase;letter-spacing:.06em;font-size:10.5px;padding-top:2px}.cite dd{margin:0;word-break:break-word}
