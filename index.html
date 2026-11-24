@@ -1024,7 +1024,8 @@ img[data-pv]:not([src]){visibility:hidden}
     let held = 0;
     const put = (v, prevPath, extPreview) => {
       files[`v4/library/records/${v.type}/${v.id}.json`] = { content: stableJSON(v) };
-      index.push({ id: v.id, type: v.type, title: v.title, date: (v.date || {}).as_stated || "unknown", tags: v.tags || [],
+      const body = stableJSON(v); let hsh = 5381; for (let i = 0; i < body.length; i++) hsh = ((hsh << 5) + hsh + body.charCodeAt(i)) | 0;
+      index.push({ v: (hsh >>> 0).toString(36), id: v.id, type: v.type, title: v.title, date: (v.date || {}).as_stated || "unknown", tags: v.tags || [],
                    preview: prevPath || extPreview || "", display: v.rights.display, access: v.care.access, path: `v4/library/records/${v.type}/${v.id}.json` });
     };
     // packaged batches: a keep in the Sorting Room (or an earlier "go") admits the item

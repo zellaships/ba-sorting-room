@@ -496,8 +496,8 @@ body.placing #dropzone{opacity:1}
   const CACHE = "ba-wb-1"; let cacheP = null;
   const cacheOpen = () => cacheP || (cacheP = (window.caches ? caches.open(CACHE) : Promise.reject()).catch(() => null));
   const ckey = path => `https://ba-cache.local/${repo}/${path}`;
-  async function cached(path, kind) {
-    const c = await cacheOpen(); const k = ckey(path);
+  async function cached(path, kind, ver) {
+    const c = await cacheOpen(); const k = ckey(path) + (ver ? `?v=${ver}` : "");   // a record's version stamp changes when its citation does
     if (c) { try { const hit = await c.match(k);
       if (hit) { const miss = +hit.headers.get("x-miss") || 0;                  // files that are not there are remembered for a day
         if (!miss) return kind === "blob" ? hit.blob() : hit.text(); if (Date.now() - miss < 864e5) return null; } } catch (e) {} }
@@ -622,7 +622,7 @@ body.placing #dropzone{opacity:1}
   async function rec(id) {
     if (REC[id]) return REC[id];
     const it = LIBBY[id]; if (!it) return null;
-    if (!RECP[id]) RECP[id] = cached(it.path, "text").then(t => { try { REC[id] = t ? JSON.parse(t) : null; } catch (e) { REC[id] = null; } return REC[id]; });
+    if (!RECP[id]) RECP[id] = cached(it.path, "text", it.v || "1").then(t => { try { REC[id] = t ? JSON.parse(t) : null; } catch (e) { REC[id] = null; } return REC[id]; });
     return RECP[id];
   }
 
