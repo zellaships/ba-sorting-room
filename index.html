@@ -245,6 +245,7 @@
   const PUB = { sha: null, ids: new Set(), at: "" };       // what v4/library/index.json holds right now
   const MAN = {};
   const CV = { sha: null, by: {}, styleSha: null, style: {} };   // card designs: v4/intake/cardview.json + v4/design/card-styles.json
+  const SHEETS = { sha: null, by: {}, tile: 240, cols: 10, shas: {} };   // contact sheets: 100 previews per request (v4/intake/sheets/)
   const SIM = { sha: null, by: {} };                        // lookalike groups from v4/intake/similar.json
   const TIER = { duplicate: "Likely duplicate", "very similar": "Very similar", similar: "Similar" };                                           // batch -> manifest (loaded when a record is opened)
   const CATS = [["image", "Images"], ["work", "Works"], ["person", "People"], ["place", "Places"], ["excerpt", "Excerpts"],
@@ -255,7 +256,7 @@
   let cache = S.get("cache", {}); // path -> record (records never change once written)
   try { localStorage.removeItem("ba.cache"); } catch {}   // finds are kept in the IndexedDB snapshot now; this old copy filled the browser's storage
   let sort = {};               // id -> {status, at}
-  let sortSha = null, pending = {}, saveTimer = null;
+  let sortSha = null, pending = S.get("pendingSort", {}), saveTimer = null;   // picks not yet saved survive closing the tab
   let keptFolders = new Set();
   let seenIds = new Set(S.get("seen", []));
   let tab = (location.hash || "#all").slice(1);
@@ -270,11 +271,24 @@
 
   function toast(msg) { const t = $("#toast"); t.textContent = msg; t.style.opacity = 1; clearTimeout(t._h); t._h = setTimeout(() => t.style.opacity = 0, 2200); }
 
+  // GitHub allows 5,000 requests an hour per key. When that runs out, say so plainly and pick back up at the reset.
+  const RL = { until: 0, t: null };
+  function limited(until) {
+    RL.until = until; clearTimeout(RL.t);
+    const at = new Date(until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const st = $("#stat"); if (st) st.textContent = `GitHub's hourly limit reached · back at ${at}. Picks are kept and save then.`;
+    RL.t = setTimeout(() => { RL.until = 0; if (st) st.textContent = "Back online"; load().then(() => { if (Object.keys(pending).length) save(); }); }, Math.max(5000, until - Date.now() + 3000));
+  }
   async function api(path, opts = {}) {
+    if (RL.until > Date.now()) throw new Error("hourly limit");
     const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
       ...(/decisions\/|v4\/edits\.json/.test(path) ? { cache: "no-store" } : {}), ...opts, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json",
                           "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) }
     });
+    if (res.status === 403 || res.status === 429) {
+      const left = res.headers.get("x-ratelimit-remaining"), reset = +res.headers.get("x-ratelimit-reset");
+      if (left === "0" && reset) limited(reset * 1000);
+    }
     if (!res.ok && res.status !== 404) throw new Error(`${res.status} ${res.statusText}`);
     return res;
   }
@@ -366,10 +380,14 @@
       if (cve) jobs.push(raw(cve.path).then(t => { CV.by = JSON.parse(t).by_id || {}; CV.sha = cve.sha; }).catch(() => {}));
       const cse = changed("v4/design/card-styles.json", CV.styleSha);
       if (cse) jobs.push(raw(cse.path).then(t => { CV.style = JSON.parse(t) || {}; CV.styleSha = cse.sha; }).catch(() => {}));
+      const she = changed("v4/intake/sheets/index.json", SHEETS.sha);
+      if (she) jobs.push(raw(she.path).then(t => { const d = JSON.parse(t); Object.assign(SHEETS, { by: d.by_id || {}, tile: d.tile, cols: d.cols, sha: she.sha }); }).catch(() => {}));
+      (tree.tree || []).forEach(t => { const m = /^v4\/intake\/sheets\/(\d+)\.webp$/.exec(t.path); if (m) SHEETS.shas[+m[1]] = t.sha; });
       const pe = changed("v4/library/index.json", PUB.sha);
       if (pe) jobs.push(raw(pe.path).then(t => { PUB.ids = new Set((JSON.parse(t).items || []).map(i => i.id)); PUB.sha = pe.sha; }).catch(() => {}));
       await Promise.all(jobs);
       Object.assign(sort, pending);
+      if (Object.keys(pending).length && !saveTimer) saveTimer = setTimeout(save, 1500);   // picks left from a closed tab
       Object.assign(EDITS, editsPending);
       SNAP.recPaths = recPaths;
       buildRecords(recPaths);
@@ -392,8 +410,8 @@
       if (sig !== lastSig || !$("#main").children.length) { lastSig = sig; render(); } else counts();
     } catch (e) {
       $("#dot").className = "dot";
-      $("#stat").textContent = `Sync failed (${e.message})`;
-      if (/401|403/.test(e.message)) renderSetup("GitHub refused the token. Check that it has Contents read and write access to the repo.");
+      if (RL.until > Date.now()) limited(RL.until); else $("#stat").textContent = `Sync failed (${e.message})`;
+      if (/401|403/.test(e.message) && !(RL.until > Date.now())) renderSetup("GitHub refused the token. Check that it has Contents read and write access to the repo.");
     }
   }
 
@@ -405,6 +423,7 @@
     const prev = statusOf(id);
     if (status) { sort[id] = { status, at: new Date().toISOString() }; pending[id] = sort[id]; }
     else { delete sort[id]; pending[id] = null; }
+    S.set("pendingSort", pending);
     seenIds.add(id); S.set("seen", [...seenIds]);
     clearTimeout(saveTimer); saveTimer = setTimeout(save, 2500);
     counts();
@@ -422,11 +441,12 @@
       if (sha) body.sha = sha;
       const res = await api(`/contents/decisions/sort.json`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`${res.status}`);
-      sortSha = (await res.json()).content.sha; sort = Object.assign(base, pending);
+      sortSha = (await res.json()).content.sha; sort = Object.assign(base, pending); S.set("pendingSort", pending);
       $("#stat").textContent = `Saved · ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
     } catch (e) {
-      Object.assign(changes, pending); pending = changes; saveTimer = setTimeout(save, 8000);
-      $("#stat").textContent = `Save failed, retrying (${e.message})`;
+      Object.assign(changes, pending); pending = changes; S.set("pendingSort", pending);
+      const wait = RL.until > Date.now() ? RL.until - Date.now() + 4000 : 8000; saveTimer = setTimeout(save, wait);
+      if (RL.until > Date.now()) limited(RL.until); else $("#stat").textContent = `Save failed, retrying (${e.message})`;
     }
   }
 
@@ -587,7 +607,11 @@
     setTimeout(() => { el.remove(); if (gridState) { gridState.left--; const n = $("#toSort"); if (n) n.textContent = gridState.left; } }, 150);
   }
   function bindTiles(root, which) {
-    const enlarge = t => { $("#lbimg").src = t.dataset.full; $("#lb").style.display = "flex"; };
+    const enlarge = async t => {
+      $("#lbimg").src = t.dataset.full; $("#lb").style.display = "flex";
+      const im = t.querySelector("img[data-pv]"), p = im && im.dataset.pv;
+      if (p && THUMB.has(p)) { try { const u = await fullPv(p); im.src = u; t.dataset.full = u; if ($("#lb").style.display === "flex") $("#lbimg").src = u; } catch {} }
+    };
     root.querySelectorAll("[data-open]").forEach(b => b.onclick = e => { e.stopPropagation(); openRecord(b.dataset.open); });
     root.querySelectorAll(".tile").forEach(el => {
       el.dataset.n = ((el.querySelector(".tnum") || {}).textContent || "").split("/")[0];
@@ -1195,8 +1219,44 @@
     pvIO = new IntersectionObserver(ents => ents.forEach(en => { if (en.isIntersecting) { pvIO.unobserve(en.target); loadPv(en.target); } }), { rootMargin: "600px" });
     $("#main").querySelectorAll("img[data-pv]:not([src])").forEach(img => pvIO.observe(img));
   }
+  // one sheet = 100 pictures in one request; kept in the browser's cache so a sheet is downloaded once
+  const SH = { pend: {}, bmp: new Map() };
+  async function sheetBlob(n) {
+    const key = `/ba-sheets/${String(n).padStart(3, "0")}?v=${SHEETS.shas[n] || ""}`;
+    let c = null; try { c = await caches.open("ba-sr-sheets"); const hit = await c.match(key); if (hit) return hit.blob(); } catch {}
+    const r = await api(`/contents/v4/intake/sheets/${String(n).padStart(3, "0")}.webp?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } });
+    if (!r.ok) throw new Error(r.status);
+    const b = await r.blob(); try { if (c) await c.put(key, new Response(b)); } catch {}
+    return b;
+  }
+  function sheetBmp(n) {
+    if (SH.bmp.has(n)) { const v = SH.bmp.get(n); SH.bmp.delete(n); SH.bmp.set(n, v); return v; }
+    const pr = sheetBlob(n).then(b => createImageBitmap(b));
+    pr.catch(() => SH.bmp.delete(n));
+    SH.bmp.set(n, pr);
+    while (SH.bmp.size > 10) { const [k, v] = SH.bmp.entries().next().value; SH.bmp.delete(k); v.then(x => x.close && x.close()).catch(() => {}); }
+    return pr;
+  }
+  const THUMB = new Set();      // preview paths currently showing a sheet thumbnail (enlarge fetches the full one)
+  async function sheetThumb(id) {
+    const [n, i] = SHEETS.by[id], T = SHEETS.tile, C = SHEETS.cols;
+    const bmp = await sheetBmp(n);
+    const cv = document.createElement("canvas"); cv.width = T; cv.height = T;
+    cv.getContext("2d").drawImage(bmp, (i % C) * T, Math.floor(i / C) * T, T, T, 0, 0, T, T);
+    return URL.createObjectURL(await new Promise(res => cv.toBlob(res, "image/webp", 0.9)));
+  }
+  async function fullPv(p) {
+    const r = await api(`/contents/${encodeURI(p)}?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } });
+    if (!r.ok) throw 0;
+    PV[p] = URL.createObjectURL(await r.blob()); THUMB.delete(p); return PV[p];
+  }
   async function loadPv(img) {
     const p = img.dataset.pv;
+    const box0 = img.closest("[data-rid]"), id = box0 && box0.dataset.rid;
+    if (!PV[p] && id && SHEETS.by[id]) {
+      try { PV[p] = await sheetThumb(id); THUMB.add(p); img.src = PV[p]; if (box0.dataset.full !== undefined) box0.dataset.full = PV[p]; return; } catch {}
+    }
+    if (RL.until > Date.now()) return;   // limit reached: leave the picture slot, it fills in after the reset
     try {
       if (!PV[p]) {
         const r = await api(`/contents/${encodeURI(p)}?ref=main`, { headers: { Accept: "application/vnd.github.raw+json" } });
@@ -1205,7 +1265,7 @@
       }
       img.src = PV[p];
       const box = img.closest("[data-full]"); if (box) box.dataset.full = PV[p];
-    } catch { const box = img.closest("[data-rid]"); const x = box && records[box.dataset.rid]; if (box && x) box.innerHTML = textCard(x.rec); }
+    } catch { if (RL.until > Date.now()) return; const box = img.closest("[data-rid]"); const x = box && records[box.dataset.rid]; if (box && x) box.innerHTML = textCard(x.rec); }
   }
 
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; location.hash = tab; shownN = CHUNK; render(); window.scrollTo(0, 0); });
