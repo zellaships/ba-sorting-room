@@ -207,6 +207,7 @@
 #where{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(11,31,42,.94);border:1px solid var(--line);color:var(--ink);
   border-radius:999px;padding:6px 16px;font-size:14px;font-variant-numeric:tabular-nums;z-index:40;display:none;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 #where b{color:#fff}
+.pager{display:flex;align-items:center;gap:14px;justify-content:center;margin:14px 0;color:var(--ink)}.pager select{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit}.pager button[disabled]{opacity:.35;cursor:default}.pager.bottom{margin:28px 0 60px}.pager.bottom .next{font-size:1.1em;padding:8px 18px;border:1px solid var(--line);border-radius:999px;text-decoration:none}
 img[data-pv]:not([src]){visibility:hidden}
 .nixbar .seg{display:inline-flex;gap:4px}.nixbar .seg button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font:inherit}.nixbar .seg button.on{background:var(--ink);color:#0b1f2a}.nixbar .seg b{font-weight:600;margin-left:4px}
 </style>
@@ -329,7 +330,7 @@ img[data-pv]:not([src]){visibility:hidden}
   function saveSnap() {
     clearTimeout(snapT);
     snapT = setTimeout(() => idb.set("snap:" + repo, { v: 2, at: Date.now(), CARDS: { sha: CARDS.sha, list: CARDS.list }, sort, sortSha, EDITS, reflections,
-      SIM: { sha: SIM.sha, by: SIM.by }, CV: { sha: CV.sha, by: CV.by, styleSha: CV.styleSha, style: CV.style },
+      SIM: { sha: SIM.sha, by: SIM.by }, SHEETS: { sha: SHEETS.sha, by: SHEETS.by, tile: SHEETS.tile, cols: SHEETS.cols, shas: SHEETS.shas }, CV: { sha: CV.sha, by: CV.by, styleSha: CV.styleSha, style: CV.style },
       PUB: { sha: PUB.sha, ids: [...PUB.ids] }, SNAP: { ...SNAP }, finds: cache, keptFolders: [...keptFolders] }), 400);
   }
   async function warm() {
@@ -337,7 +338,7 @@ img[data-pv]:not([src]){visibility:hidden}
     const d = await idb.get("snap:" + repo);
     if (!d || d.v !== 2 || Object.keys(records).length || !Object.values(d.sort || {}).some(v => v && v.status)) return false;
     Object.assign(CARDS, d.CARDS); sort = Object.assign(d.sort || {}, pending); sortSha = d.sortSha; EDITS = Object.assign(d.EDITS || {}, editsPending); reflections = d.reflections || "";
-    Object.assign(SIM, d.SIM); Object.assign(CV, d.CV); PUB.sha = d.PUB.sha; PUB.ids = new Set(d.PUB.ids || []); Object.assign(SNAP, d.SNAP); if (d.finds) Object.assign(cache, d.finds); keptFolders = new Set(d.keptFolders || []);
+    Object.assign(SIM, d.SIM); if (d.SHEETS) Object.assign(SHEETS, d.SHEETS); Object.assign(CV, d.CV); PUB.sha = d.PUB.sha; PUB.ids = new Set(d.PUB.ids || []); Object.assign(SNAP, d.SNAP); if (d.finds) Object.assign(cache, d.finds); keptFolders = new Set(d.keptFolders || []);
     buildRecords(SNAP.recPaths || []); applyEdits();
     $("#stat").textContent = `Saved copy from ${new Date(d.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · checking for changes…`;
     render();
@@ -406,7 +407,7 @@ img[data-pv]:not([src]){visibility:hidden}
       $("#stat").textContent = `Live · synced ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
       saveSnap();
       // redraw only when something changed, so a background sync never jumps the page while you scroll
-      const sig = [Object.keys(records).length, sortSha, CARDS.sha, SIM.sha, PUB.sha, JSON.stringify(EDITS).length,
+      const sig = [Object.keys(records).length, CARDS.sha, SHEETS.sha, SIM.sha, PUB.sha, JSON.stringify(EDITS).length,
                    Object.values(sort).filter(v => v && v.status).length].join("|");
       if (sig !== lastSig || !$("#main").children.length) { lastSig = sig; render(); } else counts();
     } catch (e) {
@@ -571,6 +572,7 @@ img[data-pv]:not([src]){visibility:hidden}
   let shownN = 150, lastSig = "";            // how many tiles are on the page; grows as you scroll
   const CHUNK = 150;
   let gridState = null;
+  const PAGE = { keys: [], at: 0, bottom: "" };
   const tierWord = { duplicate: "Possible duplicates", "very similar": "Very similar", similar: "Similar" };
   function tileHTML(x, which, gs, n) {
     const r = x.rec, st = statusOf(x.id), isNew = !seenIds.has(x.id) && !st, sim = SIM.by[x.id];
@@ -590,7 +592,7 @@ img[data-pv]:not([src]){visibility:hidden}
         ${thumbHTML(r)}
         <div class="acts over"><button class="x ${st === "nix" || (which === "all" && !st) ? "on" : ""}" data-act="nix" title="Nix">✕</button>
           <button class="k ${st === "keep" ? "on" : ""}" data-act="keep" title="Keep">✓</button></div>
-        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${n ? `<span class="tnum">${n.toLocaleString()} / ${gs.items.length.toLocaleString()}</span>` : ""}${esc(r.title || x.id)}</div>
+        <div class="meta"><div class="t" data-open="${esc(x.id)}" title="Open record">${n ? `<span class="tnum">${n.toLocaleString()} / ${(gs.total || gs.items.length).toLocaleString()}</span>` : ""}${esc(r.title || x.id)}</div>
           <div class="sub one">${sub(r)}</div>
           <button class="openrec" data-open="${esc(x.id)}">Open record${nq ? ` · ${nq} question${nq > 1 ? "s" : ""}` : ""}${edited ? " · edited" : ""}</button>
           <details class="more"><summary>Details</summary>
@@ -633,7 +635,7 @@ img[data-pv]:not([src]){visibility:hidden}
     const grid = $("#main .grid"); if (!grid) return;
     const next = gs.items.slice(gs.shown, gs.shown + CHUNK); if (!next.length) return;
     const tmp = document.createElement("div");
-    tmp.innerHTML = next.map((x, i) => tileHTML(x, gs.which, gs, gs.shown + i + 1)).join("");
+    tmp.innerHTML = next.map((x, i) => tileHTML(x, gs.which, gs, (gs.offset || 0) + gs.shown + i + 1)).join("");
     bindTiles(tmp, gs.which);
     while (tmp.firstChild) grid.appendChild(tmp.firstChild);
     gs.shown += next.length; shownN = Math.max(shownN, gs.shown);
@@ -670,15 +672,36 @@ img[data-pv]:not([src]){visibility:hidden}
         <button data-nv="unseen" class="${nixView === "unseen" ? "on" : ""}">Passed over <b>${nStart.toLocaleString()}</b></button>
         <button data-nv="hand" class="${nixView === "hand" ? "on" : ""}">Nixed by hand <b>${(nixAll.length - nStart).toLocaleString()}</b></button>
         <button data-nv="all" class="${nixView === "all" ? "on" : ""}">All nixed <b>${nixAll.length.toLocaleString()}</b></button></span>
-        ${nixView === "unseen" ? `<span>The ones you scrolled past on Nov 8. Still no-go; click a picture to keep it after all.</span>${pos > 1 && pos < allItems.length ? `<button class="linkbtn" id="resume">Pick up at ${pos.toLocaleString()}</button>` : ""}` : ""}</div>` : "";
+        ${nixView === "unseen" ? `<span>The ones you scrolled past on Nov 8. Still no-go; click a picture to keep it after all.</span>` : ""}</div>` : "";
     const finish = which === "all" && allItems.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <span><b id="toSort">${allItems.length}</b> to sort.</span><button class="linkbtn" id="finishnix">Done: nix everything I've scrolled past</button></div>` : "";
     const gCount = {}, gTier = {};
     allItems.forEach(x => { const g = SIM.by[x.id]; if (g) { gCount[g.gid] = (gCount[g.gid] || 0) + 1; if (g.tier === "duplicate") gTier[g.gid] = "duplicate"; } });
     const catCount = {}; if (which === "keep") allItems.forEach(x => { const c = catOf(x); catCount[c] = (catCount[c] || 0) + 1; });
     $("#main").dataset.which = which;
-    gridState = { which, items: allItems, shown: 0, lastG: null, lastCat: null, catCount, gCount, gTier, left: allItems.length };
-    $("#main").innerHTML = filtersHTML() + pub + nixbar + finish + (allItems.length ? `<div class="grid"></div><div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>` : `<div class="empty">${empty}</div>`);
+    // Nixed is shown a page at a time (one sheet of up to 100), so the page never grows past what a browser can hold
+    let pageItems = allItems, offset = 0, pager = "";
+    if (which === "nix" && allItems.length) {
+      const groups = new Map(); let loose = 0;
+      allItems.forEach(x => { const sh = SHEETS.by[x.id]; const k = sh ? sh[0] : 1000 + Math.floor(loose++ / 100); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+      const keys = [...groups.keys()].sort((a, b) => a - b);
+      let at = S.get("nixAt:" + nixView, keys[0]); if (!groups.has(at)) at = keys.find(k => k >= at) ?? keys[keys.length - 1];
+      const pi = keys.indexOf(at);
+      keys.slice(0, pi).forEach(k => offset += groups.get(k).length);
+      pageItems = groups.get(at);
+      PAGE.keys = keys; PAGE.at = at;
+      const nav = where => `<div class="pager ${where}"><button class="linkbtn" data-pg="-1" ${pi ? "" : "disabled"}>‹ Previous</button>
+        <select class="pgsel">${keys.map((k, i) => `<option value="${k}" ${k === at ? "selected" : ""}>Page ${i + 1}</option>`).join("")}</select>
+        <span>of ${keys.length} · pictures ${(offset + 1).toLocaleString()}–${(offset + pageItems.length).toLocaleString()} of ${allItems.length.toLocaleString()}</span>
+        <button class="linkbtn next" data-pg="1" ${pi < keys.length - 1 ? "" : "disabled"}>Next page ›</button></div>`;
+      pager = nav("top");
+      PAGE.bottom = nav("bottom");
+      // free the last page's pictures before drawing this one
+      THUMB.forEach(p => { try { URL.revokeObjectURL(PV[p]); } catch {} delete PV[p]; }); THUMB.clear();
+      const nk = keys[pi + 1]; if (nk !== undefined && nk < 1000) sheetBlob(nk).catch(() => {});   // the next sheet waits in the cache
+    } else PAGE.bottom = "";
+    gridState = { which, items: pageItems, shown: 0, lastG: null, lastCat: null, catCount, gCount, gTier, left: pageItems.length, offset, total: allItems.length };
+    $("#main").innerHTML = filtersHTML() + pub + nixbar + pager + finish + (allItems.length ? `<div class="grid"></div>${PAGE.bottom || `<div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>`}` : `<div class="empty">${empty}</div>`);
     bindFilters();
     const want = Math.max(CHUNK, shownN);
     while (gridState.shown < Math.min(want, allItems.length)) { const before = gridState.shown; appendChunk(); if (gridState.shown === before) break; }
@@ -686,6 +709,9 @@ img[data-pv]:not([src]){visibility:hidden}
     const sen = $("#more-sentinel");
     if (sen) { moreIO = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) appendChunk(); }, { rootMargin: "1500px" }); moreIO.observe(sen); }
     setTimeout(updateWhere, 50);
+    const goPage = k => { S.set("nixAt:" + nixView, k); render(); window.scrollTo(0, 0); };
+    document.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => { const i = PAGE.keys.indexOf(PAGE.at) + +b.dataset.pg; if (PAGE.keys[i] !== undefined) goPage(PAGE.keys[i]); });
+    document.querySelectorAll(".pgsel").forEach(sel => sel.onchange = () => goPage(+sel.value));
     document.querySelectorAll("[data-nv]").forEach(b => b.onclick = () => { nixView = b.dataset.nv; S.set("nixView", nixView); shownN = CHUNK; render(); window.scrollTo(0, 0); });
     const rb = $("#resume");
     if (rb) rb.onclick = () => {
@@ -1235,7 +1261,7 @@ img[data-pv]:not([src]){visibility:hidden}
     const pr = sheetBlob(n).then(b => createImageBitmap(b));
     pr.catch(() => SH.bmp.delete(n));
     SH.bmp.set(n, pr);
-    while (SH.bmp.size > 10) { const [k, v] = SH.bmp.entries().next().value; SH.bmp.delete(k); v.then(x => x.close && x.close()).catch(() => {}); }
+    while (SH.bmp.size > 3) { const [k, v] = SH.bmp.entries().next().value; SH.bmp.delete(k); v.then(x => x.close && x.close()).catch(() => {}); }
     return pr;
   }
   const THUMB = new Set();      // preview paths currently showing a sheet thumbnail (enlarge fetches the full one)
@@ -1290,14 +1316,20 @@ img[data-pv]:not([src]){visibility:hidden}
   window.addEventListener("beforeunload", () => { if (Object.keys(pending).length) save(); if (Object.keys(editsPending).length) saveEdits(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && drawerId) closeRecord(); });
   // ---------- Auto-update: reload by itself when a new version of this page is published ----------
-  const BUILD = "20261108215845";
-  setInterval(async () => {
+  // The page never reloads itself (that used to reset your place every minute). A newer version just shows a quiet note.
+  let BUILD = null;
+  const checkBuild = async () => {
     if (location.protocol === "file:" || document.visibilityState !== "visible") return;
     try {
       const v = await (await fetch("version.json?t=" + Date.now(), { cache: "no-store" })).json();
-      if (v.build && v.build !== BUILD && !intakePending.length && !drawerId && !Object.keys(editsPending).length && !Object.keys(pending).length) location.reload();
+      if (!BUILD) { BUILD = v.build; return; }
+      if (v.build && v.build !== BUILD && !$("#newver")) {
+        const a = Object.assign(document.createElement("button"), { id: "newver", className: "linkbtn", textContent: "Update ready · reload when you like" });
+        a.onclick = () => location.reload(); $(".status").prepend(a);
+      }
     } catch {}
-  }, 60000);
+  };
+  checkBuild(); setInterval(checkBuild, 5 * 60000);
 
   if (tab === "activity") tab = "all";
   render();
