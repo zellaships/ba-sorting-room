@@ -207,6 +207,7 @@
 #where{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(11,31,42,.94);border:1px solid var(--line);color:var(--ink);
   border-radius:999px;padding:6px 16px;font-size:14px;font-variant-numeric:tabular-nums;z-index:40;display:none;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 #where b{color:#fff}
+.nixbar .seg{display:inline-flex;gap:4px}.nixbar .seg button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font:inherit}.nixbar .seg button.on{background:var(--ink);color:#0b1f2a}.nixbar .seg b{font-weight:600;margin-left:4px}
 </style>
 </head>
 <body>
@@ -252,6 +253,7 @@
   const catOf = x => x.v4 ? x.v4.type : (x.rec.image_url || x.rec.iiif_url ? "image" : x.rec.passage ? "excerpt" : "work");
   const PV = {};                // private preview path -> blob URL
   let cache = S.get("cache", {}); // path -> record (records never change once written)
+  try { localStorage.removeItem("ba.cache"); } catch {}   // finds are kept in the IndexedDB snapshot now; this old copy filled the browser's storage
   let sort = {};               // id -> {status, at}
   let sortSha = null, pending = {}, saveTimer = null;
   let keptFolders = new Set();
@@ -395,6 +397,9 @@
     }
   }
 
+  // Nixed holds two kinds: the starting no-go (everything set to nix before you had looked) and nixes you made by hand
+  let nixView = S.get("nixView", "unseen");
+  const isStart = id => { const v = sort[id]; return !!(v && v.status === "nix" && /nix everything/.test(v.by || "")); };
   function statusOf(id) { return (sort[id] || {}).status || ""; }
   function setStatus(id, status) {
     const prev = statusOf(id);
@@ -432,7 +437,7 @@
     if (filter.lane) items = items.filter(x => String(x.rec.lane) === filter.lane);
     if (filter.day) items = items.filter(x => x.path.split("/")[1] === filter.day);
     if (which === "keep") items = items.filter(x => statusOf(x.id) === "keep");
-    else if (which === "nix") items = items.filter(x => statusOf(x.id) === "nix");
+    else if (which === "nix") items = items.filter(x => statusOf(x.id) === "nix" && (nixView === "all" || (nixView === "unseen") === isStart(x.id)));
     else if (which === "swipe") items = items.filter(x => !statusOf(x.id));
     else items = items.filter(x => !statusOf(x.id)); // All shows only unsorted finds (kept and nixed live in their own tabs)
     // packaged items first in sheet order (images before text records), then agent finds newest first
@@ -442,6 +447,8 @@
       const ci = x => { const i = CATS.findIndex(c => c[0] === catOf(x)); return i < 0 ? 99 : i; };
       return items.sort((a, b) => ci(a) - ci(b) || (a.v4 && b.v4 ? a.ord - b.ord : a.v4 ? -1 : b.v4 ? 1 : (a.path < b.path ? 1 : -1)));
     }
+    // not looked at yet: one dense run in sheet order, so your place in it stays put
+    if (which === "nix" && nixView === "unseen") return items.sort((a, b) => (a.v4 ? 0 : 1) - (b.v4 ? 0 : 1) || (a.ord || 0) - (b.ord || 0));
     const ord = x => SIM.by[x.id] ? 0 : x.v4 ? (x.v4.type === "image" ? 1 : 2) : 3;
     return items.sort((a, b) => ord(a) - ord(b) ||
       (SIM.by[a.id] && SIM.by[b.id] ? (SIM.by[a.id].gid - SIM.by[b.id].gid || SIM.by[a.id].pos - SIM.by[b.id].pos) :
@@ -550,6 +557,7 @@
     if (which === "keep") {
       const c = catOf(x);
       if (c !== gs.lastCat) { gs.lastCat = c; head = `<div class="ghead"><b>${esc((CATS.find(k => k[0] === c) || [, c])[1])}</b> · ${(gs.catCount[c] || 0).toLocaleString()}</div>`; }
+    } else if (which === "nix" && nixView === "unseen") {
     } else if (sim && sim.gid !== gs.lastG) {
       const gt = gs.gTier[sim.gid] || sim.tier;
       head = `<div class="ghead"><b>Lookalike group ${sim.gid}</b> · ${tierWord[gt] || "Similar"} · ${gs.gCount[sim.gid] || 1} here</div>`;
@@ -587,7 +595,7 @@
       const t = el.querySelector(".thumb"); if (!t) return;
       t.style.cursor = "pointer";
       // All: one click on the picture keeps it. Advancing / Nixed: the picture opens the record. ⤢ enlarges.
-      t.onclick = which === "all" ? () => decide(el, "keep") : () => openRecord(el.dataset.id);
+      t.onclick = which === "all" || (which === "nix" && nixView === "unseen") ? () => decide(el, "keep") : () => openRecord(el.dataset.id);
       if (t.dataset.full || t.querySelector("img[data-pv]")) {
         const z = Object.assign(document.createElement("button"), { className: "zoom", title: "Enlarge", textContent: "⤢" });
         z.onclick = e => { e.stopPropagation(); if (t.dataset.full) enlarge(t); };
@@ -617,7 +625,9 @@
     if (!n) { w.style.display = "none"; return; }
     const num = parseInt(n.replace(/[^0-9]/g, ""), 10) || 0, total = gs.items.length;
     w.innerHTML = `<b>${num.toLocaleString()}</b> of ${total.toLocaleString()} · ${Math.max(0, Math.round(num / total * 100))}% through`;
-    w.style.display = "none";
+    const looking = gs.which === "nix" && nixView === "unseen";
+    w.hidden = !looking; w.style.display = looking ? "" : "none";
+    if (looking && num > S.get("nixPos", 0)) S.set("nixPos", num);
   }
   let whereT = null;
   window.addEventListener("scroll", () => { clearTimeout(whereT); whereT = setTimeout(updateWhere, 60); }, { passive: true });
@@ -629,6 +639,13 @@
     const waiting = which === "keep" ? allItems.filter(x => !PUB.ids.has(x.id) && !x.rec._hold).length : 0;
     const heldN = which === "keep" ? allItems.filter(x => x.rec._hold).length : 0;
     const pub = which === "keep" ? `<div class="pubbar">Prod images is what the v4 workbench reads. <b>${allItems.filter(x => PUB.ids.has(x.id)).length}</b> live in v4 · <b>${waiting}</b> publish on Refresh${heldN ? ` · <b>${heldN}</b> held until their source entry is complete` : ""}${V4.last ? ` · last published ${new Date(V4.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}${liveOn() ? "" : " · v4 live is off"}</div>` : "";
+    const nixAll = which === "nix" ? Object.keys(records).filter(id => statusOf(id) === "nix") : [];
+    const nStart = nixAll.filter(isStart).length, pos = S.get("nixPos", 0);
+    const nixbar = which === "nix" ? `<div class="filters nixbar"><span class="seg">
+        <button data-nv="unseen" class="${nixView === "unseen" ? "on" : ""}">Not looked at yet <b>${nStart.toLocaleString()}</b></button>
+        <button data-nv="hand" class="${nixView === "hand" ? "on" : ""}">Nixed by hand <b>${(nixAll.length - nStart).toLocaleString()}</b></button>
+        <button data-nv="all" class="${nixView === "all" ? "on" : ""}">All nixed <b>${nixAll.length.toLocaleString()}</b></button></span>
+        ${nixView === "unseen" ? `<span>These start as no-go. Click a picture to keep it; anything you pass stays no-go.</span>${pos > 1 && pos < allItems.length ? `<button class="linkbtn" id="resume">Pick up at ${pos.toLocaleString()}</button>` : ""}` : ""}</div>` : "";
     const finish = which === "all" && allItems.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <span><b id="toSort">${allItems.length}</b> to sort.</span><button class="linkbtn" id="finishnix">Done: nix everything I've scrolled past</button></div>` : "";
     const gCount = {}, gTier = {};
@@ -636,7 +653,7 @@
     const catCount = {}; if (which === "keep") allItems.forEach(x => { const c = catOf(x); catCount[c] = (catCount[c] || 0) + 1; });
     $("#main").dataset.which = which;
     gridState = { which, items: allItems, shown: 0, lastG: null, lastCat: null, catCount, gCount, gTier, left: allItems.length };
-    $("#main").innerHTML = filtersHTML() + pub + finish + (allItems.length ? `<div class="grid"></div><div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>` : `<div class="empty">${empty}</div>`);
+    $("#main").innerHTML = filtersHTML() + pub + nixbar + finish + (allItems.length ? `<div class="grid"></div><div class="filters" style="justify-content:center"><span id="scrollnote"></span></div><div id="more-sentinel" style="height:1px"></div>` : `<div class="empty">${empty}</div>`);
     bindFilters();
     const want = Math.max(CHUNK, shownN);
     while (gridState.shown < Math.min(want, allItems.length)) { const before = gridState.shown; appendChunk(); if (gridState.shown === before) break; }
@@ -644,6 +661,14 @@
     const sen = $("#more-sentinel");
     if (sen) { moreIO = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) appendChunk(); }, { rootMargin: "1500px" }); moreIO.observe(sen); }
     setTimeout(updateWhere, 50);
+    document.querySelectorAll("[data-nv]").forEach(b => b.onclick = () => { nixView = b.dataset.nv; S.set("nixView", nixView); shownN = CHUNK; render(); window.scrollTo(0, 0); });
+    const rb = $("#resume");
+    if (rb) rb.onclick = () => {
+      const want = S.get("nixPos", 0);
+      while (gridState.shown < Math.min(want + 20, gridState.items.length)) { const b = gridState.shown; appendChunk(); if (gridState.shown === b) break; }
+      const t = $("#main .grid").querySelectorAll(".tile")[Math.max(0, want - 1)];
+      if (t) t.scrollIntoView({ block: "start" });
+    };
     const fb = $("#finishnix");
     if (fb) fb.onclick = () => {
       const tiles = [...$("#main .grid").querySelectorAll(".tile")].filter(el => el.getBoundingClientRect().top < window.innerHeight && !statusOf(el.dataset.id));
