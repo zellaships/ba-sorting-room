@@ -999,6 +999,26 @@ img[data-pv]:not([src]){visibility:hidden}
       origin: { system: "agent-finds", batch: x.path.split("/")[1] },
       admission: { decision: "go", decided_by: "Cyrus", decided_at: at || "unknown", batch: "agent-finds" } };
   }
+  // Citation standard (same rules as scripts/v4_citations.py in the research repo; keep them in step).
+  // A link from the Nov 8 automated source-chase is a lead, never a source, until the item page is checked.
+  const AUTO = /source-chase|web_search candidate/i, PIPE = /harvest set|harvest file|Drive id|ID-pass|source-chase|web_search/i;
+  function citeV4(v) {
+    const e = EDITS[v.id] || {}, f = e.fields || {};
+    const note = (v.care || {}).note || "";
+    const parts = note.split(/\|\|?/).map(x => x.trim()).filter(Boolean), pipe = parts.filter(x => PIPE.test(x));
+    if (pipe.length) { v.processing_notes = pipe.join(" | "); v.care = Object.assign({}, v.care, { note: parts.filter(x => !PIPE.test(x)).join(" | ") || "unknown" }); }
+    const st = e.source_status;
+    if (st === "verified") v.verification = { status: "verified", by: e.by, at: e.updated_at, how: e.check_note };
+    else if (st === "false_link_cleared") v.verification = { status: "unverified", how: e.check_note };
+    else if (AUTO.test(JSON.stringify([v.sources, v.processing_notes, note])) && f.source_url === undefined) {
+      if (v.source_url && v.source_url !== "unknown") v.source_candidate = v.source_url;
+      v.source_url = "unknown";
+      v.verification = { status: "unverified", how: "The link on file came from an automated web search on words in the filename (Nov 8, 2026) and has not been checked against the image. Kept as a lead only." };
+    } else if (e.by) v.verification = { status: "checked", by: e.by, at: e.updated_at, how: e.check_note };
+    else if ((v.origin || {}).system === "agent-finds" || String(v.id).startsWith("find-")) v.verification = { status: "from_agent", how: "Found by the research agent with a recorded search trail; not yet re-checked by a person against the item page." };
+    else v.verification = v.verification || { status: "from_source_sheet", how: "Recorded in the harvest source sheet; not yet re-checked against the item page." };
+    return v;
+  }
   async function v4Desired(treeMap) {
     const files = {}, index = [];
     let held = 0;
@@ -1019,7 +1039,8 @@ img[data-pv]:not([src]){visibility:hidden}
       const man = JSON.parse(await raw(`v4/intake/${batch}/manifest.json`) || '{"items":[]}');
       for (const it of man.items || []) {
         if (!isGo(it.v4.id)) continue;
-        if (it.v4.hold) { held++; continue; }
+        const ev = EDITS[it.v4.id] || {};
+        if (it.v4.hold && !(ev.source_status === "verified" && ev.fields && ev.fields.source_url)) { held++; continue; }   // a verified source releases the hold
         const v = JSON.parse(JSON.stringify(it.v4));
         const d = sort[v.id] || dec[v.id] || {};
         v.admission = { decision: "go", decided_by: d.by || "Cyrus", decided_at: d.at || "unknown", batch };
@@ -1032,7 +1053,7 @@ img[data-pv]:not([src]){visibility:hidden}
           delete v.preview;
         }
         delete v.hold;
-        put(editsToV4(v), prevPath);
+        put(citeV4(editsToV4(v)), prevPath);
       }
     }
     // agent finds in Advancing
