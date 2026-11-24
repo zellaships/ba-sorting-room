@@ -1110,7 +1110,7 @@ img[data-pv]:not([src]){visibility:hidden}
   }
   // ---------- Record view: open, edit, ask questions ----------
   const EDITABLE = [["title", "Title"], ["summary", "Summary"], ["creator_as_stated", "Creator (as stated)"], ["date_as_stated", "Date (as stated)"],
-                    ["holder", "Held by"], ["tags", "Tags (comma separated)"], ["rights_as_stated", "Rights (as stated)"], ["care_note", "Care note"], ["notes", "Notes"]];
+                    ["holder", "Held by"], ["source_url", "Source link"], ["tags", "Tags (comma separated)"], ["rights_as_stated", "Rights (as stated)"], ["care_note", "Care note"], ["notes", "Notes"]];
   const LONG = new Set(["summary", "creator_as_stated", "rights_as_stated", "care_note", "notes", "holder"]);
   function applyEdits() {
     for (const [id, x] of Object.entries(records)) {
@@ -1124,6 +1124,7 @@ img[data-pv]:not([src]){visibility:hidden}
       if (f.rights_as_stated !== undefined) r.rights = f.rights_as_stated;
       if (f.summary !== undefined) { if (x.v4) r.passage = f.summary; else r.why_this = f.summary; }
       if (f.care_note !== undefined) r.care_note = f.care_note;
+      if (f.source_url !== undefined) r.source_url = f.source_url;
     }
   }
   async function fullV4(x) {
@@ -1236,7 +1237,8 @@ img[data-pv]:not([src]){visibility:hidden}
     if (f.rights_as_stated !== undefined) v.rights = Object.assign({}, v.rights, { as_stated: f.rights_as_stated });
     if (f.care_note !== undefined) v.care = Object.assign({}, v.care, { note: f.care_note });
     if (f.notes !== undefined) v.notes = f.notes;
-    if (Object.keys(f).length) v.edited = { by: "Cyrus", at: e.updated_at, fields: Object.keys(f) };
+    if (f.source_url !== undefined) v.source_url = f.source_url;
+    if (Object.keys(f).length) v.edited = { by: e.by || "Cyrus", at: e.updated_at, fields: Object.keys(f) };
     if ((e.questions || []).length) v.questions = e.questions;
     return v;
   }
