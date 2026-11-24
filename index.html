@@ -397,7 +397,7 @@
     }
   }
 
-  // Nixed holds two kinds: the starting no-go (everything set to nix before you had looked) and nixes you made by hand
+  // Nixed holds two kinds: images passed over in the Nov 8 pass (set to nix after) and nixes made one by one
   let nixView = S.get("nixView", "unseen");
   const isStart = id => { const v = sort[id]; return !!(v && v.status === "nix" && /nix everything/.test(v.by || "")); };
   function statusOf(id) { return (sort[id] || {}).status || ""; }
@@ -447,7 +447,7 @@
       const ci = x => { const i = CATS.findIndex(c => c[0] === catOf(x)); return i < 0 ? 99 : i; };
       return items.sort((a, b) => ci(a) - ci(b) || (a.v4 && b.v4 ? a.ord - b.ord : a.v4 ? -1 : b.v4 ? 1 : (a.path < b.path ? 1 : -1)));
     }
-    // not looked at yet: one dense run in sheet order, so your place in it stays put
+    // passed over: one dense run in sheet order, so your place in it stays put
     if (which === "nix" && nixView === "unseen") return items.sort((a, b) => (a.v4 ? 0 : 1) - (b.v4 ? 0 : 1) || (a.ord || 0) - (b.ord || 0));
     const ord = x => SIM.by[x.id] ? 0 : x.v4 ? (x.v4.type === "image" ? 1 : 2) : 3;
     return items.sort((a, b) => ord(a) - ord(b) ||
@@ -642,10 +642,10 @@
     const nixAll = which === "nix" ? Object.keys(records).filter(id => statusOf(id) === "nix") : [];
     const nStart = nixAll.filter(isStart).length, pos = S.get("nixPos", 0);
     const nixbar = which === "nix" ? `<div class="filters nixbar"><span class="seg">
-        <button data-nv="unseen" class="${nixView === "unseen" ? "on" : ""}">Not looked at yet <b>${nStart.toLocaleString()}</b></button>
+        <button data-nv="unseen" class="${nixView === "unseen" ? "on" : ""}">Passed over <b>${nStart.toLocaleString()}</b></button>
         <button data-nv="hand" class="${nixView === "hand" ? "on" : ""}">Nixed by hand <b>${(nixAll.length - nStart).toLocaleString()}</b></button>
         <button data-nv="all" class="${nixView === "all" ? "on" : ""}">All nixed <b>${nixAll.length.toLocaleString()}</b></button></span>
-        ${nixView === "unseen" ? `<span>These start as no-go. Click a picture to keep it; anything you pass stays no-go.</span>${pos > 1 && pos < allItems.length ? `<button class="linkbtn" id="resume">Pick up at ${pos.toLocaleString()}</button>` : ""}` : ""}</div>` : "";
+        ${nixView === "unseen" ? `<span>The ones you scrolled past on Nov 8. Still no-go; click a picture to keep it after all.</span>${pos > 1 && pos < allItems.length ? `<button class="linkbtn" id="resume">Pick up at ${pos.toLocaleString()}</button>` : ""}` : ""}</div>` : "";
     const finish = which === "all" && allItems.length ? `<div class="filters"><span>Everything here is a no-go unless you keep it. Click a picture to keep it (⤢ enlarges).</span>
       <span><b id="toSort">${allItems.length}</b> to sort.</span><button class="linkbtn" id="finishnix">Done: nix everything I've scrolled past</button></div>` : "";
     const gCount = {}, gTier = {};
