@@ -25,8 +25,8 @@ function sn(t,s){return Math.sin(t*1.0+s)*.5+Math.sin(t*2.17+s*1.7)*.3+Math.sin(
 const tailR=a=>{const t=clamp((a-.37)/.615,0,1);return [.185*Math.pow(1-t,.9)+.03,.135*Math.pow(1-t,.9)+.022];};
 function buildStatic(bin){
   const nv=META.nv,nt=META.nt;
-  const q=new Uint16Array(bin,0,nv*3), c8=new Uint8Array(bin,nv*6,nv*4), idx=new Uint16Array(bin.slice(nv*10),0,nt*3);
-  const P=[],Nn=[],C=[],UV=[],I=[];
+  const q=new Uint16Array(bin,0,nv*3), c8=new Uint8Array(bin,nv*6,nv*4), w8=new Uint8Array(bin,nv*10,nv*4), idx=new Uint16Array(bin.slice(nv*14),0,nt*3);
+  const P=[],Nn=[],C=[],UV=[],I=[],Wt=[];
   const mn=META.min,mx=META.max;
   // body
   const bp=new Float32Array(nv*3);
@@ -37,10 +37,10 @@ function buildStatic(bin){
     const n=cross(e1,e2);for(const v of [a,b,c]){bn[v*3]+=n[0];bn[v*3+1]+=n[1];bn[v*3+2]+=n[2];}}
   for(let i=0;i<nv;i++){const n=norm([bn[i*3],bn[i*3+1],bn[i*3+2]]);
     P.push((ZTOP-bp[i*3+2])/LTOT,bp[i*3],bp[i*3+1],0);Nn.push(n[0],n[1],n[2]);
-    C.push(c8[i*4],c8[i*4+1],c8[i*4+2],c8[i*4+3]);UV.push(0,0);}
+    C.push(c8[i*4],c8[i*4+1],c8[i*4+2],c8[i*4+3]);UV.push(0,0);Wt.push(w8[i*4],w8[i*4+1],w8[i*4+2],w8[i*4+3]);}
   for(let i=0;i<nt*3;i++)I.push(idx[i]);
   let base=nv;
-  const vert=(a,x,y,kind,n,col,u,v)=>{P.push(a,x,y,kind);Nn.push(n[0],n[1],n[2]);C.push(col[0],col[1],col[2],col[3]);UV.push(u,v);return base++;};
+  const vert=(a,x,y,kind,n,col,u,v)=>{P.push(a,x,y,kind);Nn.push(n[0],n[1],n[2]);C.push(col[0],col[1],col[2],col[3]);UV.push(u,v);Wt.push(0,0,0,0);return base++;};
   const grid=(nu,nvv,wrap,f)=>{const b0=base;for(let i=0;i<nu;i++)for(let j=0;j<nvv;j++)f(i,j);
     for(let i=0;i<nu-(wrap?0:1);i++)for(let j=0;j<nvv-1;j++){const a=b0+i*nvv+j,b=b0+((i+1)%nu)*nvv+j;I.push(a,b,b+1,a,b+1,a+1);}};
   // tail: scaled tube, hip to fluke
@@ -65,22 +65,27 @@ function buildStatic(bin){
       const fl=1.06+(.02*(2-tier))+[.34,.46,.60][tier]*Math.pow(v,1.25),rf=1+.10*v*Math.sin(th*(13+2*tier)+tier*2.1);
       const cx=Math.cos(th),sy=Math.sin(th);
       vert(a,rx*fl*rf*cx,ry*fl*rf*sy-.012,2,norm([cx,sy,-.5]),[tier*120,0,0,0],i/SC,v);});}
-  return {P:new Float32Array(P),N:new Float32Array(Nn),C:new Uint8Array(C),UV:new Float32Array(UV),I:new Uint32Array(I)};
+  return {P:new Float32Array(P),N:new Float32Array(Nn),C:new Uint8Array(C),UV:new Float32Array(UV),I:new Uint32Array(I),W:new Uint8Array(Wt)};
 }
 
 // ---------- the swimmer's state and physics ----------
 const A0=QS.has('swima')?+QS.get('swima'):rnd()*TAU;
 const S={p:[RBASE*Math.sin(A0),-1.8,RBASE*Math.cos(A0)],yaw:A0-Math.PI/2,pitch:0,roll:0,U:.5,ph:0,amp:.9,ampT:.9,f:.9,fT:.9,mode:'kick',tm:4,dir:1,yr:0,t:rnd()*100,St:0};
 const Pj=new Float32Array(NJ*3),Tj=new Float32Array(NJ*3),Uj=new Float32Array(NJ*3);
-const LAMBDA=1.05, MA=1.0, CDS=.26, MASS=1.25, ATIP=.105;  // wavelength (body lengths), fluke added mass, drag area, mass, tip amplitude (body lengths)
-const env=s=>.018+.982*Math.pow(clamp(s,0,AMAX),2.2);
+const LAMBDA=1.0, MA=1.0, CDS=.30, MASS=1.25, ATIP=.125;  // wavelength (body lengths), fluke added mass, drag area, mass, tip amplitude (body lengths)
+const env=s=>.045+.955*Math.pow(clamp(s,0,AMAX),2.0);
 const massAt=s=>s<.38?1:Math.pow(clamp(1-(s-.38)/.7,0,1),1.6)+.04;
 function stepSwim(dt,wy){
   S.t+=dt;
   // kick, then glide
   S.tm-=dt;
-  if(S.tm<0){if(S.mode==='kick'){S.mode='glide';S.tm=1.4+rnd()*2.6;S.ampT=.07;}
-    else{S.mode='kick';S.tm=3+rnd()*4.5;S.ampT=.78+rnd()*.3;S.fT=.72+rnd()*.42;if(rnd()<.18)S.dir*=-1;}}
+  if(S.tm<0){
+    if(S.mode==='kick'){const r=rnd();
+      if(r<.16){S.mode='hover';S.tm=3+rnd()*3;S.ampT=.28;S.fT=.42;}
+      else{S.mode='glide';S.tm=1.6+rnd()*2.8;S.ampT=.06;const g=rnd();
+        if(g<.30)gesture('roll');else if(g<.60)gesture(rnd()<.5?'reachL':'reachR');else if(g<.78)gesture(rnd()<.5?'trailL':'trailR');}}
+    else{S.mode='kick';S.tm=3+rnd()*4.5;S.ampT=.8+rnd()*.35;S.fT=.72+rnd()*.5;if(rnd()<.18)S.dir*=-1;if(rnd()<.55)gesture('pull');}}
+  stepArms(dt);
   S.amp+=(S.ampT-S.amp)*(1-Math.exp(-dt*1.5));S.f+=(S.fT-S.f)*(1-Math.exp(-dt*1.1));
   // where she wants to go: a loose orbit that breathes in and out and up and down
   const r=Math.hypot(S.p[0],S.p[2])||1,er=[S.p[0]/r,S.p[2]/r],et=[-er[1]*S.dir,er[0]*S.dir];
@@ -92,23 +97,23 @@ function stepSwim(dt,wy){
   const rate=clamp(dy*1.1,-.6,.6)*(.3+.7*Math.min(1,S.U/.6));
   S.yr+=(rate-S.yr)*(1-Math.exp(-dt*2.5));S.yaw+=S.yr*dt;
   S.pitch+=(pitchT-S.pitch)*(1-Math.exp(-dt*.8));
-  S.roll+=(clamp(-S.yr*S.U*1.6,-.7,.7)-S.roll)*(1-Math.exp(-dt*2));
+  S.roll+=(clamp(-S.yr*S.U*1.6,-.7,.7)+.07*Math.sin(S.ph*.5+1.)*S.amp-S.roll)*(1-Math.exp(-dt*2));
   // thrust from the tail wave (Lighthill): T = m_a * (h_t * w - w*w/2) at the fluke, w = h_t + U*h_x
   S.ph+=TAU*S.f*dt;
   const A=S.amp*ATIP*LW*env(1),k=TAU/(LAMBDA*LW),om=TAU*S.f,arg=k*LW-S.ph;
   const ht=-A*om*Math.cos(arg),hx=A*k*Math.cos(arg),w=ht+S.U*hx;
   const thrust=MA*(ht*w-.5*w*w),drag=.5*CDS*S.U*S.U*(1+1.6*Math.abs(S.yr));
-  S.U=clamp(S.U+(thrust-drag)/MASS*dt,.06,3);
+  S.U=clamp(S.U+(thrust-drag+G.push)/MASS*dt,.06,3);
   S.St=S.f*2*A/Math.max(S.U,.05);
   const cp=Math.cos(S.pitch),F=[Math.sin(S.yaw)*cp,Math.sin(S.pitch),Math.cos(S.yaw)*cp];
   S.p=add(S.p,mul(F,S.U*dt));S.p[1]=Math.min(S.p[1],wy-.55);
   // the midline
   let U0=norm(sub([0,1,0],mul(F,F[1])));const R0=norm(cross(mul(F,-1),U0));
-  {const c=Math.cos(S.roll),s=Math.sin(S.roll);U0=norm(add(mul(U0,c),mul(R0,s)));}
+  {const rr=S.roll+G.roll,c=Math.cos(rr),s=Math.sin(rr);U0=norm(add(mul(U0,c),mul(R0,s)));}
   const Rr=norm(cross(mul(F,-1),U0));
   const kap=clamp(S.yr/Math.max(S.U,.25)*.75,-.9,.9), SCM=.36;
   const hs=new Float32Array(NJ);let m0=0,m1=0,m2=0,mh=0,mxh=0;
-  for(let i=0;i<NJ;i++){const s=i/(NJ-1)*AMAX,x=(s-SCM)*LW;hs[i]=S.amp*ATIP*LW*env(s)*Math.sin(k*s*LW-S.ph);
+  for(let i=0;i<NJ;i++){const s=i/(NJ-1)*AMAX,x=(s-SCM)*LW;{const th=k*s*LW-S.ph;hs[i]=S.amp*ATIP*LW*env(s)*(Math.sin(th)+.16*s*Math.sin(2*th+.7));}
     const m=massAt(s);m0+=m;m1+=m*x;m2+=m*x*x;mh+=m*hs[i];mxh+=m*x*hs[i];}
   // recoil: remove the net sideways shift and net rotation of the wave, so momentum balances and the head answers the tail
   const den=m0*m2-m1*m1,b=(m0*mxh-m1*mh)/den,a0=(mh-b*m1)/m0;
@@ -118,6 +123,39 @@ function stepSwim(dt,wy){
     const T=norm([Pj[c*3]-Pj[a*3],Pj[c*3+1]-Pj[a*3+1],Pj[c*3+2]-Pj[a*3+2]]),Uu=norm(sub(U0,mul(T,dot(T,U0))));
     Tj.set(T,i*3);Uj.set(Uu,i*3);}
 }
+// ---------- arms: loose in the water, with things they like to do ----------
+const ARM={sh:[[0.24657876789569855,-0.016006216406822205,0.712843656539917],[-0.24657876789569855,-0.016006216406822205,0.712843656539917]],
+  el:[[0.30203959345817566,0.030716214329004288,0.2771812677383423],[-0.30203959345817566,0.030716214329004288,0.2771812677383423]]};
+const G={roll:0,push:0,name:null,t:0,dur:0};
+const arms=[0,1].map(()=>({abd:.1,flex:.05,elb:.3,vA:0,vF:0,vE:0}));
+const shR=new Float32Array(18),elR=new Float32Array(18);
+function gesture(n){if(G.name)return;G.name=n;G.t=0;G.dur=n==='pull'?2.3:n==='roll'?3.6:n.startsWith('reach')?3.2:2.6;}
+const ease=x=>x*x*(3-2*x), bell=x=>Math.sin(Math.PI*clamp(x,0,1));
+function stepArms(dt){
+  G.push=0;let gu=0;
+  if(G.name){G.t+=dt;gu=G.t/G.dur;if(gu>=1){G.name=null;G.roll=0;gu=0;}}
+  if(G.name==='roll')G.roll=TAU*ease(clamp(gu,0,1))*S.dir;
+  const g=clamp(1-S.amp,0,1),hov=S.mode==='hover'?1:0;
+  for(let i=0;i<2;i++){const a=arms[i],side=i?-1:1,ph=S.ph-2.0+(i?.35:-.2);
+    // at rest they hang a little open, answer the body's wave a beat late, and open wider when she glides
+    let abd=.10+.26*g-.07*S.U+.05*sn(S.t*.33,i*5.1),flex=.06+.24*S.amp*Math.sin(ph)+.06*sn(S.t*.27,3+i*2.3),elb=.30+.22*g+.14*S.amp*Math.sin(ph-.7)+.08*sn(S.t*.41,9+i);
+    // the outside arm of a turn sweeps out to steer
+    abd+=.5*clamp(side*S.yr/.6,0,1);
+    if(hov){abd+=.45+.28*Math.sin(S.t*2.3+i*Math.PI);flex+=.25+.2*Math.cos(S.t*2.3+i*Math.PI);elb+=.35;}
+    if(G.name==='pull'){const r=clamp(gu/.42,0,1),p=clamp((gu-.42)/.58,0,1);
+      if(gu<.42){flex=flex*(1-ease(r))+2.75*ease(r);abd=abd*(1-ease(r))+.12*ease(r);elb=elb*(1-ease(r))+.08*ease(r);}
+      else{flex=2.75*(1-ease(p))+flex*ease(p);abd=.12+1.05*bell(p)*(1-.3*p);elb=.08+.95*bell(p);G.push=.55*bell(p);}}
+    if(G.name==='roll'){abd+=.75*bell(gu);elb+=.2*bell(gu);}
+    if((G.name==='reachL'&&i===0)||(G.name==='reachR'&&i===1)){const b=Math.min(1,bell(gu)*1.6);flex=flex*(1-b)+2.85*b;elb=elb*(1-b)+.06*b;abd*=1-b*.6;}
+    if((G.name==='trailL'&&i===0)||(G.name==='trailR'&&i===1)){const b=Math.min(1,bell(gu)*1.5);abd+=1.15*b;elb=elb*(1-b)+.12*b;flex+=.15*b;}
+    // springs, so nothing snaps
+    const K1=16,C1=7.2,sp=(x,v,t)=>{v+=(K1*(t-x)-C1*v)*dt;return [x+v*dt,v];};
+    [a.abd,a.vA]=sp(a.abd,a.vA,abd);[a.flex,a.vF]=sp(a.flex,a.vF,flex);[a.elb,a.vE]=sp(a.elb,a.vE,Math.max(0,elb));
+    const cf=Math.cos(-a.flex),sf=Math.sin(-a.flex),ca=Math.cos(-side*a.abd),sa=Math.sin(-side*a.abd),ce=Math.cos(-a.elb),se=Math.sin(-a.elb);
+    // Rx(-flex) * Ry(-side*abd), column-major
+    shR.set([ca,sf*sa,-cf*sa, 0,cf,sf, sa,-sf*ca,cf*ca],i*9);
+    elR.set([1,0,0, 0,ce,se, 0,-se,ce],i*9);}
+}
 function skin(a,x,y){const fi=a/AMAX*(NJ-1),i=clamp(Math.floor(fi),0,NJ-2),f=fi-i;
   const g=(A,j)=>[A[j*3],A[j*3+1],A[j*3+2]];
   const p0=g(Pj,i),p1=g(Pj,i+1),T=norm(add(mul(g(Tj,i),1-f),mul(g(Tj,i+1),f)));
@@ -125,7 +163,7 @@ function skin(a,x,y){const fi=a/AMAX*(NJ-1),i=clamp(Math.floor(fi),0,NJ-2),f=fi-
   return {p:add(add(p0,mul(sub(p1,p0),f)),add(mul(R,x*K),mul(Uu,y*K))),T,U:Uu,R};}
 
 // ---------- locs: chains pulled through the water ----------
-const LOCS=[],LN=9,LSIDES=5;
+const LOCS=[],LN=13,LSIDES=5;
 function buildLocs(){
   const hc=[0,.075,1.105],hr=.102,ax=norm([0,.62,.78]);let tries=0;
   while(LOCS.length<46&&tries++<4000){
@@ -133,8 +171,9 @@ function buildLocs(){
     if(dot(d,ax)<.05||dot(d,norm([0,-1,.15]))>.5)continue;
     if(LOCS.some(l=>len(sub(l.d,d))<.2))continue;
     const pos=add(hc,mul(d,hr));
-    LOCS.push({d,a:(ZTOP-pos[2])/LTOT,x:pos[0],y:pos[1],L:(.55+rnd()*.50)*K,rad:(.020+rnd()*.008)*K,seed:rnd()*100,
-      X:new Float32Array(LN*3),Xp:new Float32Array(LN*3),init:false});}
+    LOCS.push({d,a:(ZTOP-pos[2])/LTOT,x:pos[0],y:pos[1],L:(.60+rnd()*.62)*K,rad:(.020+rnd()*.008)*K,seed:rnd()*100,
+      X:new Float32Array(LN*3),Xp:new Float32Array(LN*3),D:new Float32Array(LN*3),init:false,
+      w1:1.6+rnd()*1.8,w2:1.1+rnd()*1.6,k1:4.5+rnd()*4,k2:3+rnd()*3.5,a1:.5+rnd()*.7,a2:.4+rnd()*.7,curl:(rnd()<.5?1:-1)*(.4+rnd()*1.2)});}
 }
 function stepLocs(dt,t){
   const head=skin(.035,0,.075),hR=.108*K;
@@ -144,24 +183,24 @@ function stepLocs(dt,t){
     for(let i=1;i<LN;i++){const j=i*3,u=i/(LN-1);
       let vx=l.X[j]-l.Xp[j],vy=l.X[j+1]-l.Xp[j+1],vz=l.X[j+2]-l.Xp[j+2];
       // water drag: the water is nearly still, so each point gives up most of its motion; this is what makes them trail
-      const dr=Math.exp(-dt*(10.+12.*u));vx*=dr;vy*=dr;vz*=dr;
+      const dr=Math.exp(-dt*(7.5+8.*u));vx*=dr;vy*=dr;vz*=dr;
       // a slow current, a touch of lift, and each loc's own curl, stronger toward the tip
       const w=.9+.5*Math.sin(l.seed),ph=t*w+l.seed;
       const ax=(Math.sin(ph*.9+u*3.1+l.seed*3)*.55+.05*Math.sin(t*.23+l.X[j+2]))*u,
             ay=(.10+Math.cos(ph*.7+u*2.3)*.5)*u,az=(Math.sin(ph*1.1+u*3.7+l.seed)*.55)*u;
       l.Xp[j]=l.X[j];l.Xp[j+1]=l.X[j+1];l.Xp[j+2]=l.X[j+2];
-      l.X[j]+=vx+ax*dt*dt*K*34;l.X[j+1]+=vy+ay*dt*dt*K*34;l.X[j+2]+=vz+az*dt*dt*K*34;}
+      l.X[j]+=vx+ax*dt*dt*K*13;l.X[j+1]+=vy+ay*dt*dt*K*13;l.X[j+2]+=vz+az*dt*dt*K*13;}
     l.X.set(root,0);
     for(let it=0;it<5;it++){
       // the first link holds the direction it grows from the scalp
-      if(it===0){const tg=add(root,mul(dw,seg));for(let c=0;c<3;c++)l.X[3+c]+=(tg[c]-l.X[3+c])*.22;}
+      if(it===0){const tg=add(root,mul(dw,seg));for(let c=0;c<3;c++)l.X[3+c]+=(tg[c]-l.X[3+c])*.12;}
       for(let i=1;i<LN;i++){const a=(i-1)*3,b=i*3;let dx=l.X[b]-l.X[a],dy=l.X[b+1]-l.X[a+1],dz=l.X[b+2]-l.X[a+2];
         const d=Math.hypot(dx,dy,dz)||1e-6,k=(d-seg)/d;
         if(i===1){l.X[b]-=dx*k;l.X[b+1]-=dy*k;l.X[b+2]-=dz*k;}
         else{l.X[a]+=dx*k*.5;l.X[a+1]+=dy*k*.5;l.X[a+2]+=dz*k*.5;l.X[b]-=dx*k*.5;l.X[b+1]-=dy*k*.5;l.X[b+2]-=dz*k*.5;}}
       // thick locs resist sharp bends
       for(let i=2;i<LN;i++){const a=(i-2)*3,b=i*3;let dx=l.X[b]-l.X[a],dy=l.X[b+1]-l.X[a+1],dz=l.X[b+2]-l.X[a+2];
-        const d=Math.hypot(dx,dy,dz)||1e-6,mn=seg*1.45;if(d<mn){const k=(d-mn)/d*.5;
+        const d=Math.hypot(dx,dy,dz)||1e-6,mn=seg*1.18;if(d<mn){const k=(d-mn)/d*.5;
           if(i>2){l.X[a]+=dx*k;l.X[a+1]+=dy*k;l.X[a+2]+=dz*k;}l.X[b]-=dx*k*(i>2?1:2);l.X[b+1]-=dy*k*(i>2?1:2);l.X[b+2]-=dz*k*(i>2?1:2);}}
       // stay out of her head
       for(let i=1;i<LN;i++){const b=i*3,dx=l.X[b]-head.p[0],dy=l.X[b+1]-head.p[1],dz=l.X[b+2]-head.p[2],d=Math.hypot(dx,dy,dz)||1e-6;
@@ -178,30 +217,48 @@ function locBuffers(){
   locI=new Uint32Array(I);
 }
 function fillLocs(){
+  const t=S.t;
   LOCS.forEach((l,li)=>{let nrm=null;
+    // each loc carries its own slow wave and a curl toward the tip, laid over where the water put it
+    {let fr=null;const seg=l.L/(LN-1);
+      for(let i=0;i<LN;i++){const a=Math.max(i-1,0)*3,c=Math.min(i+1,LN-1)*3,u=i/(LN-1);
+        const T=norm([l.X[c]-l.X[a],l.X[c+1]-l.X[a+1],l.X[c+2]-l.X[a+2]]);
+        fr=norm(fr?sub(fr,mul(T,dot(fr,T))):cross(T,Math.abs(T[1])<.9?[0,1,0]:[1,0,0]));const b2=cross(T,fr);
+        const e=Math.pow(u,1.4)*seg,tip=Math.pow(clamp((u-.55)/.45,0,1),2)*l.curl;
+        const o1=e*(1.9*l.a1*Math.sin(l.k1*u-t*l.w1+l.seed)+2.6*tip*Math.cos(t*.6+l.seed)),o2=e*(1.9*l.a2*Math.cos(l.k2*u-t*l.w2+l.seed*2.)+2.6*tip*Math.sin(t*.6+l.seed));
+        l.D[i*3]=l.X[i*3]+fr[0]*o1+b2[0]*o2;l.D[i*3+1]=l.X[i*3+1]+fr[1]*o1+b2[1]*o2;l.D[i*3+2]=l.X[i*3+2]+fr[2]*o1+b2[2]*o2;}}
+    const X=l.D;
     for(let i=0;i<LN;i++){const a=Math.max(i-1,0)*3,c=Math.min(i+1,LN-1)*3;
-      const T=norm([l.X[c]-l.X[a],l.X[c+1]-l.X[a+1],l.X[c+2]-l.X[a+2]]);
+      const T=norm([X[c]-X[a],X[c+1]-X[a+1],X[c+2]-X[a+2]]);
       nrm=norm(nrm?sub(nrm,mul(T,dot(nrm,T))):cross(T,Math.abs(T[1])<.9?[0,1,0]:[1,0,0]));const bn=cross(T,nrm);
       const r=l.rad*(1-.35*Math.pow(i/(LN-1),2));
       for(let s=0;s<LSIDES;s++){const th=TAU*s/LSIDES,cx=Math.cos(th),sy=Math.sin(th),v=li*LN*LSIDES+i*LSIDES+s;
         const n=[nrm[0]*cx+bn[0]*sy,nrm[1]*cx+bn[1]*sy,nrm[2]*cx+bn[2]*sy];
-        locP[v*4]=l.X[i*3]+n[0]*r;locP[v*4+1]=l.X[i*3+1]+n[1]*r;locP[v*4+2]=l.X[i*3+2]+n[2]*r;locN.set(n,v*3);}}});
+        locP[v*4]=X[i*3]+n[0]*r;locP[v*4+1]=X[i*3+1]+n[1]*r;locP[v*4+2]=X[i*3+2]+n[2]*r;locN.set(n,v*3);}}});
 }
 
 // ---------- drawing ----------
 const VS=`#version 300 es
-layout(location=0) in vec4 a_pos;layout(location=1) in vec3 a_nrm;layout(location=2) in vec4 a_col;layout(location=3) in vec2 a_uv;
+layout(location=0) in vec4 a_pos;layout(location=1) in vec3 a_nrm;layout(location=2) in vec4 a_col;layout(location=3) in vec2 a_uv;layout(location=4) in vec4 a_w;
+uniform vec3 u_shP[2],u_elP[2];uniform mat3 u_shR[2],u_elR[2];
 uniform vec3 u_P[${NJ}],u_T[${NJ}],u_U[${NJ}];uniform float u_k,u_world,u_asp,u_t;uniform vec3 u_ro,u_fw,u_rt,u_up;
 out vec3 v_wp,v_n;out vec4 v_col;out vec2 v_uv;out float v_kind,v_a;
 void main(){vec3 wp,wn;v_kind=a_pos.w;v_a=a_pos.x;
   if(u_world>.5){wp=a_pos.xyz;wn=a_nrm;}
-  else{float fi=a_pos.x/${AMAX.toFixed(3)}*${(NJ-1).toFixed(1)};float i0=clamp(floor(fi),0.,${(NJ-2).toFixed(1)});float f=fi-i0;int i=int(i0);
+  else{float aa=a_pos.x;vec2 off=a_pos.yz;vec3 nl=a_nrm;
+    float ws=a_w.x+a_w.y+a_w.z+a_w.w;
+    if(a_pos.w<.5&&ws>.004){vec3 lp=vec3(a_pos.y,a_pos.z,${ZTOP.toFixed(5)}-a_pos.x*${LTOT.toFixed(2)});vec3 acc=lp*(1.-ws),na=nl*(1.-ws);
+      for(int s=0;s<2;s++){float wu=s==0?a_w.x:a_w.z,wl=s==0?a_w.y:a_w.w;
+        vec3 pu=u_shP[s]+u_shR[s]*(lp-u_shP[s]);
+        vec3 pl=u_shP[s]+u_shR[s]*(u_elP[s]+u_elR[s]*(lp-u_elP[s])-u_shP[s]);
+        acc+=pu*wu+pl*wl;na+=(u_shR[s]*nl)*wu+(u_shR[s]*(u_elR[s]*nl))*wl;}
+      lp=acc;nl=normalize(na);aa=(${ZTOP.toFixed(5)}-lp.z)/${LTOT.toFixed(2)};off=lp.xy;}
+    float fi=aa/${AMAX.toFixed(3)}*${(NJ-1).toFixed(1)};float i0=clamp(floor(fi),0.,${(NJ-2).toFixed(1)});float f=fi-i0;int i=int(i0);
     vec3 p0=u_P[i],p1=u_P[i+1];vec3 T=normalize(mix(u_T[i],u_T[i+1],clamp(f,0.,1.)));
     vec3 Uv=normalize(mix(u_U[i],u_U[i+1],clamp(f,0.,1.)));Uv=normalize(Uv-T*dot(Uv,T));vec3 R=cross(T,Uv);
-    vec2 off=a_pos.yz;
-    if(a_pos.w>1.5&&a_pos.w<2.5){float th=a_uv.x*6.2832;off*=1.+.05*a_uv.y*sin(th*5.+u_t*2.1+a_col.r*9.)+.035*a_uv.y*sin(th*11.-u_t*3.3);}  // skirt hems drift
+    if(a_pos.w>1.5&&a_pos.w<2.5){float th=a_uv.x*6.2832;off*=1.+.09*a_uv.y*sin(th*5.+u_t*2.1+a_col.r*9.)+.06*a_uv.y*sin(th*11.-u_t*3.3);}  // skirt hems drift
     if(a_pos.w>2.5&&a_pos.w<3.5)off.x+=.03*a_uv.y*sin(a_uv.x*1.7-u_t*4.);                                                                  // fin flutter
-    wp=p0+(p1-p0)*f+(R*off.x+Uv*off.y)*u_k;wn=normalize(R*a_nrm.x+Uv*a_nrm.y-T*a_nrm.z);}
+    wp=p0+(p1-p0)*f+(R*off.x+Uv*off.y)*u_k;wn=normalize(R*nl.x+Uv*nl.y-T*nl.z);}
   v_wp=wp;v_n=wn;v_col=a_col;v_uv=a_uv;
   vec3 v=wp-u_ro;float z=dot(v,u_fw),x=dot(v,u_rt),y=dot(v,u_up);
   gl_Position=vec4(3.1*x/u_asp,3.1*y,(z*80.05-8.)/79.95,z);}`;
@@ -256,10 +313,10 @@ void main(){
   o_c=vec4(col,1.);o_d=vec4(clamp(length(v_wp-u_ro)/48.,0.,1.),0.,0.,1.);}`;
 let gl,pr,UL={},vaoS,vaoL,nS=0,bufLP,bufLN,fbo,texC,texD,rbo,fw=0,fh=0,ready=false,failed=false;
 function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;}
-function vao(P,Nn,C,UV,I,dyn){const v=gl.createVertexArray();gl.bindVertexArray(v);const out={};
+function vao(P,Nn,C,UV,I,dyn,Wt){const v=gl.createVertexArray();gl.bindVertexArray(v);const out={};
   const b=(d,loc,n,type,nrm)=>{const bf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bf);gl.bufferData(gl.ARRAY_BUFFER,d,dyn?gl.DYNAMIC_DRAW:gl.STATIC_DRAW);
     gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,n,type,!!nrm,0,0);return bf;};
-  out.p=b(P,0,4,gl.FLOAT);out.n=b(Nn,1,3,gl.FLOAT);b(C,2,4,gl.UNSIGNED_BYTE,true);b(UV,3,2,gl.FLOAT);
+  out.p=b(P,0,4,gl.FLOAT);out.n=b(Nn,1,3,gl.FLOAT);b(C,2,4,gl.UNSIGNED_BYTE,true);b(UV,3,2,gl.FLOAT);if(Wt)b(Wt,4,4,gl.UNSIGNED_BYTE,true);else gl.vertexAttrib4f(4,0,0,0,0);
   const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,I,gl.STATIC_DRAW);
   gl.bindVertexArray(null);out.v=v;return out;}
 function target(W,H){const sc=Math.min(1.5,2200/Math.max(W,H)),w=Math.max(2,Math.round(W*sc)),h=Math.max(2,Math.round(H*sc));
@@ -278,8 +335,8 @@ async function init(g){gl=g;if(OFF){failed=true;return;}
     const bin=await (await fetch('swimmer.bin')).arrayBuffer();
     pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);
     if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(pr));
-    ['u_P','u_T','u_U','u_k','u_world','u_asp','u_t','u_wt','u_ro','u_fw','u_rt','u_up','u_wy'].forEach(n=>UL[n]=gl.getUniformLocation(pr,n));
-    const st=buildStatic(bin);nS=st.I.length;vaoS=vao(st.P,st.N,st.C,st.UV,st.I,false);
+    ['u_P','u_T','u_U','u_k','u_world','u_asp','u_t','u_wt','u_ro','u_fw','u_rt','u_up','u_wy','u_shP','u_elP','u_shR','u_elR'].forEach(n=>UL[n]=gl.getUniformLocation(pr,n));
+    const st=buildStatic(bin);nS=st.I.length;vaoS=vao(st.P,st.N,st.C,st.UV,st.I,false,st.W);
     buildLocs();locBuffers();stepSwim(1/60,-.15);stepLocs(1/60,0);fillLocs();
     vaoL=vao(locP,locN,locC,locUV,locI,true);
     ready=true;
@@ -299,6 +356,7 @@ function frame(cam,W,H,wy,wt,dt,paused){
   gl.uniform3fv(UL.u_P,Pj);gl.uniform3fv(UL.u_T,Tj);gl.uniform3fv(UL.u_U,Uj);
   gl.uniform1f(UL.u_k,K);gl.uniform1f(UL.u_asp,W/H);gl.uniform1f(UL.u_t,S.t);gl.uniform1f(UL.u_wt,wt);gl.uniform1f(UL.u_wy,wy);
   gl.uniform3fv(UL.u_ro,cam.ro);gl.uniform3fv(UL.u_fw,cam.fw);gl.uniform3fv(UL.u_rt,cam.rt);gl.uniform3fv(UL.u_up,cam.up);
+  gl.uniform3fv(UL.u_shP,ARM.sh.flat());gl.uniform3fv(UL.u_elP,ARM.el.flat());gl.uniformMatrix3fv(UL.u_shR,false,shR);gl.uniformMatrix3fv(UL.u_elR,false,elR);
   gl.uniform1f(UL.u_world,0);gl.bindVertexArray(vaoS.v);gl.drawElements(gl.TRIANGLES,nS,gl.UNSIGNED_INT,0);
   gl.bindVertexArray(vaoL.v);
   gl.bindBuffer(gl.ARRAY_BUFFER,vaoL.p);gl.bufferSubData(gl.ARRAY_BUFFER,0,locP);gl.bindBuffer(gl.ARRAY_BUFFER,vaoL.n);gl.bufferSubData(gl.ARRAY_BUFFER,0,locN);
@@ -307,5 +365,5 @@ function frame(cam,W,H,wy,wt,dt,paused){
   gl.disable(gl.DEPTH_TEST);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   return true;
 }
-window.SWIM={init,frame,get texC(){return texC;},get texD(){return texD;},get ready(){return ready;},state:S};
+window.SWIM={init,frame,gesture,get texC(){return texC;},get texD(){return texD;},get ready(){return ready;},state:S};
 })();
